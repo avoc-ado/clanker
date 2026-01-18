@@ -91,7 +91,7 @@
 ## Flowchart (Handoffs)
 ```mermaid
 flowchart TD
-  A[Plan Docs] --> B[Planner]
+  A[Plan Docs (dev-authored)] --> B[Planner]
   B --> C[Task Packet]
   C --> D[Slave]
   D --> E[Slave Summary + Tests]
@@ -105,8 +105,9 @@ flowchart TD
 ```
 
 ## Plan Docs Lifecycle
+- Plan docs are authored by the developer; clanker does not generate them
 - Plan docs are versioned and updateable; new docs can be added anytime
-- Planner always reads latest plan docs + history; replan uses newest intent
+- Planner reads `docs/` each run; uses latest intent + history to build task packets
 - Doc updates can trigger new tasks without rewriting past tasks
 
 ## Main Sync
@@ -153,8 +154,8 @@ flowchart TD
 - If slave asks for input, do not escalate to developer by default
 - Controller replies with a role reminder + proceed-with-best-effort prompt
 - If missing critical info, mark `handoff_fix` and ping planner
-- Command permissions: allowlist in `clanker.yaml`; auto-approve safe commands
-- Escalate to developer only for commands outside allowlist
+- Command permissions: handled by Codex CLI rules (default `~/.codex/rules/default.rules`)
+- Clanker only detects Codex escalation prompts and auto-focuses the pane (then auto-focuses back)
 - Planner may send non-blocking async clarification request (e.g., Slack) for scope gaps
 
 ## Escalation Surfacing (Codex CLI)
@@ -162,7 +163,7 @@ flowchart TD
 - Emit event + tail line `BLOK | ... | escalation | pane cN`
 - Auto-focus codex pane on escalation; show status in TUI
 - On resume/deny+prompt completion, auto-focus back to prior pane
- - No bells/async pings; keep it quiet
+- No bells/async pings; keep it quiet
 - Always visible in TUI without blocking other panes
 
 ### Escalation Transitions (Detection Plan)
@@ -261,7 +262,7 @@ STATE: {pausedTasks} {assignments} {staleHeartbeats}
 ## Auto-Reply Templates
 - Role reminder (slave): "You are a slave. Do not ask the user. Make best assumptions, log risks, run tests, hand off."
 - Missing info: "Insufficient task packet. Marking handoff_fix; returning to planner."
-- Permission denied: "Command blocked by allowlist. Request escalation with rationale."
+- Permission denied: "Command blocked by Codex CLI rules. Request escalation with rationale."
 
 ## Mainlining + Conflicts + Regressions
 - Mainlining performed by judge (integration phase, low N)
@@ -279,10 +280,10 @@ STATE: {pausedTasks} {assignments} {staleHeartbeats}
 - Controller keeps in-memory index; persists on every event
 
 ### Planner loop
-- Inputs: plan docs + current tasks + recent summaries + local repo signals
-- Output: new/updated tasks + ownership + deps in `.clanker/tasks/`
+- Inputs: plan docs (`docs/`) + current tasks + recent summaries + local repo signals
+- Output: new task packets + ownership + deps in `.clanker/tasks/`
 - Context pack: bounded bundle built per run (size cap + relevance filter)
-- Planner brief: "create tasks from plan docs; do not co-edit tasks with user"
+- Planner brief: "LLM creates task packets from plan docs; no manual task tables"
 
 ### Slave loop
 - Inputs: assigned task + context pack + relevant files
@@ -302,7 +303,7 @@ STATE: {pausedTasks} {assignments} {staleHeartbeats}
 - Slaves/judge get fresh context packs on (re)assignment
 
 ## Planner Inputs (Capped)
-- Inputs: plan docs + current tasks + recent history summaries
+- Inputs: plan docs (`docs/`) + current tasks + recent history summaries
 - Cap growth: rolling window + compaction
 - Strategy: keep last N task summaries + weekly rollups; prune by recency + relevance
 - Build a bounded "context pack" per planning run (size limit)
