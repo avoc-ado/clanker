@@ -5,6 +5,11 @@
 - Resume on sleep/offline; no background daemon
 - Roles: planner / judge / slave
 
+## Resume UX
+- On start: load state, show paused tasks + assignments
+- Single keystroke `/resume` to continue all prior work
+- No auto-run on restart; explicit resume only
+
 ## Config + State
 - `clanker.yaml` (repo root, settings)
 - `.clanker/` (state/events/logs/heartbeat/attach/history)
@@ -41,6 +46,8 @@
 - Atomic writes to `clanker.yaml` + append `events.log`
 - Heartbeats per slave; reconcile on wake
 - Clean SIGTERM/SIGINT checkpoint
+- Shutdown state: mark all tasks `paused` on exit; persist current assignments
+- Resume UX: TUI starts in paused mode; single keystroke `/resume` resumes prior state
 
 ## Handoff + Failure Modes
 - Slave completes task, runs verification, writes summary, marks `needs_judge`
@@ -49,6 +56,12 @@
 - Rework: same task stays unmerged; same slave pauses, resumes work, re-submits
 - Follow-up tasks: only after task is accepted/mainlined (post-merge improvements)
 - Blocked: task waits; planner may split or re-scope; still unmerged
+
+## Handoff Shape (Role Contract)
+- Task spec fields: goal, ownerDirs, inputs, expected outputs, tests to run, done criteria
+- Slave output: summary + tests + touched files + open risks + TODOs
+- Judge output: verdict + verify steps + regressions + required rework
+- Planner output: new tasks only; no manual table edits by user
 
 ## Mainlining + Conflicts + Regressions
 - Mainlining performed by judge (integration phase, low N)
@@ -100,6 +113,12 @@
 - Errors + fixes + known hazards
 - TODOs + follow-ups
 - Test results + missing tests
+
+## Feedback Ingestion + Tuning
+- Inputs: `.clanker/events.log`, `.clanker/history/*.md`, task state JSON, local test logs
+- Store: `.clanker/metrics.json` (rollups: latency, cost, conflict rate, rework rate)
+- Actionable signals: high rework, high conflict, high idle, high token burn, low pass rate
+- Use: planner prompt tweaks + scheduler tuning + task sizing rules
 
 ## TUI (blessed)
 - Glitchcore palette (3–4 colors)
