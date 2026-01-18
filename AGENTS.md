@@ -135,37 +135,6 @@ Avoid: purple-on-white clichés, generic component grids, predictable layouts.
 
 AGENTS.md originally from https://raw.githubusercontent.com/steipete/agent-scripts/refs/heads/main/AGENTS.MD
 
-You are an AI assistance for writing fullstack code with Typescript.
-
-# Project Structure
-
-This is a monorepo with the following structure:
-
-1. backend - the backend server: contains multiple services, shared code, and scripts.
-   1. backed/src - the backend server code.
-      1. backend/src/generated - the generated code from the relay graphql schema.
-      2. backend/src/services - the services folder contains the different services, of which the graphql service is the main one.
-      3. backend/src/shared - the shared code folder
-      4. backend/src/scripts - the scripts folder
-   2. backend/prisma - the prisma folder containing prisma schema and migrations.
-   3. backend/tests - the tests folder containing unit tests for the backend.
-   4. backend/clickhouse - the clickhouse folder containing the schema for clickhouse tables.
-2. mobile - the mobile app: contains the mobile app code.
-   1. mobile/app - the mobile app code defining the app structure and pages.
-   2. mobile/components - the components folder contains reusable components for the app.
-   3. mobile/core - the core folder contains the core code to be used throughout the app.
-   4. mobile/env - the env folder contains the environment variables for the mobile app.
-   5. mobile/generated - the generated code from the relay graphql schema.
-   6. mobile/tamagui - the tamagui folder containing the tamagui configuration, tokens, colors, themes and fonts to be used throughout the app.
-3. terraform - the terraform folder containing the terraform code for the infrastructure.
-4. site - the folder containing code for the website. This is used as landing page outside the app, for web pages embedded in the app, and for deep linking.
-5. proxy - express-based proxy service handling rate limits and request forwarding.
-6. lambdas - serverless functions such as `image_cdn`.
-7. desktop - Electron desktop application sources.
-8. rust - asynchronous Rust services under `src/services`.
-9. bin - various helper scripts.
-10. secure - cosigner signing utilities and related tooling.
-
 # Interaction Guidelines
 
 - Don’t apologize for errors: fix them
@@ -173,11 +142,6 @@ This is a monorepo with the following structure:
 - You may ask about stack assumptions if writing code
 - Comments MUST describe purpose, not effect
 - If you can’t finish code, add TODO: comments
-
-# Development Guidelines
-
-MOST IMPORTANT RULE: consider what part of the project you should edit (mobile, backend, etc.), including if the change
-includes multiple parts. State that clearly in the beginning of your answer. Don't edit files in the wrong part of the project.
 
 ## Code Style and Structure
 
@@ -237,7 +201,7 @@ export function shouldWrapSol(dex: Dex): boolean {
 
 export const SHOULD_WRAP_SOL = Object.values(Dex).filter(shouldWrapSol);
 export const SHOULD_NOT_WRAP_SOL = Object.values(Dex).filter(
-  (dex) => !shouldWrapSol(dex)
+  (dex) => !shouldWrapSol(dex),
 );
 
 export const handleWrap = ({
@@ -254,101 +218,13 @@ export const handleWrap = ({
 };
 ```
 
-## Syntax and Formatting
-
-- Avoid unnecessary curly braces in conditionals; use concise syntax for simple statements.
-- Use declarative JSX.
-- Use Prettier for consistent code formatting.
-- Prefer `array.at(0)` with optional chaining over checking `!array.length` and
-  then indexing `array[0]`.
-
-## Backend-Specific Guidelines
-
-### API Design
-
-- All user-facing APIs should be via the graphql API.
-- Always consider the volume of data being sent to the client and being processed on the server. This is a data intensive application.
-- Consider edge cases, error handling, and retry logic.
-- Use `formatLamportsToSolString` when converting lamport values to SOL strings in any response.
-- Telegram bot replies must use named imports from `telegraf/format` (e.g., `import { code, bold, join } from "telegraf/format"`) instead of manual Markdown strings.
-  - example: join([fmt`💸 Success!`, fmt``, fmt`🚀 Sending ${formatLamportsToSolString({ lamports })} SOL your way!`], "\n")
-- All prisma models should include `createdAt DateTime @default(now())` and `updatedAt DateTime @default(now()) @updatedAt`
-
-### Service Pattern
-
-- Parse command line flags using `yargs` with `hideBin(process.argv)`. Param helpers can be found in yargs_helper.ts.
-- Initialize clients (Prisma, Redis, etc.) using `Promise.all` before starting work.
-- Run core logic inside `async function main()` or an immediately invoked async function.
-- When executed directly, use `if (require.main === module)` and call `main().catch(mainErrHandler)` or `main().catch(cronErrHandler(DDMetric.*SERVICE_NAME*_CRON_ERROR))`.
-- Start `HttpHealthz` or other health checks immediately after clients early in `main()`.
-
-### Data Loading
-
-- Use [DataLoader](./dataloader.md) for batching and caching database reads.
-- Place all loader code in `backend/src/shared/loaders` with a subdirectory for each model.
-- Model subdirectories expose factories like `makeWalletByIdLoader` or `makeWalletByTelegramIdLoader`.
-- Collect a model's loaders via `makeWalletLoaders` and export the type describing them.
-- Create a root `makeLoaders` function that accepts Prisma clients and returns an object grouping all model loader sets.
-- Extend `TradeBotContext` with a `loaders` field whose interface mirrors the object returned by `makeLoaders`.
-
-### UI and Styling
-
-- Use Tamagui for UI components. The latest Tamagui docs are here - https://tamagui.dev/docs/intro/introduction
-- In-line styles instead of having them at the bottom of the file.
-- Use custom Button.tsx and Text.tsx imported from @/components instead of Tamagui's Button and Text.
-- use "$xs, $sm, $md, $lg" instead of hardcoding font sizes.
-- Leverage react-native-reanimated and react-native-gesture-handler for performant animations and gestures.
-
-### Components and Relay
-
-- Non-trivial components should be split into its own file.
-- If data is fetched from GraphQL, use Relay fragments and propagate the fragments up to the parent component where the query is made.
-- Avoid any custom types/interfaces that can be otherwise captured by a fragment.
-- fragment/query names in each file must match Relay naming conventions based on pathname.
-
-### Performance Optimization
-
-- Minimize the use of useState and useEffect; prefer context and reducers for state management.
-- Implement code splitting and lazy loading for non-critical components with React's Suspense and dynamic imports.
-- Profile and monitor performance using React Native's built-in tools and Expo's debugging features.
-- Avoid unnecessary re-renders by memoizing components and using useMemo and useCallback hooks appropriately.
-- Be sure to use the properties defined in files in tamagui folder, in particular themes.ts, fonts.ts and tokens.ts
-
-### State Management
-
-- Use StorageContext for any persistent state.
-- use relay and graphql in generated folder for api calls
-
-### Internationalization (i18n)
-
-- Use i18n-js. See how it's handled in the app.
-
-### Key Conventions
-
-1. Prioritize Mobile Web Vitals (Load Time, Jank, and Responsiveness).
-
-## Local Validation
-
-Run backend checks locally before committing. From the `backend` directory: `yarn check`
-
-- This script runs `lint`, `tsc`, `test`, `testlint`, and Prettier's check mode to mirror CI.
-- Failure to `yarn check` due to missing `yarn` command can happen if the command is not run from the `backend` directory.
-
-To fix basic formatting issues automatically, use: `yarn check:fix`
-
-- This only applies Prettier in write mode and does not attempt ESLint or TypeScript fixes.
-
 ## AI Development Approach
 
 - Use test-driven development whenever possible. Every change should include or update unit tests proving the behavior of new or refactored code.
-- Each change should include testing of the running product using chrome-devtools, mobile simulator, or similar.
+- Each change should include testing of the running product using chrome-devtools, mobile simulator, tmux, or similar for the task at hand.
 - Test mocks should mock using `createTypedMock = <T>(impl: DeepPartial<T>): Mocked<T>; import { createTypedMock } from "../../test-utils/createTypedMock"; `. Do not create a POJO with `as any` or `as unknown` type for mocking if at all possible.
 - Tests run concurrently and should not reference mutable file shared variables. Each test should define its own local variables instead.
-- Tests can assert response body by accessing text.text using `const res = await processCallback({ ctx: ctx as any, callbackData: data }); t.true(res?.text.text.includes("FlipSol Bot Help!"));`
 - Use async versions of node functions over synchronous blocking versions
-- Extract shared functions, constants, or interfaces into `backend/src/shared` when appropriate, even if this means refactoring existing code before addressing the prompt directly.
-- When working in a `service` directory you may reorganize code into multiple files or subdirectories and add unit tests for the refactorings without further instruction.
-- Contibuting a partial design doc, scaffolding, or a single pure function with tests is a successful outcome if the task is vague or broad.
+- You may reorganize code into multiple files or subdirectories and add unit tests for the refactorings without prior instruction.
 - Favor pure functions and unit-testable modules over monolithic implementations.
 - Ensure every pure function is covered by unit tests.
-- Do not use global mutable variables to store user state. Prefer encoding session info in telegram callbacks, e.g. `makeTgCallback({ callback: TgCallback.FlipCustomAmount, data: { t: telegramId, a: amount }}). callback data supports strings, null and objects that will be stringified. More complex persistent data can use Prisma.
