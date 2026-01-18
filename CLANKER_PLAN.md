@@ -56,12 +56,37 @@
 - Rework: same task stays unmerged; same slave pauses, resumes work, re-submits
 - Follow-up tasks: only after task is accepted/mainlined (post-merge improvements)
 - Blocked: task waits; planner may split or re-scope; still unmerged
+- Handoff fix: if packet missing info, mark `handoff_fix`; planner regenerates packet and reassigns
 
 ## Handoff Shape (Role Contract)
 - Task spec fields: goal, ownerDirs, inputs, expected outputs, tests to run, done criteria
 - Slave output: summary + tests + touched files + open risks + TODOs
 - Judge output: verdict + verify steps + regressions + required rework
 - Planner output: new tasks only; no manual table edits by user
+
+### Handoff Completeness Checklist
+- Goal + non-goals
+- Scope: ownerDirs + exclusions
+- Inputs: plan refs + required files
+- Expected outputs: files/behaviors + done criteria
+- Tests: exact commands + success criteria
+- Risks/assumptions + open questions
+
+### Judge Acceptance Checklist
+- Done criteria met
+- Tests run + pass (commands listed)
+- No missing TODOs blocking release
+- Risks recorded + mitigations noted
+
+### Regression Task Checklist
+- Repro steps
+- Failing test/log
+- Expected fix or hypothesis
+
+### Planner Output Checklist
+- ownerDirs + deps defined
+- Done criteria + tests specified
+- Risk/assumption noted
 
 ## Mainlining + Conflicts + Regressions
 - Mainlining performed by judge (integration phase, low N)
