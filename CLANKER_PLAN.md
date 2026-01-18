@@ -55,8 +55,8 @@
 - No mainline until judge says `done`
 - Rework: same task stays unmerged; same slave pauses, resumes work, re-submits
 - Follow-up tasks: only after task is accepted/mainlined (post-merge improvements)
-- Blocked: task waits; planner may split or re-scope; still unmerged
-- Handoff fix: if packet missing info, mark `handoff_fix`; planner regenerates packet and reassigns
+- Blocked: task waits; planner may split or re-scope; still unmerged; resume same slave when unblocked
+- Handoff fix: missing info → planner regenerates packet → same slave resumes
 
 ## Handoff Shape (Role Contract)
 - Task spec fields: goal, ownerDirs, inputs, expected outputs, tests to run, done criteria
@@ -103,6 +103,51 @@ flowchart TD
   G --> H[Follow-up Tasks]
   H --> B
 ```
+
+## Plan Docs Lifecycle
+- Plan docs are versioned and updateable; new docs can be added anytime
+- Planner always reads latest plan docs + history; replan uses newest intent
+- Doc updates can trigger new tasks without rewriting past tasks
+
+## Main Sync
+- Planner uses read-only `main` snapshot worktree; fast-forward only
+- Slave worktree created at `baseMainSha`
+- On task start (no local commits): fast-forward to latest `main`
+- After work starts: no rebase by slave unless judge requests
+- Judge rebase/merge is the final mainline gate
+
+### baseMainSha (Field Spec)
+- `baseMainSha`: commit SHA of `main` used to create the slave worktree
+- Set on task creation; stored in `.clanker/tasks/<id>.json`
+- Used to detect drift; if behind N commits, planner may revalidate task
+- Rework keeps same `baseMainSha` unless task is re-scoped
+
+## Git Sync Policy (When)
+- Planner: `git fetch` + `git pull --ff-only` before each planning run
+- Slave: `git fetch` at task start; `git pull --ff-only` only if clean
+- Judge: `git fetch` before verify; rebase slave branch onto `main` for mainline
+- Scope change failure: do not rebase; mark failed and replan
+
+## Worktree Map + Commands
+- Planner (read-only main): `git worktree add ../c-planner main`
+- Judge (integration): `git worktree add ../c-judge main`
+- Slave (per task): `git worktree add ../c<profileNum>-<desk> <baseMainSha>`
+- Clean up: `git worktree remove ../c<profileNum>-<desk>`
+
+## Scope Change Rule
+- Minor adjustment (tests/edge cases): rework same task
+- Scope change (new requirements/dirs/users): mark failed/rescoped, no mainline
+- Planner creates follow-up tasks from failure summary
+
+## Task Context Source
+- New tasks read latest `main` snapshot
+- Rework packets read the slave worktree + judge notes
+
+## Context Lifecycle (Chat)
+- New task: start a fresh chat (use `/new` or restart `c`)
+- Rework: reuse same chat for continuity
+- Context pack always injected; prior chat treated as unreliable
+- If reset unavailable, restart `c` process in that pane
 
 ## Interaction Policy (Questions + Permissions)
 - If slave asks for input, do not escalate to developer by default
@@ -253,6 +298,14 @@ STATE: {pausedTasks} {assignments} {staleHeartbeats}
 - Store: `.clanker/metrics.json` (rollups: latency, cost, conflict rate, rework rate)
 - Actionable signals: high rework, high conflict, high idle, high token burn, low pass rate
 - Use: planner prompt tweaks + scheduler tuning + task sizing rules
+
+## Verification (Agent Commitment)
+- For the coding agent: add these checks to the testing toolkit
+- Run `clanker` TUI + `c1..c3` in tmux; confirm attach + tail stream
+- Simulate sleep/offline; ensure paused state + `/resume` works
+- Exercise worktree flow: task → slave → judge → mainline mock
+- Trigger rework + handoff_fix; ensure same slave resumes
+- Validate permission gating + escalation
 
 ## TUI (blessed)
 - Glitchcore palette (3–4 colors)
