@@ -88,6 +88,115 @@
 - Done criteria + tests specified
 - Risk/assumption noted
 
+## Flowchart (Handoffs)
+```mermaid
+flowchart TD
+  A[Plan Docs] --> B[Planner]
+  B --> C[Task Packet]
+  C --> D[Slave]
+  D --> E[Slave Summary + Tests]
+  E --> F[Judge]
+  F -->|done| G[Mainline]
+  F -->|rework| D
+  F -->|blocked| B
+  F -->|handoff_fix| B
+  G --> H[Follow-up Tasks]
+  H --> B
+```
+
+## Interaction Policy (Questions + Permissions)
+- If slave asks for input, do not escalate to developer by default
+- Controller replies with a role reminder + proceed-with-best-effort prompt
+- If missing critical info, mark `handoff_fix` and ping planner
+- Command permissions: allowlist in `clanker.yaml`; auto-approve safe commands
+- Escalate to developer only for commands outside allowlist
+
+## Context Templates (Enumerated)
+- Planner: plan docs + current tasks + recent summaries + repo signals + constraints
+- Slave: task spec + context pack + repo paths + guardrails
+- Judge: task spec + slave summary + verify checklist + repo state
+- Rework: judge verdict + required fixes + failing tests
+- Handoff fix: missing fields list + regenerated packet
+- Regression: repro steps + failing test/log + expected fix
+- Health-check: plan goals + current main behavior + acceptance checklist
+- Permission escalation: command request + rationale + risk
+- Resume: paused tasks + last known assignments + stale heartbeats
+
+### Context Templates (Drafts)
+#### Planner
+```
+ROLE: planner. Build tasks from plan docs. No user co-edit.
+INPUTS: {planDocs} {currentTasks} {recentSummaries} {repoSignals} {constraints}
+OUTPUT: tasks with goal, ownerDirs, deps, done criteria, tests, risks.
+```
+
+#### Slave
+```
+ROLE: slave. Execute assigned task. No user questions.
+TASK: {taskSpec}
+CONTEXT: {contextPack}
+GUARDRAILS: no destructive ops; use trash; run tests; log risks.
+OUTPUT: summary + tests + touched files + TODOs.
+```
+
+#### Judge
+```
+ROLE: judge. Independent verification. No edits unless rework needed.
+TASK: {taskSpec}
+SLAVE_SUMMARY: {slaveSummary}
+VERIFY: {acceptanceChecklist}
+OUTPUT: verdict done/rework + verify steps + regressions.
+```
+
+#### Rework
+```
+ROLE: slave. Rework same task. Address judge notes precisely.
+INPUT: {judgeVerdict} {failingTests} {requiredFixes}
+OUTPUT: updated summary + re-run tests.
+```
+
+#### Handoff Fix
+```
+ROLE: planner. Regenerate missing handoff fields.
+MISSING: {missingFields}
+OUTPUT: complete task packet; reassign.
+```
+
+#### Regression
+```
+ROLE: slave. Fix regression.
+REPRO: {steps}
+FAIL: {testOrLog}
+OUTPUT: fix + test proof + summary.
+```
+
+#### Health-check
+```
+ROLE: judge. Validate main matches plan.
+PLAN: {planGoals}
+OBSERVE: {currentBehavior}
+OUTPUT: pass/fail + follow-up tasks.
+```
+
+#### Permission Escalation
+```
+ROLE: system. Request approval for command.
+CMD: {command}
+RATIONALE: {why}
+RISK: {riskLevel}
+```
+
+#### Resume
+```
+ROLE: controller. Present paused state; await /resume.
+STATE: {pausedTasks} {assignments} {staleHeartbeats}
+```
+
+## Auto-Reply Templates
+- Role reminder (slave): "You are a slave. Do not ask the user. Make best assumptions, log risks, run tests, hand off."
+- Missing info: "Insufficient task packet. Marking handoff_fix; returning to planner."
+- Permission denied: "Command blocked by allowlist. Request escalation with rationale."
+
 ## Mainlining + Conflicts + Regressions
 - Mainlining performed by judge (integration phase, low N)
 - Flow: judge rebases task worktree onto `main`, resolves conflicts, runs gate
