@@ -59,6 +59,35 @@
 - Regression tasks: tagged `regression`, highest priority, assigned immediately
 - Periodic health-check task: verify `main` app behavior matches current plan/state
 
+## Data Flow + Context (Theory of Mind)
+- Source of intent: plan docs in `docs/plan-*.md`
+- State of work: `.clanker/state.json` + `.clanker/tasks/*.json`
+- Memory: `.clanker/history/*.md` (slave/judge summaries) + `.clanker/events.log`
+- Controller keeps in-memory index; persists on every event
+
+### Planner loop
+- Inputs: plan docs + current tasks + recent summaries + local repo signals
+- Output: new/updated tasks + ownership + deps in `.clanker/tasks/`
+- Context pack: bounded bundle built per run (size cap + relevance filter)
+- Planner brief: "create tasks from plan docs; do not co-edit tasks with user"
+
+### Slave loop
+- Inputs: assigned task + context pack + relevant files
+- Output: code changes + summary + test results
+- Summary written to `.clanker/history/task-<id>-slave.md`
+- Status to `.clanker/tasks/<id>.json` → `needs_judge`
+
+### Judge loop
+- Inputs: task + slave summary + context pack + current repo state
+- Output: verdict + independent test/verify
+- Summary to `.clanker/history/task-<id>-judge.md`
+- Status to `.clanker/tasks/<id>.json` → `done` or `rework`
+
+### Update propagation
+- Any status change → event log append + state update
+- Planner reads latest state + summaries each cycle
+- Slaves/judge get fresh context packs on (re)assignment
+
 ## Planner Inputs (Capped)
 - Inputs: plan docs + current tasks + recent history summaries
 - Cap growth: rolling window + compaction
