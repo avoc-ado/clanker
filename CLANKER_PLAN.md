@@ -155,6 +155,27 @@ flowchart TD
 - If missing critical info, mark `handoff_fix` and ping planner
 - Command permissions: allowlist in `clanker.yaml`; auto-approve safe commands
 - Escalate to developer only for commands outside allowlist
+- Planner may send non-blocking async clarification request (e.g., Slack) for scope gaps
+
+## Escalation Surfacing (Codex CLI)
+- Detect codex prompt lines like "Would you like to run the following command?"
+- Emit event + tail line `BLOK | ... | escalation | pane cN`
+- Auto-focus codex pane on escalation; show status in TUI
+- On resume/deny+prompt completion, auto-focus back to prior pane
+ - No bells/async pings; keep it quiet
+- Always visible in TUI without blocking other panes
+
+### Escalation Transitions (Detection Plan)
+- Source: `tmux pipe-pane` logs + `tmux capture-pane` polling
+- State machine: `idle → escalation_pending → resolved`
+- Enter pending: log line contains "Would you like to run the following command?"
+- Pending UI check: poll pane for prompt lines ("Would you like..." + "Press enter to confirm")
+- Resolve when prompt lines are no longer visible in last N lines
+- On resolve: emit `INFO` event, restore focus to prior pane
+- Timeout: if pending > N minutes, emit `BLOK` reminder but stay pending
+
+## TUI Debug Hotkeys
+- Hotkey to toggle focus between clanker TUI and last active slave pane
 
 ## Context Templates (Enumerated)
 - Planner: plan docs + current tasks + recent summaries + repo signals + constraints
