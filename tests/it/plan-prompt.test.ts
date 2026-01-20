@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
-import { ensureExists, makeTmpRepo, runCli, writeCodexStub, writeConfig } from "./utils.js";
+import { ensureExists, makeTmpRepo, resolveCodexCommand, runCli, writeConfig } from "./utils.js";
 
 describe("integration: plan prompt", () => {
   test("includes plan directive for minimum tasks", async () => {
@@ -8,8 +8,8 @@ describe("integration: plan prompt", () => {
     const root = await makeTmpRepo({
       planLines: ["Goal: echo cli", requirement, "Ensure at least two tasks (no upper cap)."],
     });
-    const stubPath = await writeCodexStub({ root });
-    await writeConfig({ root, stubPath });
+    const { codexCommand } = await resolveCodexCommand({ root });
+    await writeConfig({ root, codexCommand });
 
     await runCli({ cwd: root, args: ["plan"] });
 

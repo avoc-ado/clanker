@@ -1,0 +1,43 @@
+# clanker
+
+Glitchcore agent harness: planner + slaves + judge + TUI dashboard.
+
+## Quickstart
+
+```bash
+npx clanker-cli@latest --help
+```
+
+```bash
+# dashboard
+npx clanker-cli@latest
+
+# planner/slave/judge in tmux panes
+npx clanker-cli@latest planner
+npx clanker-cli@latest slave 1
+npx clanker-cli@latest judge
+```
+
+## Config
+
+Create `clanker.yaml` at repo root:
+
+```yaml
+slaves: 3
+tmuxSession: "clanker-swarm"
+codexCommand: "c"
+```
+
+## Integration tests
+
+```bash
+yarn test:it
+yarn test:it:stub
+yarn test:it:real
+```
+
+Real mode needs `c` or `codex` on PATH (override via `CLANKER_IT_REAL_COMMAND`).
+
+## Docs
+
+See `docs/quickstart.md` and `docs/integration-tests.md`.

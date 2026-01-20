@@ -5,7 +5,7 @@ import {
   makeTmpRepo,
   runCli,
   runNode,
-  writeCodexStub,
+  resolveCodexCommand,
   writeConfig,
 } from "./utils.js";
 
@@ -18,8 +18,8 @@ describe("integration: basic flow", () => {
         "Ensure at least two tasks (no upper cap).",
       ],
     });
-    const stubPath = await writeCodexStub({ root });
-    await writeConfig({ root, stubPath });
+    const { codexCommand, stubPath } = await resolveCodexCommand({ root });
+    await writeConfig({ root, codexCommand });
 
     await runCli({ cwd: root, args: ["doctor", "--fix"] });
     await runCli({ cwd: root, args: ["task", "add", "t1", "do stuff"] });
@@ -40,17 +40,14 @@ describe("integration: basic flow", () => {
       ],
     });
 
-    const echo = await runNode({ cwd: root, args: [stubPath, "--echo", "hello"] });
-    expect(echo).toContain("echo:hello");
+    if (stubPath) {
+      const echo = await runNode({ cwd: root, args: [stubPath, "--echo", "hello"] });
+      expect(echo).toContain("echo:hello");
+    }
 
     await runCli({
       cwd: root,
       args: ["slave", "1"],
-      env: {
-        ...process.env,
-        CLANKER_CODEX_COMMAND: `node ${stubPath}`,
-        CLANKER_DISABLE_CODEX: "1",
-      },
     });
 
     const tasksDir = join(root, ".clanker", "tasks");

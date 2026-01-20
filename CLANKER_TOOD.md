@@ -12,6 +12,8 @@
 - Add `yarn test:it` and `yarn verify`
 - Update `AGENTS.md` to require `yarn verify`
 - Add `docs/integration-tests.md` + quickstart link
+- Integration tests support stub + real Codex modes
+- Package metadata + README/LICENSE for `npx clanker@latest`
 
 ## Now
 
@@ -19,7 +21,7 @@
 
 ## Next
 
-- (none queued)
+- If codex resolution fails in real IT mode, prompt to install; decline exits nonzero
 
 ## Later
 

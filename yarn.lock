@@ -1558,9 +1558,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"clanker@workspace:.":
+"clanker-cli@workspace:.":
   version: 0.0.0-use.local
-  resolution: "clanker@workspace:."
+  resolution: "clanker-cli@workspace:."
   dependencies:
     "@types/blessed": "npm:^0.1.21"
     "@types/jest": "npm:^30.0.0"
