@@ -1,8 +1,4 @@
-export const formatIdleLine = ({
-  idleMinutes,
-}: {
-  idleMinutes: number;
-}): string => {
+export const formatIdleLine = ({ idleMinutes }: { idleMinutes: number }): string => {
   if (idleMinutes < 60) {
     return `${idleMinutes}m`;
   }

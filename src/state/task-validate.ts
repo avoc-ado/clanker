@@ -18,7 +18,8 @@ export interface TaskValidationResult {
   warnings: string[];
 }
 
-const isStatus = (value: string): value is TaskStatus => TASK_STATUSES.includes(value as TaskStatus);
+const isStatus = (value: string): value is TaskStatus =>
+  TASK_STATUSES.includes(value as TaskStatus);
 
 export const validateTaskRecord = ({ task }: { task: TaskRecord }): TaskValidationResult => {
   const errors: string[] = [];
@@ -41,7 +42,10 @@ export const validateTaskRecord = ({ task }: { task: TaskRecord }): TaskValidati
   if (task.resumeSlaveId && task.resumeSlaveId.length === 0) {
     errors.push("invalid resumeSlaveId");
   }
-  if ((!task.ownerDirs || task.ownerDirs.length === 0) && (!task.ownerFiles || task.ownerFiles.length === 0)) {
+  if (
+    (!task.ownerDirs || task.ownerDirs.length === 0) &&
+    (!task.ownerFiles || task.ownerFiles.length === 0)
+  ) {
     warnings.push("missing ownerDirs");
   }
   if (!task.baseMainSha || task.baseMainSha.length === 0) {

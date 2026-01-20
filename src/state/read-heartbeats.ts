@@ -2,7 +2,11 @@ import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { Heartbeat } from "./heartbeat.js";
 
-export const readHeartbeats = async ({ heartbeatDir }: { heartbeatDir: string }): Promise<Heartbeat[]> => {
+export const readHeartbeats = async ({
+  heartbeatDir,
+}: {
+  heartbeatDir: string;
+}): Promise<Heartbeat[]> => {
   try {
     const files = await readdir(heartbeatDir);
     const heartbeats = await Promise.all(

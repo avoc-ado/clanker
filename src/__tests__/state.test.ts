@@ -31,7 +31,11 @@ describe("state", () => {
     const root = await mkdtemp(join(tmpdir(), "clanker-state-tasks-"));
     const path = join(root, "state.json");
     await import("node:fs/promises").then(({ writeFile }) =>
-      writeFile(path, JSON.stringify({ paused: false, tasks: [{ id: "t1", status: "queued" }] }), "utf-8"),
+      writeFile(
+        path,
+        JSON.stringify({ paused: false, tasks: [{ id: "t1", status: "queued" }] }),
+        "utf-8",
+      ),
     );
 
     const state = await loadState({ statePath: path });

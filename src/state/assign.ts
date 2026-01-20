@@ -31,14 +31,17 @@ export const assignQueuedTasks = async ({
 
   const freeSlaves = new Set(availableSlaves.filter((slave) => !busySlaves.has(slave)));
   const queued = tasks.filter((task) => task.status === "queued");
-  const lockState = buildLockState({ tasks: tasks.filter((task) => BUSY_STATUSES.has(task.status)) });
+  const lockState = buildLockState({
+    tasks: tasks.filter((task) => BUSY_STATUSES.has(task.status)),
+  });
 
   for (const task of queued) {
     if (hasLockConflict({ task, lockState })) {
       continue;
     }
     const preferred = task.resumeSlaveId;
-    const slaveId = preferred && freeSlaves.has(preferred) ? preferred : freeSlaves.values().next().value;
+    const slaveId =
+      preferred && freeSlaves.has(preferred) ? preferred : freeSlaves.values().next().value;
     if (!slaveId) {
       break;
     }

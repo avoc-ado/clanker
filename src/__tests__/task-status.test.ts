@@ -25,8 +25,12 @@ const makePaths = async (): Promise<ClankerPaths> => {
 describe("transitionTaskStatus", () => {
   test("updates task and writes event", async () => {
     const paths = await makePaths();
-    await import("node:fs/promises").then(({ mkdir }) => mkdir(paths.tasksDir, { recursive: true }));
-    await import("node:fs/promises").then(({ mkdir }) => mkdir(paths.stateDir, { recursive: true }));
+    await import("node:fs/promises").then(({ mkdir }) =>
+      mkdir(paths.tasksDir, { recursive: true }),
+    );
+    await import("node:fs/promises").then(({ mkdir }) =>
+      mkdir(paths.stateDir, { recursive: true }),
+    );
 
     const task = { id: "t1", status: "queued", prompt: "do", assignedSlaveId: "c1" } as const;
     await saveTask({ tasksDir: paths.tasksDir, task: task });
@@ -39,8 +43,12 @@ describe("transitionTaskStatus", () => {
 
   test("marks rework and resets prompt", async () => {
     const paths = await makePaths();
-    await import("node:fs/promises").then(({ mkdir }) => mkdir(paths.tasksDir, { recursive: true }));
-    await import("node:fs/promises").then(({ mkdir }) => mkdir(paths.stateDir, { recursive: true }));
+    await import("node:fs/promises").then(({ mkdir }) =>
+      mkdir(paths.tasksDir, { recursive: true }),
+    );
+    await import("node:fs/promises").then(({ mkdir }) =>
+      mkdir(paths.stateDir, { recursive: true }),
+    );
 
     const task = {
       id: "t2",
@@ -63,8 +71,12 @@ describe("transitionTaskStatus", () => {
 
   test("handoff_fix frees slave and stores resume", async () => {
     const paths = await makePaths();
-    await import("node:fs/promises").then(({ mkdir }) => mkdir(paths.tasksDir, { recursive: true }));
-    await import("node:fs/promises").then(({ mkdir }) => mkdir(paths.stateDir, { recursive: true }));
+    await import("node:fs/promises").then(({ mkdir }) =>
+      mkdir(paths.tasksDir, { recursive: true }),
+    );
+    await import("node:fs/promises").then(({ mkdir }) =>
+      mkdir(paths.stateDir, { recursive: true }),
+    );
 
     const task = {
       id: "t3",
@@ -87,8 +99,12 @@ describe("transitionTaskStatus", () => {
 
   test("blocked stores resume and emits blocked event", async () => {
     const paths = await makePaths();
-    await import("node:fs/promises").then(({ mkdir }) => mkdir(paths.tasksDir, { recursive: true }));
-    await import("node:fs/promises").then(({ mkdir }) => mkdir(paths.stateDir, { recursive: true }));
+    await import("node:fs/promises").then(({ mkdir }) =>
+      mkdir(paths.tasksDir, { recursive: true }),
+    );
+    await import("node:fs/promises").then(({ mkdir }) =>
+      mkdir(paths.stateDir, { recursive: true }),
+    );
 
     const task = {
       id: "t4",

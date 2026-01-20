@@ -2,7 +2,15 @@ import { readFile, writeFile } from "node:fs/promises";
 
 export interface TaskState {
   id: string;
-  status: "queued" | "running" | "needs_judge" | "rework" | "done" | "blocked" | "paused" | "handoff_fix";
+  status:
+    | "queued"
+    | "running"
+    | "needs_judge"
+    | "rework"
+    | "done"
+    | "blocked"
+    | "paused"
+    | "handoff_fix";
   assignedSlaveId?: string;
   title?: string;
 }

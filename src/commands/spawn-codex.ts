@@ -14,9 +14,15 @@ const hasBinary = async ({ name }: { name: string }): Promise<boolean> => {
   }
 };
 
-const resolveCliCommand = async ({ override }: { override?: string }): Promise<{ cmd: string; args: string[] }> => {
-  if (override && override.trim().length > 0) {
-    const parts = override.trim().split(/\s+/);
+const resolveCliCommand = async ({
+  override,
+}: {
+  override?: string;
+}): Promise<{ cmd: string; args: string[] }> => {
+  const envOverride = process.env.CLANKER_CODEX_COMMAND;
+  const command = envOverride && envOverride.trim().length > 0 ? envOverride : override;
+  if (command && command.trim().length > 0) {
+    const parts = command.trim().split(/\s+/);
     const [cmd, ...args] = parts;
     return { cmd: cmd ?? "codex", args };
   }
@@ -24,7 +30,15 @@ const resolveCliCommand = async ({ override }: { override?: string }): Promise<{
   return { cmd: hasC ? "c" : "codex", args: [] };
 };
 
-const makeLogPath = ({ logsDir, role, id }: { logsDir: string; role: string; id: string }): string => {
+const makeLogPath = ({
+  logsDir,
+  role,
+  id,
+}: {
+  logsDir: string;
+  role: string;
+  id: string;
+}): string => {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   return join(logsDir, `${role}-${id}-${stamp}.log`);
 };
@@ -40,9 +54,16 @@ export const spawnCodex = async ({
   id: string;
   command?: string;
 }): Promise<{ child: ReturnType<typeof spawn>; logPath: string }> => {
-  const cli = await resolveCliCommand({ override: command });
   const logPath = makeLogPath({ logsDir, role, id });
   const logStream = createWriteStream(logPath, { flags: "a" });
+  if (process.env.CLANKER_DISABLE_CODEX === "1") {
+    logStream.write("codex disabled\n");
+    logStream.end();
+    const child = spawn(process.execPath, ["-e", "process.exit(0)"], { stdio: "ignore" });
+    return { child, logPath };
+  }
+
+  const cli = await resolveCliCommand({ override: command });
 
   const child = spawn(cli.cmd, cli.args, { stdio: ["inherit", "pipe", "pipe"] });
   child.stdout?.on("data", (chunk) => {

@@ -14,7 +14,7 @@ module.exports = {
     "!src/git.ts",
     "!src/worktrees.ts",
   ],
-  testPathIgnorePatterns: ["/dist/"],
+  testPathIgnorePatterns: ["/dist/", "/tests/it/"],
   coverageThreshold: {
     global: {
       branches: 85,

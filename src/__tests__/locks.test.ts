@@ -18,14 +18,24 @@ describe("locks", () => {
 
   test("file lock conflicts with same file", () => {
     const busy: TaskRecord = { id: "t1", status: "running", prompt: "x", ownerFiles: ["src/a.ts"] };
-    const queued: TaskRecord = { id: "t2", status: "queued", prompt: "y", ownerFiles: ["src/a.ts"] };
+    const queued: TaskRecord = {
+      id: "t2",
+      status: "queued",
+      prompt: "y",
+      ownerFiles: ["src/a.ts"],
+    };
     const lockState = buildLockState({ tasks: [busy] });
     expect(hasLockConflict({ task: queued, lockState })).toBe(true);
   });
 
   test("file lock does not conflict with different file", () => {
     const busy: TaskRecord = { id: "t1", status: "running", prompt: "x", ownerFiles: ["src/a.ts"] };
-    const queued: TaskRecord = { id: "t2", status: "queued", prompt: "y", ownerFiles: ["src/b.ts"] };
+    const queued: TaskRecord = {
+      id: "t2",
+      status: "queued",
+      prompt: "y",
+      ownerFiles: ["src/b.ts"],
+    };
     const lockState = buildLockState({ tasks: [busy] });
     expect(hasLockConflict({ task: queued, lockState })).toBe(false);
   });

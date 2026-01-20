@@ -54,6 +54,9 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 ## Build / Test
 
 - Before handoff: run full gate (lint/typecheck/tests/docs).
+- Always run `yarn verify` after code changes; report results.
+- Behavioral changes: run swarm verify (local), note if blocked by tmux permissions.
+- Add/extend integration tests when behavior spans planner/slave/judge flow; prefer fast tmpdir harness + stub `codexCommand`.
 - CI red: `gh run list/view`, rerun, fix, push, repeat til green.
 - Keep it observable (logs, panes, tails, MCP/browser tools).
 - Release: read `docs/RELEASING.md` (or find best checklist if missing).
@@ -200,9 +203,7 @@ export function shouldWrapSol(dex: Dex): boolean {
 }
 
 export const SHOULD_WRAP_SOL = Object.values(Dex).filter(shouldWrapSol);
-export const SHOULD_NOT_WRAP_SOL = Object.values(Dex).filter(
-  (dex) => !shouldWrapSol(dex),
-);
+export const SHOULD_NOT_WRAP_SOL = Object.values(Dex).filter((dex) => !shouldWrapSol(dex));
 
 export const handleWrap = ({
   dex,

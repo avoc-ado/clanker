@@ -11,7 +11,11 @@ export interface MetricsSnapshot {
   backlogHistory: number[];
 }
 
-export const loadMetrics = async ({ metricsPath }: { metricsPath: string }): Promise<MetricsSnapshot> => {
+export const loadMetrics = async ({
+  metricsPath,
+}: {
+  metricsPath: string;
+}): Promise<MetricsSnapshot> => {
   try {
     const raw = await readFile(metricsPath, "utf-8");
     const parsed = JSON.parse(raw) as MetricsSnapshot;

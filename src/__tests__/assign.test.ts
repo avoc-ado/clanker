@@ -26,7 +26,9 @@ const makePaths = async (): Promise<ClankerPaths> => {
 describe("assignQueuedTasks", () => {
   test("assigns queued tasks to available slaves", async () => {
     const paths = await makePaths();
-    await import("node:fs/promises").then(({ mkdir }) => mkdir(paths.tasksDir, { recursive: true }));
+    await import("node:fs/promises").then(({ mkdir }) =>
+      mkdir(paths.tasksDir, { recursive: true }),
+    );
 
     const tasks: TaskRecord[] = [
       { id: "t1", status: "queued", prompt: "do t1" },
@@ -50,7 +52,9 @@ describe("assignQueuedTasks", () => {
 
   test("no assignment when no slaves available", async () => {
     const paths = await makePaths();
-    await import("node:fs/promises").then(({ mkdir }) => mkdir(paths.tasksDir, { recursive: true }));
+    await import("node:fs/promises").then(({ mkdir }) =>
+      mkdir(paths.tasksDir, { recursive: true }),
+    );
 
     const task: TaskRecord = { id: "t3", status: "queued", prompt: "do t3" };
     await saveTask({ tasksDir: paths.tasksDir, task });
@@ -67,7 +71,9 @@ describe("assignQueuedTasks", () => {
 
   test("skips busy slave", async () => {
     const paths = await makePaths();
-    await import("node:fs/promises").then(({ mkdir }) => mkdir(paths.tasksDir, { recursive: true }));
+    await import("node:fs/promises").then(({ mkdir }) =>
+      mkdir(paths.tasksDir, { recursive: true }),
+    );
 
     const busy: TaskRecord = { id: "t4", status: "running", prompt: "busy", assignedSlaveId: "c1" };
     const queued: TaskRecord = { id: "t5", status: "queued", prompt: "do t5" };
@@ -86,7 +92,9 @@ describe("assignQueuedTasks", () => {
 
   test("prefers resume slave when available", async () => {
     const paths = await makePaths();
-    await import("node:fs/promises").then(({ mkdir }) => mkdir(paths.tasksDir, { recursive: true }));
+    await import("node:fs/promises").then(({ mkdir }) =>
+      mkdir(paths.tasksDir, { recursive: true }),
+    );
 
     const task: TaskRecord = {
       id: "t6",

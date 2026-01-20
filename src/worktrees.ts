@@ -7,7 +7,13 @@ export interface WorktreeNames {
   slave: string;
 }
 
-export const getWorktreeNames = ({ profileNum, desk }: { profileNum: number; desk: string }): WorktreeNames => {
+export const getWorktreeNames = ({
+  profileNum,
+  desk,
+}: {
+  profileNum: number;
+  desk: string;
+}): WorktreeNames => {
   return {
     planner: "c-planner",
     judge: "c-judge",

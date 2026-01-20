@@ -18,6 +18,7 @@ flowchart TD
 ```
 
 ## Signals
+
 - `needs_judge`: slave complete
 - `rework`: return to same slave
 - `handoff_fix`: planner regenerates packet

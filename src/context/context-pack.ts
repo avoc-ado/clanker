@@ -35,7 +35,11 @@ const readPlanDocs = async ({ repoRoot }: { repoRoot: string }): Promise<Context
   }
 };
 
-const readHistorySummaries = async ({ historyDir }: { historyDir: string }): Promise<ContextPackEntry[]> => {
+const readHistorySummaries = async ({
+  historyDir,
+}: {
+  historyDir: string;
+}): Promise<ContextPackEntry[]> => {
   try {
     const files = await readdir(historyDir);
     const summaries = files.filter((file) => file.endsWith(".md")).slice(-5);

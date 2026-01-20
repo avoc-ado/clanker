@@ -23,12 +23,9 @@ describe("tasks", () => {
   test("skips invalid task files", async () => {
     const root = await mkdtemp(join(tmpdir(), "clanker-tasks-bad-"));
     const tasksDir = join(root, "tasks");
-    await import("node:fs/promises").then(({ mkdir, writeFile }) => {
-      return Promise.all([
-        mkdir(tasksDir, { recursive: true }),
-        writeFile(join(tasksDir, "bad.json"), JSON.stringify({ id: 1 }), "utf-8"),
-      ]);
-    });
+    const fs = await import("node:fs/promises");
+    await fs.mkdir(tasksDir, { recursive: true });
+    await fs.writeFile(join(tasksDir, "bad.json"), JSON.stringify({ id: 1 }), "utf-8");
 
     const list = await listTasks({ tasksDir });
     expect(list.length).toBe(0);
@@ -73,21 +70,18 @@ describe("tasks", () => {
   test("skips invalid usage fields", async () => {
     const root = await mkdtemp(join(tmpdir(), "clanker-tasks-usage-bad-"));
     const tasksDir = join(root, "tasks");
-    await import("node:fs/promises").then(({ mkdir, writeFile }) => {
-      return Promise.all([
-        mkdir(tasksDir, { recursive: true }),
-        writeFile(
-          join(tasksDir, "bad.json"),
-          JSON.stringify({
-            id: "t8",
-            status: "queued",
-            prompt: "do",
-            usage: { tokens: "nope", cost: 0.1 },
-          }),
-          "utf-8",
-        ),
-      ]);
-    });
+    const fs = await import("node:fs/promises");
+    await fs.mkdir(tasksDir, { recursive: true });
+    await fs.writeFile(
+      join(tasksDir, "bad.json"),
+      JSON.stringify({
+        id: "t8",
+        status: "queued",
+        prompt: "do",
+        usage: { tokens: "nope", cost: 0.1 },
+      }),
+      "utf-8",
+    );
 
     const list = await listTasks({ tasksDir });
     expect(list.length).toBe(0);

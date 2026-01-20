@@ -11,7 +11,10 @@ export const sparkline = ({ values }: { values: number[] }): string => {
   return values
     .map((value) => {
       const ratio = value / max;
-      const index = Math.min(SPARK_LEVELS.length - 1, Math.floor(ratio * (SPARK_LEVELS.length - 1)));
+      const index = Math.min(
+        SPARK_LEVELS.length - 1,
+        Math.floor(ratio * (SPARK_LEVELS.length - 1)),
+      );
       return SPARK_LEVELS[index];
     })
     .join("");

@@ -10,6 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "yarn build && yarn node dist/cli.js",
     "test": "NODE_OPTIONS=--experimental-vm-modules yarn jest --coverage",
+    "test:it": "yarn build && NODE_OPTIONS=--experimental-vm-modules yarn jest --config jest.it.config.cjs",
+    "verify": "yarn format:write && yarn typecheck && yarn test && yarn test:it",
     "format": "prettier --check .",
     "format:write": "prettier --write ."
   },

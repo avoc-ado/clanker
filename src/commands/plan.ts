@@ -8,13 +8,18 @@ import { formatTaskSchema } from "../plan/schema.js";
 import { buildContextPack } from "../context/context-pack.js";
 import { loadConfig } from "../config.js";
 
-const formatContextEntries = ({ entries }: { entries: { title: string; content: string }[] }): string => {
+const formatContextEntries = ({
+  entries,
+}: {
+  entries: { title: string; content: string }[];
+}): string => {
   if (entries.length === 0) {
     return "(none)";
   }
   return entries
     .map((entry) => {
-      const clipped = entry.content.length > 1000 ? `${entry.content.slice(0, 1000)}…` : entry.content;
+      const clipped =
+        entry.content.length > 1000 ? `${entry.content.slice(0, 1000)}…` : entry.content;
       return [`--- ${entry.title} ---`, clipped].join("\n");
     })
     .join("\n");

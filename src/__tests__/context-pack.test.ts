@@ -34,7 +34,10 @@ describe("buildContextPack", () => {
     await mkdir(docsDir, { recursive: true });
     await writeFile(join(docsDir, "plan-empty.md"), "", "utf-8");
 
-    const pack = await buildContextPack({ repoRoot: root, historyDir: join(root, ".clanker", "history") });
+    const pack = await buildContextPack({
+      repoRoot: root,
+      historyDir: join(root, ".clanker", "history"),
+    });
     expect(pack.entries.length).toBe(0);
   });
 

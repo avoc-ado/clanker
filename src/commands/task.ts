@@ -45,7 +45,13 @@ const parseUsageFlags = ({
   args,
 }: {
   args: string[];
-}): { tokens?: number; cost?: number; judgeTokens?: number; judgeCost?: number; remaining: string[] } => {
+}): {
+  tokens?: number;
+  cost?: number;
+  judgeTokens?: number;
+  judgeCost?: number;
+  remaining: string[];
+} => {
   let next = args;
   const tok = parseFlag({ args: next, name: "--tok" });
   next = tok.remaining;

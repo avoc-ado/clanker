@@ -160,7 +160,9 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     const tokenBurnPerMin = Math.floor(tokenBurnWindow / windowMinutes);
 
     const conflictCount = countLockConflicts({
-      tasks: tasks.filter((task) => ["running", "needs_judge", "rework", "blocked", "handoff_fix"].includes(task.status)),
+      tasks: tasks.filter((task) =>
+        ["running", "needs_judge", "rework", "blocked", "handoff_fix"].includes(task.status),
+      ),
     });
     const schedulerCap = computeSlaveCap({
       slaveCap: config.slaves,

@@ -13,7 +13,9 @@ const runTmux = async ({ args }: { args: string[] }): Promise<string> => {
   return stdout.trim();
 };
 
-export const listPanes = async ({ sessionName }: { sessionName?: string } = {}): Promise<TmuxPane[]> => {
+export const listPanes = async ({ sessionName }: { sessionName?: string } = {}): Promise<
+  TmuxPane[]
+> => {
   try {
     const targetArgs = sessionName ? ["list-panes", "-t", sessionName] : ["list-panes", "-a"];
     const output = await runTmux({
@@ -73,7 +75,13 @@ export const getCurrentPaneId = async (): Promise<string | null> => {
   }
 };
 
-export const sendKeys = async ({ paneId, text }: { paneId: string; text: string }): Promise<void> => {
+export const sendKeys = async ({
+  paneId,
+  text,
+}: {
+  paneId: string;
+  text: string;
+}): Promise<void> => {
   try {
     await runTmux({ args: ["send-keys", "-t", paneId, text, "Enter"] });
   } catch {

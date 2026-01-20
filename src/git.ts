@@ -3,13 +3,7 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-export const runGit = async ({
-  args,
-  cwd,
-}: {
-  args: string[];
-  cwd: string;
-}): Promise<string> => {
+export const runGit = async ({ args, cwd }: { args: string[]; cwd: string }): Promise<string> => {
   const { stdout } = await execFileAsync("git", args, { cwd });
   return stdout.trim();
 };

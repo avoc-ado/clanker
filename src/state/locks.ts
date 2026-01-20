@@ -48,7 +48,13 @@ export const buildLockState = ({ tasks }: { tasks: TaskRecord[] }): LockState =>
   return { lockedDirs, lockedFiles, lockedFileTopDirs };
 };
 
-export const hasLockConflict = ({ task, lockState }: { task: TaskRecord; lockState: LockState }): boolean => {
+export const hasLockConflict = ({
+  task,
+  lockState,
+}: {
+  task: TaskRecord;
+  lockState: LockState;
+}): boolean => {
   const locks = getTaskLocks({ task });
   if (locks.dirs.length > 0) {
     return locks.dirs.some(

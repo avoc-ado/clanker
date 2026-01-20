@@ -25,8 +25,10 @@ export const loadConfig = async ({ repoRoot }: { repoRoot: string }): Promise<Cl
     } satisfies ClankerConfig;
     return {
       ...merged,
-      tmuxSession: merged.tmuxSession && merged.tmuxSession.length > 0 ? merged.tmuxSession : undefined,
-      codexCommand: merged.codexCommand && merged.codexCommand.length > 0 ? merged.codexCommand : undefined,
+      tmuxSession:
+        merged.tmuxSession && merged.tmuxSession.length > 0 ? merged.tmuxSession : undefined,
+      codexCommand:
+        merged.codexCommand && merged.codexCommand.length > 0 ? merged.codexCommand : undefined,
     } satisfies ClankerConfig;
   } catch {
     return DEFAULT_CONFIG;
