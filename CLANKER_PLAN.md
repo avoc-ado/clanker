@@ -12,18 +12,27 @@
 
 ## Config + State
 - `clanker.yaml` (repo root, settings)
-- `.clanker/` (state/events/logs/heartbeat/attach/history)
+- `.clanker/` (state/events/logs/heartbeat/history/archive)
+- Raw chat logs: `.clanker/logs/<role>-<id>-<timestamp>.log`
 - Defaults: `slaves: 3`
+- Config options: `tmuxSession` (optional), `codexCommand` (optional override)
 
 ## CLI
 - `clanker` → controller + TUI
 - `clanker slave 1` → run slave `c1`
+- `clanker judge` → run judge
 - `clanker status` → summary
+- `clanker tail` → follow events log
 - `clanker doctor` → env/attach/worktree checks
+- `clanker doctor --fix` → create missing state dirs
+- `clanker resume` → unpause + open TUI
+- `clanker task handoff <id> <role> --summary --tests --diffs [--risks]`
+- `clanker task gc [--days N]` → archive old task JSON
 
 ## tmux attach
 - `c1` alias: set pane title `clanker:c1`, run `clanker slave 1`
 - Controller: `tmux list-panes -a -F '#{pane_id} #{pane_title}'`
+- If `tmuxSession` set, restrict panes to that session
 - Attach order: existing panes first, then auto-spawn if `slaves` > panes
 
 ## Scheduler
@@ -34,13 +43,14 @@
 
 ## Task routing
 - Default lock: top-level dir ownership
-- Optional `ownerFiles[]` for hot dirs
+- Optional `ownerFiles[]` for file-level locks (override dir lock)
 - Conflict detect: watcher + `git status --porcelain`
 
 ## Retries
 - Exponential backoff + jitter; cap 30s; infinite retries
 - Retriable: offline, 429, 5xx, timeouts
 - Out-of-tokens: replan/split, not blind retry
+  - Planner splits scope and issues smaller packets
 
 ## Resilience
 - Atomic writes to `clanker.yaml` + append `events.log`
@@ -60,9 +70,28 @@
 
 ## Handoff Shape (Role Contract)
 - Task spec fields: goal, ownerDirs, inputs, expected outputs, tests to run, done criteria
+- Internal routing: `resumeSlaveId` set when rework/handoff_fix/blocked to resume same slave
 - Slave output: summary + tests + touched files + open risks + TODOs
 - Judge output: verdict + verify steps + regressions + required rework
 - Planner output: new tasks only; no manual table edits by user
+
+### Handoff Packet (Sample)
+```
+# judge handoff
+
+## Summary
+Verified task scope; mainline ready.
+
+## Tests
+- yarn test
+
+## Diffs
+- src/state/tasks.ts
+- src/commands/task.ts
+
+## Risks
+(none)
+```
 
 ### Handoff Completeness Checklist
 - Goal + non-goals
@@ -276,7 +305,7 @@ STATE: {pausedTasks} {assignments} {staleHeartbeats}
 ## Data Flow + Context (Theory of Mind)
 - Source of intent: plan docs in `docs/plan-*.md`
 - State of work: `.clanker/state.json` + `.clanker/tasks/*.json`
-- Memory: `.clanker/history/*.md` (slave/judge summaries) + `.clanker/events.log`
+- Memory: `.clanker/history/*.md` (summaries) + `.clanker/events.log` + `.clanker/logs/*.log`
 - Controller keeps in-memory index; persists on every event
 
 ### Planner loop

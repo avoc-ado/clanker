@@ -49,7 +49,7 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 ## Flow & Runtime
 
 - Use repo’s package manager/runtime; no swaps w/o approval.
-- Use cursor-agent background for long jobs; tmux only for interactive/persistent (debugger/server).
+- Use Codex background for long jobs; tmux only for interactive/persistent (debugger/server).
 
 ## Build / Test
 
