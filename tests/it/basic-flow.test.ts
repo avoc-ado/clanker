@@ -14,8 +14,8 @@ describe("integration: basic flow", () => {
     const root = await makeTmpRepo({
       planLines: [
         "Goal: verify basic flow.",
-        "Requirement: planner must output at least 2 task packets.",
-        "Split the work across 2 tasks (scaffold + wire).",
+        "Requirement: planner must output a minimum of 2 task packets.",
+        "Ensure at least two tasks (no upper cap).",
       ],
     });
     const stubPath = await writeCodexStub({ root });

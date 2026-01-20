@@ -5,7 +5,7 @@
 - Decide Prettier in verify (`prettier --write` in `yarn verify`, keep `yarn format` check)
 - Integration suite shape (parallel-safe tmpdir, no shared ports/state)
 - CLI artifact validation uses args/STDIO (no disk writes)
-- Plan docs require minimum 2 task packets (directive in plan prompt tests)
+- Plan docs require minimum of 2 task packets (no upper cap)
 - Replace `scripts/it-runner.mjs` with TS integration tests
 - Add `jest.it.config.cjs` + `tsconfig.it.json`
 - Add integration tests under `tests/it`

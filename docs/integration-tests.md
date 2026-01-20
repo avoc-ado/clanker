@@ -16,5 +16,5 @@ read_when: testing, ops
 ## Notes
 
 - Each test creates its own temp repo with `docs/plan-*.md`.
-- Plan docs include a directive: "planner must output at least 2 task packets" to avoid one-shot plans.
+- Plan docs include a directive: "planner must output a minimum of 2 task packets" to avoid one-shot plans.
 - `codexCommand` is stubbed with a small Node script that echoes args to stdout.

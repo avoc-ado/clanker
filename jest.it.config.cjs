@@ -7,9 +7,7 @@ module.exports = {
   },
   testMatch: ["<rootDir>/tests/it/**/*.test.ts"],
   collectCoverage: false,
-  globals: {
-    "ts-jest": {
-      tsconfig: "tsconfig.it.json",
-    },
+  transform: {
+    "^.+\\.tsx?$": ["ts-jest", { useESM: true, tsconfig: "tsconfig.it.json" }],
   },
 };

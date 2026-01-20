@@ -4,13 +4,9 @@ import { ensureExists, makeTmpRepo, runCli, writeCodexStub, writeConfig } from "
 
 describe("integration: plan prompt", () => {
   test("includes plan directive for minimum tasks", async () => {
-    const requirement = "Requirement: planner must output at least 2 task packets.";
+    const requirement = "Requirement: planner must output a minimum of 2 task packets.";
     const root = await makeTmpRepo({
-      planLines: [
-        "Goal: echo cli",
-        requirement,
-        "Split the work across 2 tasks (scaffold + wire).",
-      ],
+      planLines: ["Goal: echo cli", requirement, "Ensure at least two tasks (no upper cap)."],
     });
     const stubPath = await writeCodexStub({ root });
     await writeConfig({ root, stubPath });
