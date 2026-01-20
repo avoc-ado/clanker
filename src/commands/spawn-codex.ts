@@ -14,6 +14,45 @@ const hasBinary = async ({ name }: { name: string }): Promise<boolean> => {
   }
 };
 
+const splitCommand = ({ command }: { command: string }): string[] => {
+  const parts: string[] = [];
+  let current = "";
+  let inSingle = false;
+  let inDouble = false;
+  let isEscaping = false;
+  for (const ch of command.trim()) {
+    if (isEscaping) {
+      current += ch;
+      isEscaping = false;
+      continue;
+    }
+    if (ch === "\\") {
+      isEscaping = true;
+      continue;
+    }
+    if (ch === "'" && !inDouble) {
+      inSingle = !inSingle;
+      continue;
+    }
+    if (ch === '"' && !inSingle) {
+      inDouble = !inDouble;
+      continue;
+    }
+    if (!inSingle && !inDouble && /\s/.test(ch)) {
+      if (current.length > 0) {
+        parts.push(current);
+        current = "";
+      }
+      continue;
+    }
+    current += ch;
+  }
+  if (current.length > 0) {
+    parts.push(current);
+  }
+  return parts;
+};
+
 const resolveCliCommand = async ({
   override,
 }: {
@@ -22,7 +61,7 @@ const resolveCliCommand = async ({
   const envOverride = process.env.CLANKER_CODEX_COMMAND;
   const command = envOverride && envOverride.trim().length > 0 ? envOverride : override;
   if (command && command.trim().length > 0) {
-    const parts = command.trim().split(/\s+/);
+    const parts = splitCommand({ command });
     const [cmd, ...args] = parts;
     return { cmd: cmd ?? "codex", args };
   }

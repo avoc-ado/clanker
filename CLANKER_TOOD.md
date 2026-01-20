@@ -14,6 +14,13 @@
 - Add `docs/integration-tests.md` + quickstart link
 - Integration tests support stub + real Codex modes
 - Package metadata + README/LICENSE for `npx clanker@latest`
+- Real IT mode runs real Codex (interactive + token output), no "extended" mode
+- Update IT harness to drive real Codex: send prompt, await output, assert logs non-empty
+- Adjust `tests/it/basic-flow.test.ts` to branch stub vs real behavior
+- Add IT: pack workspace and run CLI from extracted tarball
+- Add IT: resume CLI toggles paused + emits RESUMED
+- Add IT: task handoff usage persists + emits TASK_USAGE
+- Add IT: tail output includes tok/judge formatting for usage events
 
 ## Now
 
@@ -22,9 +29,13 @@
 ## Next
 
 - If codex resolution fails in real IT mode, prompt to install; decline exits nonzero
+- Blind-spot audit: map current IT coverage to features; list gaps (low/medium)
+- Add IT: planner/judge rework routing (CLI-level)
+- Add IT: multi-slave scheduler assignment + stale heartbeat handling (no tmux)
 
 ## Later
 
-- Split integration suite into fast vs extended (tagged)
+- Add IT: tmux attach (pane discovery + send-keys)
+- Add IT: lock/ownership conflict detection + lock expiry
 - Add flaky guard for tmux-bound scenarios
 - Add example plan doc fixture for integration

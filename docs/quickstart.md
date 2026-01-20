@@ -40,6 +40,6 @@ See `clanker.yaml` for `slaves`, `tmuxSession`, `codexCommand`.
 ## Verify
 
 - `yarn verify` (format + typecheck + unit + integration)
-- `yarn test:it` (integration only; runs stub + real modes)
-- `yarn test:it:stub` / `yarn test:it:real` (single mode)
+- `yarn test:it` (integration only; stub mode)
+- `yarn test:it:real` (runs real Codex; use for behavior changes)
 - See `docs/integration-tests.md` for suite details.

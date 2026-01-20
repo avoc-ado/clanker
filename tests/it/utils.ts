@@ -1,16 +1,29 @@
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile, copyFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { execFile } from "node:child_process";
+import { basename, join, resolve } from "node:path";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { createInterface } from "node:readline/promises";
+import { setTimeout as delay } from "node:timers/promises";
 
 const execFileAsync = promisify(execFile);
 
 const repoRoot = resolve(process.cwd());
 const cliPath = join(repoRoot, "dist", "cli.js");
-const pnpRequire = join(repoRoot, ".pnp.cjs");
-const pnpLoader = join(repoRoot, ".pnp.loader.mjs");
+const defaultPnpRequire = join(repoRoot, ".pnp.cjs");
+const defaultPnpLoader = join(repoRoot, ".pnp.loader.mjs");
+const yarnRcPath = join(repoRoot, ".yarnrc.yml");
+const yarnLockPath = join(repoRoot, "yarn.lock");
+const yarnCacheDir = join(repoRoot, ".yarn", "cache");
+
+const resolveYarnReleasePath = async (): Promise<string> => {
+  const raw = await readFile(yarnRcPath, "utf-8");
+  const match = raw.match(/yarnPath:\s*(.+)/);
+  if (!match || !match[1]) {
+    return join(repoRoot, ".yarn", "releases", "yarn-4.12.0.cjs");
+  }
+  return join(repoRoot, match[1].trim());
+};
 
 export const runCli = async ({
   cwd,
@@ -22,7 +35,7 @@ export const runCli = async ({
   env?: NodeJS.ProcessEnv;
 }): Promise<string> => {
   const baseOptions = env?.NODE_OPTIONS ?? process.env.NODE_OPTIONS ?? "";
-  const pnpOptions = `--require ${pnpRequire} --loader ${pnpLoader}`;
+  const pnpOptions = `--require ${defaultPnpRequire} --loader ${defaultPnpLoader}`;
   const nodeOptions = `${baseOptions} ${pnpOptions}`.trim();
   const mergedEnv: NodeJS.ProcessEnv = {
     ...process.env,
@@ -43,6 +56,8 @@ const getCodexMode = (): CodexMode => {
   return mode === "real" ? "real" : "stub";
 };
 
+export const isRealMode = (): boolean => getCodexMode() === "real";
+
 const hasBinary = async ({ name }: { name: string }): Promise<boolean> => {
   try {
     await execFileAsync("command", ["-v", name], { shell: true });
@@ -58,10 +73,10 @@ const resolveRealCodexCommand = async (): Promise<string | null> => {
     return override;
   }
   if (await hasBinary({ name: "c" })) {
-    return "c --help";
+    return 'c "clanker it real mode: reply with OK and then stay idle"';
   }
   if (await hasBinary({ name: "codex" })) {
-    return "codex --help";
+    return 'codex "clanker it real mode: reply with OK and then stay idle"';
   }
   return null;
 };
@@ -165,4 +180,126 @@ export const ensureExists = async ({
 export const runNode = async ({ cwd, args }: { cwd: string; args: string[] }): Promise<string> => {
   const { stdout, stderr } = await execFileAsync("node", args, { cwd });
   return `${stdout}${stderr}`.trim();
+};
+
+export const runNodeWithPnp = async ({
+  cwd,
+  args,
+  env,
+  pnpRoot,
+}: {
+  cwd: string;
+  args: string[];
+  env?: NodeJS.ProcessEnv;
+  pnpRoot?: string;
+}): Promise<string> => {
+  const pnpRequire = pnpRoot ? join(pnpRoot, ".pnp.cjs") : defaultPnpRequire;
+  const pnpLoader = pnpRoot ? join(pnpRoot, ".pnp.loader.mjs") : defaultPnpLoader;
+  const baseOptions = env?.NODE_OPTIONS ?? (pnpRoot ? "" : (process.env.NODE_OPTIONS ?? ""));
+  const pnpOptions = `--require ${pnpRequire} --loader ${pnpLoader}`;
+  const nodeOptions = `${baseOptions} ${pnpOptions}`.trim();
+  const mergedEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    ...env,
+    NODE_OPTIONS: nodeOptions,
+  };
+  const { stdout, stderr } = await execFileAsync(process.execPath, args, { cwd, env: mergedEnv });
+  return `${stdout}${stderr}`.trim();
+};
+
+export const packWorkspace = async ({ outDir }: { outDir: string }): Promise<string> => {
+  await mkdir(outDir, { recursive: true });
+  const tarPath = join(outDir, "clanker-cli.tgz");
+  await execFileAsync("yarn", ["pack", "-o", tarPath], { cwd: repoRoot });
+  return tarPath;
+};
+
+export const extractTarball = async ({
+  tarPath,
+  outDir,
+}: {
+  tarPath: string;
+  outDir: string;
+}): Promise<string> => {
+  await mkdir(outDir, { recursive: true });
+  await execFileAsync("tar", ["-xzf", tarPath, "-C", outDir]);
+  return join(outDir, "package");
+};
+
+export const installPackedDeps = async ({ pkgRoot }: { pkgRoot: string }): Promise<void> => {
+  await copyFile(yarnRcPath, join(pkgRoot, ".yarnrc.yml"));
+  await copyFile(yarnLockPath, join(pkgRoot, "yarn.lock"));
+  const releasePath = await resolveYarnReleasePath();
+  const releaseDir = join(pkgRoot, ".yarn", "releases");
+  await mkdir(releaseDir, { recursive: true });
+  const releaseName = basename(releasePath);
+  await copyFile(releasePath, join(releaseDir, releaseName));
+  await execFileAsync(process.execPath, [join(releaseDir, releaseName), "install", "--immutable"], {
+    cwd: pkgRoot,
+    env: {
+      ...process.env,
+      YARN_CACHE_FOLDER: yarnCacheDir,
+      YARN_ENABLE_NETWORK: "0",
+    },
+  });
+};
+
+export const runCliInteractive = async ({
+  cwd,
+  args,
+  env,
+  inputLines,
+  timeoutMs,
+  usePty,
+}: {
+  cwd: string;
+  args: string[];
+  env?: NodeJS.ProcessEnv;
+  inputLines: string[];
+  timeoutMs: number;
+  usePty?: boolean;
+}): Promise<{ stdout: string; stderr: string; timedOut: boolean }> => {
+  const baseOptions = env?.NODE_OPTIONS ?? process.env.NODE_OPTIONS ?? "";
+  const pnpOptions = `--require ${defaultPnpRequire} --loader ${defaultPnpLoader}`;
+  const nodeOptions = `${baseOptions} ${pnpOptions}`.trim();
+  const mergedEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    ...env,
+    NODE_OPTIONS: nodeOptions,
+  };
+  const child = usePty
+    ? spawn("script", ["-q", "/dev/null", process.execPath, cliPath, ...args], {
+        cwd,
+        env: mergedEnv,
+        stdio: ["pipe", "pipe", "pipe"],
+      })
+    : spawn(process.execPath, [cliPath, ...args], {
+        cwd,
+        env: mergedEnv,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk.toString();
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk.toString();
+  });
+  await delay(500);
+  child.stdin.write(`${inputLines.join("\n")}\n`);
+
+  const exitPromise = new Promise<void>((resolve) => {
+    child.on("exit", () => resolve());
+  });
+  const timeoutPromise = delay(timeoutMs).then(() => "timeout" as const);
+  const winner = await Promise.race([exitPromise.then(() => "exit" as const), timeoutPromise]);
+  if (winner === "timeout") {
+    child.kill("SIGTERM");
+    await delay(500);
+    child.kill("SIGKILL");
+    await Promise.race([exitPromise, delay(1000)]);
+    return { stdout: stdout.trim(), stderr: stderr.trim(), timedOut: true };
+  }
+  return { stdout: stdout.trim(), stderr: stderr.trim(), timedOut: false };
 };

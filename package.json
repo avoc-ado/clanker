@@ -38,7 +38,7 @@
     "test": "NODE_OPTIONS=--experimental-vm-modules yarn jest --coverage",
     "test:it:stub": "CLANKER_IT_MODE=stub yarn build && NODE_OPTIONS=--experimental-vm-modules yarn jest --config jest.it.config.cjs",
     "test:it:real": "CLANKER_IT_MODE=real yarn build && NODE_OPTIONS=--experimental-vm-modules yarn jest --config jest.it.config.cjs",
-    "test:it": "yarn test:it:stub && yarn test:it:real",
+    "test:it": "yarn test:it:stub",
     "verify": "yarn format:write && yarn typecheck && yarn test && yarn test:it",
     "format": "prettier --check .",
     "format:write": "prettier --write .",

@@ -1,9 +1,11 @@
 import { join } from "node:path";
-import { readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import {
   ensureExists,
+  isRealMode,
   makeTmpRepo,
   runCli,
+  runCliInteractive,
   runNode,
   resolveCodexCommand,
   writeConfig,
@@ -45,10 +47,20 @@ describe("integration: basic flow", () => {
       expect(echo).toContain("echo:hello");
     }
 
-    await runCli({
-      cwd: root,
-      args: ["slave", "1"],
-    });
+    if (isRealMode()) {
+      const result = await runCliInteractive({
+        cwd: root,
+        args: ["slave", "1"],
+        inputLines: [],
+        timeoutMs: 20_000,
+      });
+      expect(result.timedOut).toBe(true);
+    } else {
+      await runCli({
+        cwd: root,
+        args: ["slave", "1"],
+      });
+    }
 
     const tasksDir = join(root, ".clanker", "tasks");
     const historyDir = join(root, ".clanker", "history");
@@ -58,6 +70,10 @@ describe("integration: basic flow", () => {
 
     const logs = await readdir(logsDir);
     expect(logs.length).toBeGreaterThan(0);
+    const logPath = join(logsDir, logs[0] ?? "");
+    await ensureExists({ path: logPath, label: "log file" });
+    const logContent = await readFile(logPath, "utf-8");
+    expect(logContent.length).toBeGreaterThan(0);
 
     const tail = await runCli({ cwd: root, args: ["tail", "--limit=1", "--no-follow"] });
     expect(tail.length).toBeGreaterThan(0);

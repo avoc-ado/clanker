@@ -20,5 +20,6 @@ read_when: testing, ops
 - Each test creates its own temp repo with `docs/plan-*.md`.
 - Plan docs include a directive: "planner must output a minimum of 2 task packets" to avoid one-shot plans.
 - Stub mode uses a small Node script that echoes args to stdout.
+- Real mode runs the actual Codex CLI (generates tokens, may spend usage). It uses a short one-shot prompt and then idles; the test kills the process after a timeout. Run it when behavior changes need real agent coverage.
 - Real mode requires `c` or `codex` on PATH (override with `CLANKER_IT_REAL_COMMAND`). If missing, the runner prompts to install via `npm i -g @openai/codex`.
-- Select mode with `CLANKER_IT_MODE=stub|real` (default: stub).
+- Select mode with `CLANKER_IT_MODE=stub|real` (default: stub). `yarn test:it` runs stub only.
