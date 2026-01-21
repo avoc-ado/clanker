@@ -19,6 +19,7 @@ describe("ensureStateDirs", () => {
       logsDir: join(root, ".clanker", "logs"),
       archiveDir: join(root, ".clanker", "archive"),
       archiveTasksDir: join(root, ".clanker", "archive", "tasks"),
+      commandHistoryPath: join(root, ".clanker", "command-history.json"),
     };
 
     await ensureStateDirs({ paths });

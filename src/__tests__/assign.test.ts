@@ -20,6 +20,7 @@ const makePaths = async (): Promise<ClankerPaths> => {
     logsDir: join(root, ".clanker", "logs"),
     archiveDir: join(root, ".clanker", "archive"),
     archiveTasksDir: join(root, ".clanker", "archive", "tasks"),
+    commandHistoryPath: join(root, ".clanker", "command-history.json"),
   };
 };
 
@@ -111,6 +112,40 @@ describe("assignQueuedTasks", () => {
       paths,
     });
 
+    expect(updated[0]?.assignedSlaveId).toBe("c2");
+  });
+
+  test("ignores stale locks when assigning queued tasks", async () => {
+    const paths = await makePaths();
+    await import("node:fs/promises").then(({ mkdir }) =>
+      mkdir(paths.tasksDir, { recursive: true }),
+    );
+
+    const busy: TaskRecord = {
+      id: "t7",
+      status: "running",
+      prompt: "busy",
+      assignedSlaveId: "c1",
+      ownerDirs: ["src"],
+    };
+    const queued: TaskRecord = {
+      id: "t8",
+      status: "queued",
+      prompt: "do t8",
+      ownerDirs: ["src/utils"],
+    };
+    await saveTask({ tasksDir: paths.tasksDir, task: busy });
+    await saveTask({ tasksDir: paths.tasksDir, task: queued });
+
+    const loaded = await listTasks({ tasksDir: paths.tasksDir });
+    const updated = await assignQueuedTasks({
+      tasks: loaded,
+      availableSlaves: ["c2"],
+      paths,
+      staleSlaves: new Set(["c1"]),
+    });
+
+    expect(updated.length).toBe(1);
     expect(updated[0]?.assignedSlaveId).toBe("c2");
   });
 });

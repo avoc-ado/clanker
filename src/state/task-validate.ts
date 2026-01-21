@@ -8,7 +8,6 @@ const TASK_STATUSES: TaskStatus[] = [
   "done",
   "blocked",
   "paused",
-  "handoff_fix",
   "failed",
 ];
 

@@ -11,8 +11,8 @@ flowchart TD
   E --> F[Judge]
   F -->|done| G[Mainline]
   F -->|rework| D
-  F -->|handoff_fix| B
   F -->|blocked| B
+  F -->|failed| H
   G --> H[Follow-up Tasks]
   H --> B
 ```
@@ -21,5 +21,5 @@ flowchart TD
 
 - `needs_judge`: slave complete
 - `rework`: return to same slave
-- `handoff_fix`: planner regenerates packet
 - `blocked`: wait for input
+- `failed`: task rejected; planner may split follow-up

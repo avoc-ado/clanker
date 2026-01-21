@@ -38,8 +38,8 @@ const tagFromType = ({ type }: { type: string }): string => {
       return "BLOK";
     case "TASK_REWORK":
       return "RISK";
-    case "TASK_HANDOFF_FIX":
     case "TASK_BLOCKED":
+    case "TASK_FAILED":
       return "BLOK";
     case "TEST_FAIL":
       return "TEST";

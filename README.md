@@ -1,6 +1,6 @@
 # clanker
 
-Glitchcore agent harness: planner + slaves + judge + TUI dashboard.
+Glitchcore agent harness: planner + slaves + judge + dashboard stream.
 
 ## Quickstart
 

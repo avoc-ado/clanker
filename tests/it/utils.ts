@@ -91,11 +91,27 @@ const resolveRealCodexCommand = async (): Promise<string | null> => {
   return null;
 };
 
-export const makeTmpRepo = async ({ planLines }: { planLines: string[] }): Promise<string> => {
+export const makeTmpRepo = async ({
+  planLines,
+  planFixture,
+}: {
+  planLines?: string[];
+  planFixture?: string;
+}): Promise<string> => {
   const root = await mkdtemp(join(tmpdir(), "clanker-it-"));
   const docsDir = join(root, "docs");
   await mkdir(docsDir, { recursive: true });
-  await writeFile(join(docsDir, "plan-it.md"), planLines.join("\n"), "utf-8");
+  const planPath = join(docsDir, "plan-it.md");
+  if (planFixture) {
+    const fixturePath = join(repoRoot, planFixture);
+    const raw = await readFile(fixturePath, "utf-8");
+    await writeFile(planPath, raw, "utf-8");
+    return root;
+  }
+  if (!planLines) {
+    throw new Error("planLines required when no planFixture provided");
+  }
+  await writeFile(planPath, planLines.join("\n"), "utf-8");
   return root;
 };
 

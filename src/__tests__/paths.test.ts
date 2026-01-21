@@ -7,5 +7,6 @@ describe("getClankerPaths", () => {
     expect(paths.tasksDir).toBe("/tmp/repo/.clanker/tasks");
     expect(paths.logsDir).toBe("/tmp/repo/.clanker/logs");
     expect(paths.archiveTasksDir).toBe("/tmp/repo/.clanker/archive/tasks");
+    expect(paths.commandHistoryPath).toBe("/tmp/repo/.clanker/command-history.json");
   });
 });

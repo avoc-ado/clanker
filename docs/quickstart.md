@@ -15,6 +15,12 @@ read_when: first-use, onboarding
 - `clanker judge` (integration pane)
 - `clanker planner` (planner pane)
 
+## Dashboard
+
+- Native scrollback (no alt-screen)
+- Commands: `/pause`, `/resume`, `/task <id> <status>`, `/focus`
+- Command history persists (last 50 entries)
+
 ## Task Flow
 
 1. Write/update `docs/plan-*.md`

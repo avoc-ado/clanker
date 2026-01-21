@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { readdir, readFile } from "node:fs/promises";
+import { jest } from "@jest/globals";
 import {
   ensureExists,
   isRealMode,
@@ -11,6 +12,8 @@ import {
   setupRealMode,
   writeConfig,
 } from "./utils.js";
+
+jest.setTimeout(15_000);
 
 describe("integration: basic flow", () => {
   test("task + handoff + slave log", async () => {

@@ -19,6 +19,7 @@ const makePaths = async (): Promise<ClankerPaths> => {
     logsDir: join(root, ".clanker", "logs"),
     archiveDir: join(root, ".clanker", "archive"),
     archiveTasksDir: join(root, ".clanker", "archive", "tasks"),
+    commandHistoryPath: join(root, ".clanker", "command-history.json"),
   };
 };
 
@@ -69,7 +70,7 @@ describe("transitionTaskStatus", () => {
     expect(updated?.promptedAt).toBeUndefined();
   });
 
-  test("handoff_fix frees slave and stores resume", async () => {
+  test("failed clears assignment and emits failed event", async () => {
     const paths = await makePaths();
     await import("node:fs/promises").then(({ mkdir }) =>
       mkdir(paths.tasksDir, { recursive: true }),
@@ -84,17 +85,21 @@ describe("transitionTaskStatus", () => {
       prompt: "do",
       assignedSlaveId: "c3",
       promptedAt: new Date().toISOString(),
+      resumeSlaveId: "c3",
     } as const;
     await saveTask({ tasksDir: paths.tasksDir, task: task });
 
-    await transitionTaskStatus({ task, status: "handoff_fix", paths });
+    await transitionTaskStatus({ task, status: "failed", paths });
 
     const updated = await import("../state/tasks.js").then(({ loadTask }) =>
       loadTask({ tasksDir: paths.tasksDir, id: "t3" }),
     );
-    expect(updated?.status).toBe("handoff_fix");
+    expect(updated?.status).toBe("failed");
     expect(updated?.assignedSlaveId).toBeUndefined();
-    expect(updated?.resumeSlaveId).toBe("c3");
+    expect(updated?.resumeSlaveId).toBeUndefined();
+
+    const eventRaw = await readFile(paths.eventsLog, "utf-8");
+    expect(eventRaw).toContain("TASK_FAILED");
   });
 
   test("blocked stores resume and emits blocked event", async () => {

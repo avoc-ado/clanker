@@ -52,6 +52,7 @@
 - Default lock: top-level dir ownership
 - Optional `ownerFiles[]` for file-level locks (override dir lock)
 - Conflict detect: watcher + `git status --porcelain`
+- Lock expiry: ignore locks held by stale slaves (no heartbeat > 30s)
 
 ## Retries
 
@@ -76,12 +77,12 @@
 - Rework: same task stays unmerged; same slave pauses, resumes work, re-submits
 - Follow-up tasks: only after task is accepted/mainlined (post-merge improvements)
 - Blocked: task waits; planner may split or re-scope; still unmerged; resume same slave when unblocked
-- Handoff fix: missing info → planner regenerates packet → same slave resumes
+- Failed: missing critical info or scope mismatch → task rejected; planner may create follow-up tasks
 
 ## Handoff Shape (Role Contract)
 
 - Task spec fields: goal, ownerDirs, inputs, expected outputs, tests to run, done criteria
-- Internal routing: `resumeSlaveId` set when rework/handoff_fix/blocked to resume same slave
+- Internal routing: rework keeps assignment; blocked clears assignment + sets `resumeSlaveId`
 - Slave output: summary + tests + touched files + open risks + TODOs
 - Judge output: verdict + verify steps + regressions + required rework
 - Planner output: new tasks only; no manual table edits by user
@@ -145,7 +146,7 @@ flowchart TD
   F -->|done| G[Mainline]
   F -->|rework| D
   F -->|blocked| B
-  F -->|handoff_fix| B
+  F -->|failed| H
   G --> H[Follow-up Tasks]
   H --> B
 ```
@@ -208,7 +209,7 @@ flowchart TD
 
 - If slave asks for input, do not escalate to developer by default
 - Controller replies with a role reminder + proceed-with-best-effort prompt
-- If missing critical info, mark `handoff_fix` and ping planner
+- If missing critical info, mark `rework` or `failed` (do not ping planner directly)
 - Command permissions: handled by Codex CLI rules (default `~/.codex/rules/default.rules`)
 - Clanker only detects Codex escalation prompts and auto-focuses the pane (then auto-focuses back)
 - Planner may send non-blocking async clarification request (e.g., Slack) for scope gaps
@@ -331,7 +332,7 @@ STATE: {pausedTasks} {assignments} {staleHeartbeats}
 ## Auto-Reply Templates
 
 - Role reminder (slave): "You are a slave. Do not ask the user. Make best assumptions, log risks, run tests, hand off."
-- Missing info: "Insufficient task packet. Marking handoff_fix; returning to planner."
+- Missing info: "Insufficient task packet. Marking rework or failed; resubmit with risks."
 - Permission denied: "Command blocked by Codex CLI rules. Request escalation with rationale."
 
 ## Mainlining + Conflicts + Regressions
@@ -406,7 +407,7 @@ STATE: {pausedTasks} {assignments} {staleHeartbeats}
 - Run `clanker` TUI + `c1..c3` in tmux; confirm attach + tail stream
 - Simulate sleep/offline; ensure paused state + `/resume` works
 - Exercise worktree flow: task → slave → judge → mainline mock
-- Trigger rework + handoff_fix; ensure same slave resumes
+- Trigger rework or failed; ensure correct status handling
 - Validate permission gating + escalation
 
 ## TUI (blessed)

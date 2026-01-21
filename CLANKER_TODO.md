@@ -24,8 +24,14 @@
 - Add IT: real mode tmux flow (dashboard + planner + slave)
 - Fail fast if tmux/codex missing in real IT mode
 - Real IT: full flow runs dashboard + planner + slaves + judge and checks artifact output
-- Add IT: rework routing (handoff_fix + rework status transitions)
+- Add IT: rework routing + failed status transitions
 - Add IT: multi-slave scheduler assignment + stale heartbeat handling (no tmux)
+- Eliminate handoff_fix status (judge -> rework or fail)
+- Add IT: tmux attach (pane discovery + send-keys)
+- Add IT: lock/ownership conflict detection (ownerDirs + ownerFiles)
+- Define lock expiry policy + tests (stale heartbeat unlocks)
+- Add flaky guard for tmux-bound scenarios
+- Add example plan doc fixture for integration
 - Docs + README use "codex CLI" wording (no alias)
 - Default codexCommand to `codex --no-alt-screen --sandbox workspace-write` in config
 - Auto-write clanker.yaml with commented defaults on startup
@@ -40,16 +46,10 @@
 ## Stack Rank
 
 1. Blind-spot audit: map current IT coverage to features; list gaps (low/medium)
-2. Add IT: tmux attach (pane discovery + send-keys)
-3. Add IT: lock/ownership conflict detection + lock expiry
-4. Add flaky guard for tmux-bound scenarios
-5. Add example plan doc fixture for integration
-6. Eliminate handoff_fix status (judge -> rework or fail)
 
 ## Now
 
 - Blind-spot audit: map current IT coverage to features; list gaps (low/medium)
-- Eliminate handoff_fix status (judge -> rework or fail)
 
 ## Blind-Spot Audit
 
@@ -63,17 +63,5 @@
 
 ### Gaps (low/medium)
 
-- Lock/ownership conflict detection + expiry
-- tmux attach helpers + send-keys behavior
 - Escalation auto-focus + restore behavior in IT
 - Resume-after-sleep / offline recovery (paused state consistency)
-
-## Next
-
-- Add IT: tmux attach (pane discovery + send-keys)
-- Add IT: lock/ownership conflict detection + lock expiry
-- Add flaky guard for tmux-bound scenarios
-
-## Later
-
-- Add example plan doc fixture for integration

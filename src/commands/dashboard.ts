@@ -2,32 +2,56 @@ import { loadConfig } from "../config.js";
 import { getClankerPaths } from "../paths.js";
 import { ensureStateDirs } from "../state/ensure-state.js";
 import { loadState, saveState } from "../state/state.js";
-import { startDashboard } from "../tui/dashboard.js";
 import { capturePane, getCurrentPaneId, listPanes, selectPane, sendKeys } from "../tmux.js";
 import { readRecentEvents } from "../state/read-events.js";
 import { appendEvent } from "../state/events.js";
+import type { ClankerEvent } from "../state/events.js";
 import { listTasks, loadTask, saveTask } from "../state/tasks.js";
 import { readHeartbeats } from "../state/read-heartbeats.js";
-import { isHeartbeatStale } from "../state/heartbeat.js";
 import { assignQueuedTasks } from "../state/assign.js";
 import { computeSlaveCap } from "../scheduler.js";
 import { appendMetricSeries, loadMetrics, saveMetrics } from "../state/metrics.js";
-import { formatIdleLine } from "../tui/idle-line.js";
 import { transitionTaskStatus } from "../state/task-status.js";
 import { TASK_SCHEMA } from "../plan/schema.js";
 import { listDirtyFiles } from "../git.js";
 import { countLockConflicts } from "../state/locks.js";
-import { formatRibbonLine } from "../tui/format-event.js";
 import { buildTaskFileDispatch, getPromptSettings } from "../prompting.js";
-import { readFile } from "node:fs/promises";
+import { formatDateDivider, formatDateKey, formatStreamLine } from "../dashboard/stream-format.js";
+import {
+  appendHistoryEntry,
+  loadCommandHistory,
+  saveCommandHistory,
+} from "../state/command-history.js";
+import { createReadStream, watch } from "node:fs";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import * as readline from "node:readline";
+
+const COMMAND_HISTORY_LIMIT = 50;
+const STREAM_LIMIT = 200;
+
+const ANSI = {
+  reset: "\x1b[0m",
+  gray: "\x1b[90m",
+  cyan: "\x1b[36m",
+} as const;
+
+type CommandHandler = (value: string) => void;
+
+interface ReadlineWithHistory extends readline.Interface {
+  history: string[];
+  output: NodeJS.WriteStream;
+}
+
+const makeCommandPrompt = (): string => {
+  return `${ANSI.gray}[/]${ANSI.reset} ${ANSI.cyan}/command${ANSI.reset} `;
+};
 
 export const runDashboard = async ({}: {}): Promise<void> => {
   const repoRoot = process.cwd();
   const paths = getClankerPaths({ repoRoot });
   await ensureStateDirs({ paths });
   const config = await loadConfig({ repoRoot });
-  const state = await loadState({ statePath: paths.statePath });
   const version = await (async (): Promise<string> => {
     try {
       const raw = await readFile(join(repoRoot, "package.json"), "utf-8");
@@ -45,7 +69,124 @@ export const runDashboard = async ({}: {}): Promise<void> => {
   let lastTickAt = Date.now();
   let lastGitFiles = new Set<string>();
   let staleSlaves = new Set<string>();
+  let lastStatusLine = "";
   const promptSettings = getPromptSettings({ repoRoot, config });
+  const knownTaskIds = new Set<string>();
+  let lastDateKey: string | null = null;
+
+  const commandHistory = await loadCommandHistory({
+    path: paths.commandHistoryPath,
+    maxEntries: COMMAND_HISTORY_LIMIT,
+  });
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    terminal: true,
+    historySize: COMMAND_HISTORY_LIMIT,
+  }) as ReadlineWithHistory;
+  rl.setPrompt(makeCommandPrompt());
+  rl.history = [...commandHistory].reverse();
+
+  const clearPromptLine = (): void => {
+    readline.clearLine(rl.output, 0);
+    readline.cursorTo(rl.output, 0);
+  };
+
+  const writeLine = (line: string): void => {
+    rl.pause();
+    clearPromptLine();
+    rl.output.write(`${line}\n`);
+    rl.resume();
+    rl.prompt(true);
+  };
+
+  const writeDividerIfNeeded = ({ date }: { date: Date }): void => {
+    const dateKey = formatDateKey({ date });
+    if (dateKey === lastDateKey) {
+      return;
+    }
+    lastDateKey = dateKey;
+    writeLine(formatDateDivider({ date }));
+  };
+
+  const renderEvent = ({ raw }: { raw: string }): void => {
+    const line = raw.trim();
+    if (!line) {
+      return;
+    }
+    try {
+      const event = JSON.parse(line) as ClankerEvent;
+      if (event.taskId) {
+        knownTaskIds.add(event.taskId);
+      }
+      const formatted = formatStreamLine({ event });
+      if (!formatted) {
+        return;
+      }
+      writeDividerIfNeeded({ date: formatted.date });
+      writeLine(formatted.line);
+    } catch {
+      return;
+    }
+  };
+
+  const handleCommand: CommandHandler = (raw) => {
+    const value = raw.trim();
+    if (!value) {
+      return;
+    }
+    if (!value.startsWith("/")) {
+      writeLine(`${ANSI.gray}commands must start with '/'${ANSI.reset}`);
+      return;
+    }
+
+    const nextHistory = appendHistoryEntry({
+      entries: commandHistory,
+      entry: value,
+      maxEntries: COMMAND_HISTORY_LIMIT,
+    });
+    commandHistory.splice(0, commandHistory.length, ...nextHistory);
+    rl.history = [...commandHistory].reverse();
+    void saveCommandHistory({
+      path: paths.commandHistoryPath,
+      entries: commandHistory,
+      maxEntries: COMMAND_HISTORY_LIMIT,
+    });
+
+    if (value.startsWith("/resume")) {
+      void setPaused({ paused: false });
+      return;
+    }
+    if (value.startsWith("/pause")) {
+      void setPaused({ paused: true });
+      return;
+    }
+    if (value.startsWith("/focus")) {
+      void toggleFocus();
+      return;
+    }
+    if (value.startsWith("/task")) {
+      const [, id, status] = value.split(/\s+/);
+      if (!id || !status) {
+        writeLine(`${ANSI.gray}usage: /task <id> <status>${ANSI.reset}`);
+        return;
+      }
+      if (!TASK_SCHEMA.status.includes(status)) {
+        writeLine(`${ANSI.gray}invalid status: ${status}${ANSI.reset}`);
+        return;
+      }
+      void loadTask({ tasksDir: paths.tasksDir, id }).then((task) => {
+        if (!task) {
+          writeLine(`${ANSI.gray}task not found: ${id}${ANSI.reset}`);
+          return;
+        }
+        void transitionTaskStatus({ task, status: status as typeof task.status, paths });
+      });
+      return;
+    }
+    writeLine(`${ANSI.gray}unknown command: ${value}${ANSI.reset}`);
+  };
 
   const toggleFocus = async (): Promise<void> => {
     if (!dashboardPaneId) {
@@ -78,45 +219,98 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     });
   };
 
-  const dashboard = startDashboard({
-    config,
-    state,
-    version,
-    configSummary: `planners:${config.planners} judges:${config.judges} slaves:${config.slaves} tmux:${config.tmuxFilter ?? "all"}`,
-    onToggleFocus: () => void toggleFocus(),
-    onPause: () => {
-      void setPaused({ paused: true });
-    },
-    onResume: () => {
-      void setPaused({ paused: false });
-    },
-    onCommand: (value) => {
-      if (value.startsWith("/resume")) {
-        void setPaused({ paused: false });
-        return;
+  const ensureEventsLog = async (): Promise<void> => {
+    try {
+      await stat(paths.eventsLog);
+    } catch {
+      await writeFile(paths.eventsLog, "", "utf-8");
+    }
+  };
+
+  const backfillTaskPackets = async (): Promise<void> => {
+    const tasks = await listTasks({ tasksDir: paths.tasksDir });
+    for (const task of tasks) {
+      if (knownTaskIds.has(task.id)) {
+        continue;
       }
-      if (value.startsWith("/pause")) {
-        void setPaused({ paused: true });
-        return;
-      }
-      if (value.startsWith("/task")) {
-        const [, id, status] = value.split(/\s+/);
-        if (!id || !status) {
-          return;
-        }
-        if (!TASK_SCHEMA.status.includes(status)) {
-          return;
-        }
-        void loadTask({ tasksDir: paths.tasksDir, id }).then((task) => {
-          if (!task) {
-            return;
+      knownTaskIds.add(task.id);
+      await appendEvent({
+        eventsLog: paths.eventsLog,
+        event: {
+          ts: new Date().toISOString(),
+          type: "TASK_PACKET",
+          msg: task.title ? `packet issued: ${task.title}` : "packet issued",
+          taskId: task.id,
+        },
+      });
+    }
+  };
+
+  const startEventStream = async (): Promise<(() => void) | null> => {
+    await ensureEventsLog();
+    try {
+      const raw = await readFile(paths.eventsLog, "utf-8");
+      const lines = raw
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+      for (const line of lines) {
+        try {
+          const event = JSON.parse(line) as { taskId?: string };
+          if (event.taskId) {
+            knownTaskIds.add(event.taskId);
           }
-          void transitionTaskStatus({ task, status: status as typeof task.status, paths });
-        });
+        } catch {
+          continue;
+        }
       }
-    },
-  });
-  dashboardPaneId = await getCurrentPaneId();
+      const recent = lines.slice(-STREAM_LIMIT);
+      for (const line of recent) {
+        renderEvent({ raw: line });
+      }
+    } catch {
+      return null;
+    }
+
+    let offset = 0;
+    try {
+      const raw = await readFile(paths.eventsLog, "utf-8");
+      offset = Buffer.from(raw).length;
+    } catch {
+      offset = 0;
+    }
+
+    const watcher = watch(paths.eventsLog, async (eventType) => {
+      if (eventType !== "change") {
+        return;
+      }
+      try {
+        const stats = await stat(paths.eventsLog);
+        if (stats.size <= offset) {
+          return;
+        }
+        const stream = createReadStream(paths.eventsLog, { start: offset, end: stats.size - 1 });
+        let chunked = "";
+        stream.on("data", (chunk) => {
+          chunked += chunk.toString();
+        });
+        stream.on("end", () => {
+          const chunkLines = chunked
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0);
+          for (const line of chunkLines) {
+            renderEvent({ raw: line });
+          }
+          offset = stats.size;
+        });
+      } catch {
+        return;
+      }
+    });
+
+    return () => watcher.close();
+  };
 
   const escalationPromptMatches = [
     "Would you like to run the following command?",
@@ -145,6 +339,20 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     const liveState = await loadState({ statePath: paths.statePath });
     const panes = await listPanes({ sessionName: config.tmuxFilter });
     const tasks = await listTasks({ tasksDir: paths.tasksDir });
+    for (const task of tasks) {
+      if (!knownTaskIds.has(task.id)) {
+        knownTaskIds.add(task.id);
+        await appendEvent({
+          eventsLog: paths.eventsLog,
+          event: {
+            ts: new Date().toISOString(),
+            type: "TASK_PACKET",
+            msg: task.title ? `packet issued: ${task.title}` : "packet issued",
+            taskId: task.id,
+          },
+        });
+      }
+    }
     const extractSlaveId = ({ title }: { title: string }): string | null => {
       const normalized = title.startsWith("clanker:") ? title.replace("clanker:", "") : title;
       return /^c\d+$/.test(normalized) ? normalized : null;
@@ -159,6 +367,7 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     const reworkCount = tasks.filter((task) => task.status === "rework").length;
     const blockedCount = tasks.filter((task) => task.status === "blocked").length;
     const needsJudgeCount = tasks.filter((task) => task.status === "needs_judge").length;
+    const runningCount = tasks.filter((task) => task.status === "running").length;
     const recentForScheduler = await readRecentEvents({ eventsLog: paths.eventsLog, limit: 200 });
     const tokenBurnWindow = recentForScheduler.reduce((sum, event) => {
       const tok = typeof event.data?.tok === "number" ? event.data.tok : 0;
@@ -240,14 +449,14 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     }
 
     const heartbeats = await readHeartbeats({ heartbeatDir: paths.heartbeatDir });
-    const nowMs = Date.now();
-    const staleThresholdMs = 30_000;
-    const staleCount = heartbeats.filter((hb) =>
-      isHeartbeatStale({ heartbeat: hb, nowMs, thresholdMs: staleThresholdMs }),
-    ).length;
+    const staleCount = heartbeats.filter((hb) => {
+      const deltaMs = Date.now() - new Date(hb.ts).getTime();
+      return deltaMs > 30_000;
+    }).length;
     const nextStale = new Set<string>();
     for (const hb of heartbeats) {
-      if (isHeartbeatStale({ heartbeat: hb, nowMs, thresholdMs: staleThresholdMs })) {
+      const deltaMs = Date.now() - new Date(hb.ts).getTime();
+      if (deltaMs > 30_000) {
         nextStale.add(hb.slaveId);
         if (!staleSlaves.has(hb.slaveId)) {
           await appendEvent({
@@ -346,48 +555,37 @@ export const runDashboard = async ({}: {}): Promise<void> => {
       });
     }
 
-    dashboard.updateStatus({
-      paneCount: panes.length,
-      slavePaneCount,
-      escalation: pendingEscalationPaneId ? "pending" : "none",
-      taskCount: tasks.length,
-      conflictCount,
-      heartbeatCount: heartbeats.length,
-      staleCount,
-      paused: liveState.paused,
-    });
+    const statusLine = [
+      `panes=${panes.length}`,
+      `slavePanes=${slavePaneCount}`,
+      `paused=${liveState.paused ? "yes" : "no"}`,
+      `tasks=${tasks.length}`,
+      `ready=${readyCount}`,
+      `run=${runningCount}`,
+      `judge=${needsJudgeCount}`,
+      `rework=${reworkCount}`,
+      `blocked=${blockedCount}`,
+      `escalation=${pendingEscalationPaneId ? "pending" : "none"}`,
+      `hb=${heartbeats.length}`,
+      `stale=${staleCount}`,
+    ].join(" ");
+    if (statusLine !== lastStatusLine) {
+      lastStatusLine = statusLine;
+      await appendEvent({
+        eventsLog: paths.eventsLog,
+        event: {
+          ts: new Date().toISOString(),
+          type: "DASH_STATUS",
+          msg: statusLine,
+        },
+      });
+    }
+
     const events = await readRecentEvents({ eventsLog: paths.eventsLog, limit: 6 });
-    const ribbonEvents = await readRecentEvents({ eventsLog: paths.eventsLog, limit: 40 });
     if (events.length > 0) {
       idleStartedAt = Date.now();
     }
     const idleMinutes = Math.floor((Date.now() - idleStartedAt) / (60 * 1000));
-    dashboard.updateTail({
-      events:
-        events.length > 0
-          ? events
-          : [
-              {
-                ts: new Date(idleStartedAt).toISOString(),
-                type: "IDLE",
-                msg: `idle ${formatIdleLine({ idleMinutes })}`,
-              },
-            ],
-    });
-    const feedbackLines = ribbonEvents
-      .filter((event) =>
-        [
-          "TASK_DONE",
-          "TASK_REWORK",
-          "TASK_HANDOFF_FIX",
-          "TASK_NEEDS_JUDGE",
-          "TASK_BLOCKED",
-          "TASK_STATUS",
-        ].includes(event.type),
-      )
-      .slice(-2)
-      .map((event) => formatRibbonLine({ event }));
-    dashboard.updateRibbon({ lines: feedbackLines });
 
     const tokenBurn = recentForScheduler.reduce((sum, event) => {
       const tok = typeof event.data?.tok === "number" ? event.data.tok : 0;
@@ -435,17 +633,41 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     });
   };
 
+  dashboardPaneId = await getCurrentPaneId();
+
+  writeLine(`clanker dashboard v${version} (native scroll)`);
+  writeLine(`planners:${config.planners} judges:${config.judges} slaves:${config.slaves}`);
+
+  const stopStream = await startEventStream();
+  await backfillTaskPackets();
+
+  rl.on("line", (value) => {
+    handleCommand(value);
+    rl.prompt();
+  });
+  rl.on("SIGINT", () => {
+    process.emit("SIGINT", "SIGINT");
+  });
+
   await tick();
   const interval = setInterval(() => {
     void tick();
   }, 2000);
 
-  process.on("SIGINT", () => {
+  const shutdown = (): void => {
     clearInterval(interval);
-    dashboard.destroy();
+    rl.close();
+    if (stopStream) {
+      stopStream();
+    }
+  };
+
+  process.on("SIGINT", () => {
+    shutdown();
   });
   process.on("SIGTERM", () => {
-    clearInterval(interval);
-    dashboard.destroy();
+    shutdown();
   });
+
+  rl.prompt();
 };

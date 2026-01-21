@@ -10,7 +10,6 @@ export type TaskStatus =
   | "done"
   | "blocked"
   | "paused"
-  | "handoff_fix"
   | "failed";
 
 export interface TaskUsage {
@@ -43,7 +42,6 @@ const isTaskStatus = (value: unknown): value is TaskStatus => {
     value === "done" ||
     value === "blocked" ||
     value === "paused" ||
-    value === "handoff_fix" ||
     value === "failed"
   );
 };

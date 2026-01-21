@@ -1,16 +1,6 @@
 export const TASK_SCHEMA = {
   required: ["id", "status", "prompt"],
-  status: [
-    "queued",
-    "running",
-    "needs_judge",
-    "rework",
-    "done",
-    "blocked",
-    "paused",
-    "handoff_fix",
-    "failed",
-  ],
+  status: ["queued", "running", "needs_judge", "rework", "done", "blocked", "paused", "failed"],
   optional: ["ownerDirs", "ownerFiles", "baseMainSha", "assignedSlaveId", "resumeSlaveId", "usage"],
 };
 

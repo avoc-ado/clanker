@@ -12,6 +12,7 @@ export interface ClankerPaths {
   logsDir: string;
   archiveDir: string;
   archiveTasksDir: string;
+  commandHistoryPath: string;
 }
 
 export const getClankerPaths = ({ repoRoot }: { repoRoot: string }): ClankerPaths => {
@@ -28,5 +29,6 @@ export const getClankerPaths = ({ repoRoot }: { repoRoot: string }): ClankerPath
     logsDir: join(stateDir, "logs"),
     archiveDir: join(stateDir, "archive"),
     archiveTasksDir: join(stateDir, "archive", "tasks"),
+    commandHistoryPath: join(stateDir, "command-history.json"),
   };
 };

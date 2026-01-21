@@ -6,7 +6,7 @@ describe("integration: plan prompt", () => {
   test("includes plan directive for minimum tasks", async () => {
     const requirement = "Requirement: planner must output a minimum of 2 task packets.";
     const root = await makeTmpRepo({
-      planLines: ["Goal: echo cli", requirement, "Ensure at least two tasks (no upper cap)."],
+      planFixture: "tests/it/fixtures/plan-basic.md",
     });
     const { codexCommand } = await resolveCodexCommand({ root });
     await writeConfig({ root, codexCommand });

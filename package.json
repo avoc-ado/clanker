@@ -1,7 +1,7 @@
 {
   "name": "clanker-cli",
   "version": "0.1.0",
-  "description": "Glitchcore agent harness with planner, slaves, judge, and TUI dashboard.",
+  "description": "Glitchcore agent harness with planner, slaves, judge, and dashboard stream.",
   "type": "module",
   "packageManager": "yarn@4.12.0",
   "license": "MIT",

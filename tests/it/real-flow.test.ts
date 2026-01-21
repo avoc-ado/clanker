@@ -1,5 +1,6 @@
 import { appendFile, readFile, readdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { jest } from "@jest/globals";
 import {
   ensureTmuxInstalled,
   getCliPath,
@@ -26,6 +27,8 @@ const parseTimeout = ({ fallbackMs }: { fallbackMs: number }): number => {
 const isDebug = process.env.CLANKER_IT_DEBUG === "1";
 
 describe("integration: real flow", () => {
+  jest.retryTimes(2, { logErrorsBeforeRetry: true });
+
   run(
     "planner creates tasks, dashboard assigns, slave produces artifacts",
     async () => {

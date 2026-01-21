@@ -10,7 +10,7 @@ export interface TaskState {
     | "done"
     | "blocked"
     | "paused"
-    | "handoff_fix";
+    | "failed";
   assignedSlaveId?: string;
   title?: string;
 }
