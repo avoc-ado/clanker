@@ -7,8 +7,8 @@ judges: 1
 # Number of Slave terminals.
 slaves: 3
 
-# Tmux session filter; leave empty to use clanker-<repo>.
-tmuxSession: ""
+# Tmux session filter overide; leave empty to use 'clanker-<repo>''.
+tmuxFilter: ""
 
 # Command used to launch Codex CLI.
 codexCommand: "codex --no-alt-screen --sandbox workspace-write"

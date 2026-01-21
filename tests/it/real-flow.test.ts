@@ -61,7 +61,7 @@ describe("integration: real flow", () => {
       await writeConfig({
         root,
         codexCommand,
-        tmuxSession: session,
+        tmuxFilter: session,
         promptFile: ".clanker/plan-prompt.txt",
       });
       const nodeBase = [process.execPath, "--require", pnpRequire, "--loader", pnpLoader, cliPath];
@@ -268,6 +268,13 @@ describe("integration: real flow", () => {
             args: ["set-environment", "-t", session, "CLANKER_TMUX_SOCKET", tmuxSocket],
           });
         }
+        await runTmux({ args: ["set-window-option", "-g", "allow-rename", "off"] });
+        await runTmux({ args: ["set-window-option", "-g", "automatic-rename", "off"] });
+        await runTmux({ args: ["set-option", "-g", "set-titles", "off"] });
+        await runTmux({ args: ["set-environment", "-t", session, "CLANKER_CODEX_TTY", "1"] });
+        await runTmux({
+          args: ["set-environment", "-t", session, "CLANKER_PROMPT_MODE", "file"],
+        });
         await runTmux({ args: ["set-window-option", "-g", "remain-on-exit", "on"] });
         await runTmux({
           args: ["select-pane", "-t", `${session}:dashboard`, "-T", "clanker:dashboard"],

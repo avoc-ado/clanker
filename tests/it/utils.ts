@@ -116,8 +116,19 @@ export const writeCodexStub = async ({ root }: { root: string }): Promise<string
   return stubPath;
 };
 
-const addRealCodexFlags = ({ command }: { command: string }): string =>
-  `${command} --no-alt-screen --sandbox workspace-write -a never`;
+const addRealCodexFlags = ({ command }: { command: string }): string => {
+  let next = command.trim();
+  if (!next.includes("--no-alt-screen")) {
+    next = `${next} --no-alt-screen`;
+  }
+  if (!/--sandbox(?:\s|=)/.test(next)) {
+    next = `${next} --sandbox workspace-write`;
+  }
+  if (!/\s-a\s+\w+/.test(next)) {
+    next = `${next} -a never`;
+  }
+  return next;
+};
 
 export const resolveCodexCommand = async ({
   root,
@@ -155,20 +166,24 @@ export const setupRealMode = async ({ root }: { root: string }): Promise<void> =
 export const writeConfig = async ({
   root,
   codexCommand,
-  tmuxSession,
+  tmuxFilter,
   promptFile,
 }: {
   root: string;
   codexCommand: string;
-  tmuxSession?: string;
+  tmuxFilter?: string;
   promptFile?: string;
 }): Promise<void> => {
-  const safeCommand = codexCommand.replace(/"/g, '\\"');
-  const sessionLine = tmuxSession ? `tmuxSession: "${tmuxSession}"\n` : "";
-  const promptLine = promptFile ? `promptFile: "${promptFile.replace(/"/g, '\\"')}"\n` : "";
+  const safeCommand = codexCommand.replace(/"/g, '\"');
+  const sessionLine = tmuxFilter ? `tmuxFilter: "${tmuxFilter}"
+` : "";
+  const promptLine = promptFile ? `promptFile: "${promptFile.replace(/"/g, '\"')}"
+` : "";
   await writeFile(
     join(root, "clanker.yaml"),
-    `slaves: 1\n${sessionLine}${promptLine}codexCommand: "${safeCommand}"\n`,
+    `slaves: 1
+${sessionLine}${promptLine}codexCommand: "${safeCommand}"
+`,
     "utf-8",
   );
 };

@@ -26,12 +26,12 @@ Create `clanker.yaml` at repo root:
 planners: 1
 judges: 1
 slaves: 3
-tmuxSession: "clanker-<repo>"
+tmuxFilter: ""
 codexCommand: "codex --no-alt-screen --sandbox workspace-write"
 promptFile: ""
 ```
 
-`tmuxSession` is a tmux session filter. Leave it empty to use `clanker-<repo>`.
+`tmuxFilter` is a tmux session filter. Leave it empty to use `clanker-<repo>`.
 
 ## Integration tests
 

@@ -15,7 +15,6 @@ import { ensureConfigFile } from "./config.js";
 import { getClankerPaths } from "./paths.js";
 import { ensureStateDirs } from "./state/ensure-state.js";
 import { appendEvent } from "./state/events.js";
-import { ensureConfigFile } from "./config.js";
 import { setRuntimeOverrides } from "./runtime/overrides.js";
 
 interface CommandSpec {

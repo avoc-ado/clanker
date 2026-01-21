@@ -18,7 +18,7 @@
 - `.clanker/` (state/events/logs/heartbeat/history/archive)
 - Raw chat logs: `.clanker/logs/<role>-<id>-<timestamp>.log`
 - Defaults: `slaves: 3`
-- Config options: `tmuxSession` (optional), `codexCommand` (optional override), `promptFile` (testing/automation)
+- Config options: `tmuxFilter` (optional), `codexCommand` (optional override), `promptFile` (testing/automation)
 
 ## CLI
 
@@ -37,7 +37,7 @@
 
 - `c1` alias: set pane title `clanker:c1`, run `clanker slave 1`
 - Controller: `tmux list-panes -a -F '#{pane_id} #{pane_title}'`
-- If `tmuxSession` set, restrict panes to that session
+- If `tmuxFilter` set, restrict panes to that session
 - Attach order: existing panes first, then auto-spawn if `slaves` > panes
 
 ## Scheduler

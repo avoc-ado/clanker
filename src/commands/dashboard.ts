@@ -82,7 +82,7 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     config,
     state,
     version,
-    configSummary: `planners:${config.planners} judges:${config.judges} slaves:${config.slaves} tmux:${config.tmuxSession ?? "all"}`,
+    configSummary: `planners:${config.planners} judges:${config.judges} slaves:${config.slaves} tmux:${config.tmuxFilter ?? "all"}`,
     onToggleFocus: () => void toggleFocus(),
     onPause: () => {
       void setPaused({ paused: true });
@@ -143,7 +143,7 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     }
     lastTickAt = tickStartedAt;
     const liveState = await loadState({ statePath: paths.statePath });
-    const panes = await listPanes({ sessionName: config.tmuxSession });
+    const panes = await listPanes({ sessionName: config.tmuxFilter });
     const tasks = await listTasks({ tasksDir: paths.tasksDir });
     const extractSlaveId = ({ title }: { title: string }): string | null => {
       const normalized = title.startsWith("clanker:") ? title.replace("clanker:", "") : title;

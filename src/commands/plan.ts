@@ -78,7 +78,7 @@ export const runPlan = async (): Promise<void> => {
       ? buildPlanFileDispatch({ promptPath: promptSettings.planPromptPath })
       : prompt;
 
-  const panes = await listPanes({ sessionName: config.tmuxSession });
+  const panes = await listPanes({ sessionName: config.tmuxFilter });
   const plannerPane =
     panes.find((pane) => pane.title === "clanker:planner") ??
     panes.find((pane) => pane.title === "planner");

@@ -38,7 +38,11 @@ const escapeYamlString = ({ value }: { value: string }): string =>
 const getDefaultTmuxFilter = ({ repoRoot }: { repoRoot: string }): string =>
   `clanker-${basename(repoRoot)}`;
 
-const normalizeParsedConfig = ({ parsed }: { parsed: ParsedConfig | null }): ParsedConfig | null => {
+const normalizeParsedConfig = ({
+  parsed,
+}: {
+  parsed: ParsedConfig | null;
+}): ParsedConfig | null => {
   if (!parsed) {
     return null;
   }
@@ -54,7 +58,6 @@ const normalizeParsedConfig = ({ parsed }: { parsed: ParsedConfig | null }): Par
   }
   return parsed;
 };
-
 const formatConfigTemplate = ({ config }: { config: ClankerConfig }): string => {
   const tmuxValue = config.tmuxFilter
     ? `"${escapeYamlString({ value: config.tmuxFilter })}"`
@@ -128,6 +131,10 @@ export const loadConfig = async ({ repoRoot }: { repoRoot: string }): Promise<Cl
     const overrides = getRuntimeOverrides();
     const withOverrides = {
       ...merged,
+      tmuxFilter:
+        merged.tmuxFilter && merged.tmuxFilter.trim().length > 0
+          ? merged.tmuxFilter
+          : getDefaultTmuxFilter({ repoRoot }),
       codexCommand: overrides.codexCommand ?? merged.codexCommand,
       promptFile: overrides.promptFile ?? merged.promptFile,
     } satisfies ClankerConfig;

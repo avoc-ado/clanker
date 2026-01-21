@@ -1,3 +1,5 @@
+const shouldIgnoreWorktree = process.env.JEST_INCLUDE_WORKTREE !== "1";
+
 module.exports = {
   preset: "ts-jest/presets/default-esm",
   testEnvironment: "node",
@@ -5,7 +7,7 @@ module.exports = {
   moduleNameMapper: {
     "^(\\.{1,2}/.*)\\.js$": "$1",
   },
-  modulePathIgnorePatterns: ["/\\.worktree/"],
+  modulePathIgnorePatterns: shouldIgnoreWorktree ? ["/\\.worktree/"] : [],
   collectCoverageFrom: [
     "src/**/*.ts",
     "!src/commands/**",
@@ -15,7 +17,12 @@ module.exports = {
     "!src/git.ts",
     "!src/worktrees.ts",
   ],
-  testPathIgnorePatterns: ["/node_modules/", "/dist/", "/tests/it/", "/\\.worktree/"],
+  testPathIgnorePatterns: [
+    "/node_modules/",
+    "/dist/",
+    "/tests/it/",
+    ...(shouldIgnoreWorktree ? ["/\\.worktree/"] : []),
+  ],
   coverageThreshold: {
     global: {
       branches: 85,

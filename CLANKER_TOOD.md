@@ -68,6 +68,7 @@
 - Escalation auto-focus + restore behavior in IT
 - Resume-after-sleep / offline recovery (paused state consistency)
 
+
 ## Next
 
 - Add IT: tmux attach (pane discovery + send-keys)
