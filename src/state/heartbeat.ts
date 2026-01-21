@@ -6,6 +6,19 @@ export interface Heartbeat {
   ts: string;
 }
 
+export const isHeartbeatStale = ({
+  heartbeat,
+  nowMs,
+  thresholdMs,
+}: {
+  heartbeat: Heartbeat;
+  nowMs: number;
+  thresholdMs: number;
+}): boolean => {
+  const deltaMs = nowMs - new Date(heartbeat.ts).getTime();
+  return deltaMs > thresholdMs;
+};
+
 export const writeHeartbeat = async ({
   heartbeatDir,
   slaveId,
