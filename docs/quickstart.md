@@ -35,7 +35,7 @@ read_when: first-use, onboarding
 
 ## Config
 
-See `clanker.yaml` for `slaves`, `tmuxSession`, `codexCommand`.
+See `clanker.yaml` for `slaves`, `tmuxSession`, `codexCommand`, `promptFile` (testing/automation).
 
 ## Verify
 

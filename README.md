@@ -28,6 +28,7 @@ judges: 1
 slaves: 3
 tmuxSession: "clanker-swarm"
 codexCommand: "codex --no-alt-screen --sandbox workspace-write"
+promptFile: ""
 ```
 
 ## Integration tests
@@ -36,6 +37,7 @@ codexCommand: "codex --no-alt-screen --sandbox workspace-write"
 yarn test:it
 yarn test:it:stub
 yarn test:it:real
+yarn test:it:real:debug
 ```
 
 Real mode needs codex CLI on PATH (override via `CLANKER_IT_REAL_COMMAND`).

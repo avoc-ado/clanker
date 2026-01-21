@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { parse } from "yaml";
 import { basename, join } from "node:path";
+import { getRuntimeOverrides } from "./runtime/overrides.js";
 
 export interface ClankerConfig {
   planners: number;
@@ -8,6 +9,7 @@ export interface ClankerConfig {
   slaves: number;
   tmuxSession?: string;
   codexCommand?: string;
+  promptFile?: string;
 }
 
 const DEFAULT_CONFIG = {
@@ -16,9 +18,17 @@ const DEFAULT_CONFIG = {
   slaves: 3,
   tmuxSession: undefined,
   codexCommand: "codex --no-alt-screen --sandbox workspace-write",
+  promptFile: undefined,
 } satisfies ClankerConfig;
 
-const CONFIG_KEYS = ["planners", "judges", "slaves", "tmuxSession", "codexCommand"] as const;
+const CONFIG_KEYS = [
+  "planners",
+  "judges",
+  "slaves",
+  "tmuxSession",
+  "codexCommand",
+  "promptFile",
+] as const;
 
 const escapeYamlString = ({ value }: { value: string }): string =>
   value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
@@ -32,6 +42,9 @@ const formatConfigTemplate = ({ config }: { config: ClankerConfig }): string => 
     : '""';
   const codexValue = config.codexCommand
     ? `"${escapeYamlString({ value: config.codexCommand })}"`
+    : '""';
+  const promptValue = config.promptFile
+    ? `"${escapeYamlString({ value: config.promptFile })}"`
     : '""';
   return [
     "# (experimental) Number of Planner terminals.",
@@ -48,6 +61,9 @@ const formatConfigTemplate = ({ config }: { config: ClankerConfig }): string => 
     "",
     "# Command used to launch Codex CLI.",
     `codexCommand: ${codexValue}`,
+    "",
+    "# (testing/automation) Prompt file path for plan dispatch.",
+    `promptFile: ${promptValue}`,
     "",
   ].join("\n");
 };
@@ -88,16 +104,40 @@ export const loadConfig = async ({ repoRoot }: { repoRoot: string }): Promise<Cl
       ...DEFAULT_CONFIG,
       ...parsed,
     } satisfies ClankerConfig;
-    return {
+    const overrides = getRuntimeOverrides();
+    const withOverrides = {
       ...merged,
+      codexCommand: overrides.codexCommand ?? merged.codexCommand,
+      promptFile: overrides.promptFile ?? merged.promptFile,
+    } satisfies ClankerConfig;
+    return {
+      ...withOverrides,
       tmuxSession:
-        merged.tmuxSession && merged.tmuxSession.trim().length > 0
-          ? merged.tmuxSession
+        withOverrides.tmuxSession && withOverrides.tmuxSession.trim().length > 0
+          ? withOverrides.tmuxSession
           : getDefaultTmuxSession({ repoRoot }),
       codexCommand:
-        merged.codexCommand && merged.codexCommand.length > 0 ? merged.codexCommand : undefined,
+        withOverrides.codexCommand && withOverrides.codexCommand.length > 0
+          ? withOverrides.codexCommand
+          : undefined,
+      promptFile:
+        withOverrides.promptFile && withOverrides.promptFile.length > 0
+          ? withOverrides.promptFile
+          : undefined,
     } satisfies ClankerConfig;
   } catch {
-    return DEFAULT_CONFIG;
+    const overrides = getRuntimeOverrides();
+    const merged = {
+      ...DEFAULT_CONFIG,
+      codexCommand: overrides.codexCommand ?? DEFAULT_CONFIG.codexCommand,
+      promptFile: overrides.promptFile ?? DEFAULT_CONFIG.promptFile,
+    } satisfies ClankerConfig;
+    return {
+      ...merged,
+      tmuxSession: getDefaultTmuxSession({ repoRoot }),
+      codexCommand:
+        merged.codexCommand && merged.codexCommand.length > 0 ? merged.codexCommand : undefined,
+      promptFile: merged.promptFile && merged.promptFile.length > 0 ? merged.promptFile : undefined,
+    } satisfies ClankerConfig;
   }
 };

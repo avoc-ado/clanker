@@ -12,3 +12,6 @@ tmuxSession: ""
 
 # Command used to launch Codex CLI.
 codexCommand: "codex --no-alt-screen --sandbox workspace-write"
+
+# (testing/automation) Prompt file path for plan dispatch.
+promptFile: ""

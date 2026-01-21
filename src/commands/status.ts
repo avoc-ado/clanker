@@ -19,6 +19,7 @@ export const runStatus = async ({}: {}): Promise<void> => {
   console.log(`slaves=${config.slaves}`);
   console.log(`tmuxSession=${config.tmuxSession ?? "-"}`);
   console.log(`codexCommand=${config.codexCommand ?? "-"}`);
+  console.log(`promptFile=${config.promptFile ?? "-"}`);
   console.log(`state=${pausedLabel}`);
   console.log(`tasks=${taskCount}`);
   if (metrics.burnHistory.length > 0) {

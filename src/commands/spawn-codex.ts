@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
 import { join } from "node:path";
+import { getRuntimeOverrides } from "../runtime/overrides.js";
 
 const splitCommand = ({ command }: { command: string }): string[] => {
   const parts: string[] = [];
@@ -46,8 +47,7 @@ const resolveCliCommand = async ({
 }: {
   override?: string;
 }): Promise<{ cmd: string; args: string[] }> => {
-  const envOverride = process.env.CLANKER_CODEX_COMMAND;
-  const command = envOverride && envOverride.trim().length > 0 ? envOverride : override;
+  const command = override;
   if (command && command.trim().length > 0) {
     const parts = splitCommand({ command });
     const [cmd, ...args] = parts;
@@ -95,7 +95,8 @@ export const spawnCodex = async ({
 }): Promise<{ child: ReturnType<typeof spawn>; logPath: string }> => {
   const logPath = makeLogPath({ logsDir, role, id });
   const logStream = createWriteStream(logPath, { flags: "a" });
-  if (process.env.CLANKER_DISABLE_CODEX === "1") {
+  const overrides = getRuntimeOverrides();
+  if (overrides.disableCodex) {
     logStream.write("codex disabled\n");
     logStream.end();
     const child = spawn(process.execPath, ["-e", "process.exit(0)"], { stdio: "ignore" });
@@ -103,7 +104,7 @@ export const spawnCodex = async ({
   }
 
   const cli = await resolveCliCommand({ override: command });
-  const usePty = process.env.CLANKER_CODEX_TTY === "1";
+  const usePty = Boolean(overrides.codexTty);
   const finalCli = usePty ? wrapWithPty(cli) : cli;
 
   const child = spawn(finalCli.cmd, finalCli.args, { stdio: ["inherit", "pipe", "pipe"] });

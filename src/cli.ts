@@ -15,17 +15,76 @@ import { getClankerPaths } from "./paths.js";
 import { ensureStateDirs } from "./state/ensure-state.js";
 import { appendEvent } from "./state/events.js";
 import { ensureConfigFile } from "./config.js";
+import { setRuntimeOverrides } from "./runtime/overrides.js";
 
 interface CommandSpec {
   name: string;
   args: string[];
 }
 
-const parseCommand = ({ argv }: { argv: string[] }): CommandSpec => {
-  const [name, ...args] = argv;
+interface ParsedArgs {
+  command: CommandSpec;
+  overrides: {
+    codexCommand?: string;
+    codexTty?: boolean;
+    disableCodex?: boolean;
+    promptFile?: string;
+  };
+}
+
+const requireFlagValue = ({ value, flag }: { value: string | undefined; flag: string }): string => {
+  if (!value || value.length === 0) {
+    throw new Error(`Missing value for ${flag}`);
+  }
+  return value;
+};
+
+const parseArgs = ({ argv }: { argv: string[] }): ParsedArgs => {
+  const overrides: ParsedArgs["overrides"] = {};
+  const remaining: string[] = [];
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i] ?? "";
+    if (arg === "--codex-command") {
+      overrides.codexCommand = requireFlagValue({ value: argv[i + 1], flag: "--codex-command" });
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--codex-command=")) {
+      overrides.codexCommand = requireFlagValue({
+        value: arg.slice("--codex-command=".length),
+        flag: "--codex-command",
+      });
+      continue;
+    }
+    if (arg === "--codex-tty") {
+      overrides.codexTty = true;
+      continue;
+    }
+    if (arg === "--disable-codex") {
+      overrides.disableCodex = true;
+      continue;
+    }
+    if (arg === "--prompt-file") {
+      overrides.promptFile = requireFlagValue({ value: argv[i + 1], flag: "--prompt-file" });
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--prompt-file=")) {
+      overrides.promptFile = requireFlagValue({
+        value: arg.slice("--prompt-file=".length),
+        flag: "--prompt-file",
+      });
+      continue;
+    }
+    remaining.push(arg);
+  }
+  const [name, ...args] = remaining;
   return {
-    name: name ?? "",
-    args,
+    command: {
+      name: name ?? "",
+      args,
+    },
+    overrides,
   };
 };
 
@@ -67,7 +126,9 @@ process.on("unhandledRejection", (error) => {
 const main = async ({ argv }: { argv: string[] }): Promise<void> => {
   const repoRoot = process.cwd();
   await ensureConfigFile({ repoRoot });
-  const command = parseCommand({ argv });
+  const parsed = parseArgs({ argv });
+  setRuntimeOverrides({ overrides: parsed.overrides });
+  const command = parsed.command;
 
   switch (command.name) {
     case "slave": {

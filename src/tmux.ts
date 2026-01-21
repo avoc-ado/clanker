@@ -9,7 +9,9 @@ export interface TmuxPane {
 const execFileAsync = promisify(execFile);
 
 const runTmux = async ({ args }: { args: string[] }): Promise<string> => {
-  const { stdout } = await execFileAsync("tmux", args);
+  const socket = process.env.CLANKER_TMUX_SOCKET?.trim();
+  const baseArgs = socket ? ["-S", socket, ...args] : args;
+  const { stdout } = await execFileAsync("tmux", baseArgs);
   return stdout.trim();
 };
 

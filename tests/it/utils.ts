@@ -1,6 +1,6 @@
 import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { setTimeout as delay } from "node:timers/promises";
@@ -144,22 +144,28 @@ export const initGitRepo = async ({ root }: { root: string }): Promise<void> => 
 export const setupRealMode = async ({ root }: { root: string }): Promise<void> => {
   await ensureCodexInstalled();
   await initGitRepo({ root });
+  const tmuxDir = join(repoRoot, ".clanker", "tmux-it", basename(root));
+  await mkdir(tmuxDir, { recursive: true });
+  process.env.CLANKER_TMUX_SOCKET = join(tmuxDir, "socket");
 };
 
 export const writeConfig = async ({
   root,
   codexCommand,
   tmuxSession,
+  promptFile,
 }: {
   root: string;
   codexCommand: string;
   tmuxSession?: string;
+  promptFile?: string;
 }): Promise<void> => {
   const safeCommand = codexCommand.replace(/"/g, '\\"');
   const sessionLine = tmuxSession ? `tmuxSession: "${tmuxSession}"\n` : "";
+  const promptLine = promptFile ? `promptFile: "${promptFile.replace(/"/g, '\\"')}"\n` : "";
   await writeFile(
     join(root, "clanker.yaml"),
-    `slaves: 1\n${sessionLine}codexCommand: "${safeCommand}"\n`,
+    `slaves: 1\n${sessionLine}${promptLine}codexCommand: "${safeCommand}"\n`,
     "utf-8",
   );
 };
@@ -244,7 +250,9 @@ export const runCliInteractive = async ({
 };
 
 export const runTmux = async ({ args }: { args: string[] }): Promise<string> => {
-  const { stdout } = await execFileAsync("tmux", args);
+  const socket = process.env.CLANKER_TMUX_SOCKET?.trim();
+  const baseArgs = socket ? ["-S", socket, ...args] : args;
+  const { stdout } = await execFileAsync("tmux", baseArgs);
   return stdout.trim();
 };
 

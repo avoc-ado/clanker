@@ -23,6 +23,7 @@ const parseTimeout = ({ fallbackMs }: { fallbackMs: number }): number => {
   const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackMs;
 };
+const isDebug = process.env.CLANKER_IT_DEBUG === "1";
 
 describe("integration: real flow", () => {
   run(
@@ -56,9 +57,17 @@ describe("integration: real flow", () => {
       const session = `clanker-it-${Date.now()}`;
       const cliPath = getCliPath();
       const { codexCommand } = await resolveCodexCommand({ root });
-      await writeConfig({ root, codexCommand, tmuxSession: session });
+      const tmuxSocket = process.env.CLANKER_TMUX_SOCKET;
+      await writeConfig({
+        root,
+        codexCommand,
+        tmuxSession: session,
+        promptFile: ".clanker/plan-prompt.txt",
+      });
       const nodeBase = [process.execPath, "--require", pnpRequire, "--loader", pnpLoader, cliPath];
-      console.log(`it-real debug log: ${debugLogPath}`);
+      if (isDebug) {
+        console.log(`it-real debug log: ${debugLogPath}`);
+      }
       const readEvents = async (): Promise<string> => {
         try {
           return await readFile(join(root, ".clanker", "events.log"), "utf-8");
@@ -87,6 +96,9 @@ describe("integration: real flow", () => {
         });
       };
       const emitDebug = async ({ label }: { label: string }): Promise<void> => {
+        if (!isDebug) {
+          return;
+        }
         try {
           const [events, panes, plannerPane, slavePane, judgePane] = await Promise.all([
             readEvents(),
@@ -229,33 +241,38 @@ describe("integration: real flow", () => {
 
       let debugInterval: NodeJS.Timeout | null = null;
       try {
-        debugInterval = setInterval(() => {
-          void emitDebug({ label: "tick" });
-        }, 15_000);
-        debugInterval.unref?.();
+        if (isDebug) {
+          debugInterval = setInterval(() => {
+            void emitDebug({ label: "tick" });
+          }, 15_000);
+          debugInterval.unref?.();
+        }
         await runTmux({
-          args: ["new-session", "-d", "-s", session, "-n", "dashboard", "-c", root, ...nodeBase],
+          args: ["new-session", "-d", "-s", session, "-n", "dashboard", "-c", root],
         });
-        await runTmux({ args: ["set-environment", "-t", session, "CLANKER_CODEX_TTY", "1"] });
-        await runTmux({ args: ["set-environment", "-t", session, "CLANKER_PROMPT_MODE", "file"] });
+        if (tmuxSocket) {
+          await runTmux({
+            args: ["set-environment", "-t", session, "CLANKER_TMUX_SOCKET", tmuxSocket],
+          });
+        }
         await runTmux({ args: ["set-window-option", "-g", "remain-on-exit", "on"] });
         await runTmux({
           args: ["select-pane", "-t", `${session}:dashboard`, "-T", "clanker:dashboard"],
         });
         await runTmux({
-          args: ["new-window", "-t", session, "-n", "planner", "-c", root, ...nodeBase],
+          args: ["new-window", "-t", session, "-n", "planner", "-c", root],
         });
         await runTmux({
           args: ["select-pane", "-t", `${session}:planner`, "-T", "clanker:planner"],
         });
         await runTmux({
-          args: ["new-window", "-t", session, "-n", "c1", "-c", root, ...nodeBase],
+          args: ["new-window", "-t", session, "-n", "c1", "-c", root],
         });
         await runTmux({
           args: ["select-pane", "-t", `${session}:c1`, "-T", "clanker:c1"],
         });
         await runTmux({
-          args: ["new-window", "-t", session, "-n", "judge", "-c", root, ...nodeBase],
+          args: ["new-window", "-t", session, "-n", "judge", "-c", root],
         });
         await runTmux({
           args: ["select-pane", "-t", `${session}:judge`, "-T", "clanker:judge"],
@@ -285,13 +302,38 @@ describe("integration: real flow", () => {
           args: ["respawn-pane", "-k", "-t", `${session}:dashboard`, ...nodeBase],
         });
         await runTmux({
-          args: ["respawn-pane", "-k", "-t", `${session}:planner`, ...nodeBase, "planner"],
+          args: [
+            "respawn-pane",
+            "-k",
+            "-t",
+            `${session}:planner`,
+            ...nodeBase,
+            "--codex-tty",
+            "planner",
+          ],
         });
         await runTmux({
-          args: ["respawn-pane", "-k", "-t", `${session}:c1`, ...nodeBase, "slave", "1"],
+          args: [
+            "respawn-pane",
+            "-k",
+            "-t",
+            `${session}:c1`,
+            ...nodeBase,
+            "--codex-tty",
+            "slave",
+            "1",
+          ],
         });
         await runTmux({
-          args: ["respawn-pane", "-k", "-t", `${session}:judge`, ...nodeBase, "judge"],
+          args: [
+            "respawn-pane",
+            "-k",
+            "-t",
+            `${session}:judge`,
+            ...nodeBase,
+            "--codex-tty",
+            "judge",
+          ],
         });
 
         await emitDebug({ label: "processes-started" });
@@ -372,8 +414,7 @@ describe("integration: real flow", () => {
 
         const planOutput = await runCli({
           cwd: root,
-          args: ["plan"],
-          env: { CLANKER_PROMPT_MODE: "file" },
+          args: ["plan", "--prompt-file", ".clanker/plan-prompt.txt"],
         });
         if (planOutput.includes("planner pane not found")) {
           const panes = await runTmux({

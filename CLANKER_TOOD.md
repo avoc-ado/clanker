@@ -30,38 +30,33 @@
 - Add planners/judges config + status/dashboard readout
 - Add `--prompt-file` for plan/task dispatch; remove `CLANKER_PROMPT_MODE`
 - Stabilize real-flow IT: codex UI ready wait + tmux send-keys literal + window-name fallback
+- Replace env overrides with CLI args/config where appropriate (`--codex-command`, `--codex-tty`, `--disable-codex`)
+- Deduplicate prompt helpers (e.g. `getPromptMode`) into shared util
+- Add `test:it:real:debug` with `--detectOpenHandles`
+- Keep tmux session alive before respawn in real IT flow
 
 ## Stack Rank
 
-1. Replace env overrides with CLI args/config where appropriate (`--codex-command`, `--codex-tty`, `--disable-codex`) and delete env paths
-2. Add `--prompt-file` plumbing (plan + dashboard) + config, remove `CLANKER_PROMPT_MODE`
-3. Deduplicate prompt helpers (e.g. `getPromptMode`) into shared util
-4. Decide `--detectOpenHandles` default vs `test:it:real:debug` script
-5. Investigate Jest open-handle warning after `yarn test:it:real`
-6. Blind-spot audit: map current IT coverage to features; list gaps (low/medium)
-7. Add IT: planner/judge rework routing (CLI-level)
-8. Add IT: multi-slave scheduler assignment + stale heartbeat handling (no tmux)
-9. Add IT: tmux attach (pane discovery + send-keys)
-10. Add IT: lock/ownership conflict detection + lock expiry
-11. Add flaky guard for tmux-bound scenarios
-12. Add example plan doc fixture for integration
+1. Blind-spot audit: map current IT coverage to features; list gaps (low/medium)
+2. Add IT: planner/judge rework routing (CLI-level)
+3. Add IT: multi-slave scheduler assignment + stale heartbeat handling (no tmux)
+4. Add IT: tmux attach (pane discovery + send-keys)
+5. Add IT: lock/ownership conflict detection + lock expiry
+6. Add flaky guard for tmux-bound scenarios
+7. Add example plan doc fixture for integration
 
 ## Now
-
-- Replace env overrides with CLI args/config where appropriate (`--codex-command`, `--codex-tty`, `--disable-codex`)
-- Decide `--detectOpenHandles` default vs `test:it:real:debug` script
-- Investigate Jest open-handle warning after `yarn test:it:real`
- - Deduplicate prompt helpers (e.g. `getPromptMode`)
-
-## Next
 
 - Blind-spot audit: map current IT coverage to features; list gaps (low/medium)
 - Add IT: planner/judge rework routing (CLI-level)
 - Add IT: multi-slave scheduler assignment + stale heartbeat handling (no tmux)
 
-## Later
+## Next
 
 - Add IT: tmux attach (pane discovery + send-keys)
 - Add IT: lock/ownership conflict detection + lock expiry
 - Add flaky guard for tmux-bound scenarios
+
+## Later
+
 - Add example plan doc fixture for integration

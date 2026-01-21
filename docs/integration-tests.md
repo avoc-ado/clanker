@@ -13,6 +13,7 @@ read_when: testing, ops
 - `yarn test:it`
 - `yarn test:it:stub`
 - `yarn test:it:real`
+- `yarn test:it:real:debug` (adds `--detectOpenHandles` + verbose tmux logging)
 - `yarn verify` (includes integration tests)
 
 ## Notes
@@ -24,4 +25,4 @@ read_when: testing, ops
 - Real mode runs a tmux-backed flow (dashboard + planner + slave). If tmux is missing it fails fast (`brew install tmux`).
 - Real mode requires codex CLI on PATH (override with `CLANKER_IT_REAL_COMMAND`). If missing it fails fast (`npm i -g @openai/codex`).
 - Select mode with `CLANKER_IT_MODE=stub|real` (default: stub). `yarn test:it` runs stub only.
-- Real mode sets `CLANKER_PROMPT_MODE=file` to dispatch short prompts that reference `.clanker/plan-prompt.txt` and task JSON files.
+- Real mode can use `--prompt-file .clanker/plan-prompt.txt` (or config `promptFile`) to dispatch short prompts that reference plan/task files.

@@ -1,5 +1,5 @@
-import { readdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { getClankerPaths } from "../paths.js";
 import { ensureStateDirs } from "../state/ensure-state.js";
 import { appendEvent } from "../state/events.js";
@@ -7,6 +7,7 @@ import { listPanes, sendKeys } from "../tmux.js";
 import { formatTaskSchema } from "../plan/schema.js";
 import { buildContextPack } from "../context/context-pack.js";
 import { loadConfig } from "../config.js";
+import { buildPlanFileDispatch, getPromptSettings } from "../prompting.js";
 
 const formatContextEntries = ({
   entries,
@@ -49,14 +50,6 @@ const buildPlannerPrompt = ({
   ].join("\n");
 };
 
-const buildPlannerFilePrompt = (): string =>
-  "Open .clanker/plan-prompt.txt and follow it exactly. Create task packets in .clanker/tasks now.";
-
-const getPromptMode = (): "inline" | "file" => {
-  const raw = process.env.CLANKER_PROMPT_MODE?.trim().toLowerCase();
-  return raw === "file" ? "file" : "inline";
-};
-
 export const runPlan = async (): Promise<void> => {
   const repoRoot = process.cwd();
   const paths = getClankerPaths({ repoRoot });
@@ -76,9 +69,14 @@ export const runPlan = async (): Promise<void> => {
   const contextPack = await buildContextPack({ repoRoot, historyDir: paths.historyDir });
   const recentSummaries = formatContextEntries({ entries: contextPack.entries });
   const prompt = buildPlannerPrompt({ planDocs, recentSummaries });
-  await writeFile(join(paths.stateDir, "plan-prompt.txt"), prompt, "utf-8");
+  const promptSettings = getPromptSettings({ repoRoot, config });
+  await mkdir(dirname(promptSettings.planPromptAbsolutePath), { recursive: true });
+  await writeFile(promptSettings.planPromptAbsolutePath, prompt, "utf-8");
 
-  const dispatchPrompt = getPromptMode() === "file" ? buildPlannerFilePrompt() : prompt;
+  const dispatchPrompt =
+    promptSettings.mode === "file"
+      ? buildPlanFileDispatch({ promptPath: promptSettings.planPromptPath })
+      : prompt;
 
   const panes = await listPanes({ sessionName: config.tmuxSession });
   const plannerPane =

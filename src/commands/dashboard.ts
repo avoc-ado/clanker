@@ -17,16 +17,9 @@ import { TASK_SCHEMA } from "../plan/schema.js";
 import { listDirtyFiles } from "../git.js";
 import { countLockConflicts } from "../state/locks.js";
 import { formatRibbonLine } from "../tui/format-event.js";
+import { buildTaskFileDispatch, getPromptSettings } from "../prompting.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-
-const getPromptMode = (): "inline" | "file" => {
-  const raw = process.env.CLANKER_PROMPT_MODE?.trim().toLowerCase();
-  return raw === "file" ? "file" : "inline";
-};
-
-const buildTaskFilePrompt = ({ taskId }: { taskId: string }): string =>
-  `Open .clanker/tasks/${taskId}.json and execute it. Follow the instructions exactly.`;
 
 export const runDashboard = async ({}: {}): Promise<void> => {
   const repoRoot = process.cwd();
@@ -51,7 +44,7 @@ export const runDashboard = async ({}: {}): Promise<void> => {
   let lastTickAt = Date.now();
   let lastGitFiles = new Set<string>();
   let staleSlaves = new Set<string>();
-  const promptMode = getPromptMode();
+  const promptSettings = getPromptSettings({ repoRoot, config });
 
   const toggleFocus = async (): Promise<void> => {
     if (!dashboardPaneId) {
@@ -306,7 +299,9 @@ export const runDashboard = async ({}: {}): Promise<void> => {
           const paneId = task.assignedSlaveId ? slavePaneMap.get(task.assignedSlaveId) : null;
           if (paneId) {
             const prompt =
-              promptMode === "file" ? buildTaskFilePrompt({ taskId: task.id }) : task.prompt;
+              promptSettings.mode === "file"
+                ? buildTaskFileDispatch({ taskId: task.id })
+                : task.prompt;
             await sendKeys({ paneId, text: prompt });
             task.promptedAt = new Date().toISOString();
             await saveTask({ tasksDir: paths.tasksDir, task });
@@ -333,7 +328,8 @@ export const runDashboard = async ({}: {}): Promise<void> => {
       if (!paneId) {
         continue;
       }
-      const prompt = promptMode === "file" ? buildTaskFilePrompt({ taskId: task.id }) : task.prompt;
+      const prompt =
+        promptSettings.mode === "file" ? buildTaskFileDispatch({ taskId: task.id }) : task.prompt;
       await sendKeys({ paneId, text: prompt });
       task.promptedAt = new Date().toISOString();
       await saveTask({ tasksDir: paths.tasksDir, task });
