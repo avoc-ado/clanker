@@ -14,6 +14,7 @@ import { runResume } from "./commands/resume.js";
 import { getClankerPaths } from "./paths.js";
 import { ensureStateDirs } from "./state/ensure-state.js";
 import { appendEvent } from "./state/events.js";
+import { ensureConfigFile } from "./config.js";
 
 interface CommandSpec {
   name: string;
@@ -64,6 +65,8 @@ process.on("unhandledRejection", (error) => {
 });
 
 const main = async ({ argv }: { argv: string[] }): Promise<void> => {
+  const repoRoot = process.cwd();
+  await ensureConfigFile({ repoRoot });
   const command = parseCommand({ argv });
 
   switch (command.name) {

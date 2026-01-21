@@ -35,9 +35,14 @@ export const listPanes = async ({ sessionName }: { sessionName?: string } = {}):
         }
         const paneTitle = paneTitleRaw?.trim() ?? "";
         const windowName = windowNameRaw?.trim() ?? "";
+        const resolvedTitle = paneTitle.startsWith("clanker:")
+          ? paneTitle
+          : windowName.length > 0
+            ? windowName
+            : paneTitle;
         return {
           paneId: paneId ?? "",
-          title: paneTitle.length > 0 ? paneTitle : windowName,
+          title: resolvedTitle,
         } satisfies TmuxPane;
       })
       .filter((pane): pane is TmuxPane => Boolean(pane && pane.paneId.length > 0));
@@ -83,12 +88,30 @@ export const getCurrentPaneId = async (): Promise<string | null> => {
 export const sendKeys = async ({
   paneId,
   text,
+  submitWithTab,
 }: {
   paneId: string;
   text: string;
+  submitWithTab?: boolean;
 }): Promise<void> => {
   try {
-    await runTmux({ args: ["send-keys", "-t", paneId, text, "Enter"] });
+    if (text.includes("\n")) {
+      await runTmux({ args: ["set-buffer", "--", text] });
+      await runTmux({ args: ["paste-buffer", "-t", paneId, "-d"] });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      if (submitWithTab) {
+        await runTmux({ args: ["send-keys", "-t", paneId, "Tab"] });
+      }
+      await runTmux({ args: ["send-keys", "-t", paneId, "C-m"] });
+      return;
+    }
+    await runTmux({ args: ["send-keys", "-t", paneId, "-l", "--", text] });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    if (submitWithTab) {
+      await runTmux({ args: ["send-keys", "-t", paneId, "Tab"] });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    await runTmux({ args: ["send-keys", "-t", paneId, "C-m"] });
   } catch {
     // ignore
   }

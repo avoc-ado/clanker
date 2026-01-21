@@ -1,6 +1,6 @@
-import { mkdtemp, mkdir, readFile, writeFile, copyFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { setTimeout as delay } from "node:timers/promises";
@@ -11,18 +11,6 @@ const repoRoot = resolve(process.cwd());
 const cliPath = join(repoRoot, "dist", "cli.js");
 const defaultPnpRequire = join(repoRoot, ".pnp.cjs");
 const defaultPnpLoader = join(repoRoot, ".pnp.loader.mjs");
-const yarnRcPath = join(repoRoot, ".yarnrc.yml");
-const yarnLockPath = join(repoRoot, "yarn.lock");
-const yarnCacheDir = join(repoRoot, ".yarn", "cache");
-
-const resolveYarnReleasePath = async (): Promise<string> => {
-  const raw = await readFile(yarnRcPath, "utf-8");
-  const match = raw.match(/yarnPath:\s*(.+)/);
-  if (!match || !match[1]) {
-    return join(repoRoot, ".yarn", "releases", "yarn-4.12.0.cjs");
-  }
-  return join(repoRoot, match[1].trim());
-};
 
 export const runCli = async ({
   cwd,
@@ -98,7 +86,7 @@ const resolveRealCodexCommand = async (): Promise<string | null> => {
   }
   const codexPath = await resolveBinaryPath({ name: "codex" });
   if (codexPath) {
-    return codexPath;
+    return [codexPath, "-a", "never", "--sandbox", "workspace-write", "--no-alt-screen"].join(" ");
   }
   return null;
 };
@@ -153,6 +141,11 @@ export const initGitRepo = async ({ root }: { root: string }): Promise<void> => 
   }
 };
 
+export const setupRealMode = async ({ root }: { root: string }): Promise<void> => {
+  await ensureCodexInstalled();
+  await initGitRepo({ root });
+};
+
 export const writeConfig = async ({
   root,
   codexCommand,
@@ -188,68 +181,6 @@ export const ensureExists = async ({
 export const runNode = async ({ cwd, args }: { cwd: string; args: string[] }): Promise<string> => {
   const { stdout, stderr } = await execFileAsync("node", args, { cwd });
   return `${stdout}${stderr}`.trim();
-};
-
-export const runNodeWithPnp = async ({
-  cwd,
-  args,
-  env,
-  pnpRoot,
-}: {
-  cwd: string;
-  args: string[];
-  env?: NodeJS.ProcessEnv;
-  pnpRoot?: string;
-}): Promise<string> => {
-  const pnpRequire = pnpRoot ? join(pnpRoot, ".pnp.cjs") : defaultPnpRequire;
-  const pnpLoader = pnpRoot ? join(pnpRoot, ".pnp.loader.mjs") : defaultPnpLoader;
-  const baseOptions = env?.NODE_OPTIONS ?? (pnpRoot ? "" : (process.env.NODE_OPTIONS ?? ""));
-  const pnpOptions = `--require ${pnpRequire} --loader ${pnpLoader}`;
-  const nodeOptions = `${baseOptions} ${pnpOptions}`.trim();
-  const mergedEnv: NodeJS.ProcessEnv = {
-    ...process.env,
-    ...env,
-    NODE_OPTIONS: nodeOptions,
-  };
-  const { stdout, stderr } = await execFileAsync(process.execPath, args, { cwd, env: mergedEnv });
-  return `${stdout}${stderr}`.trim();
-};
-
-export const packWorkspace = async ({ outDir }: { outDir: string }): Promise<string> => {
-  await mkdir(outDir, { recursive: true });
-  const tarPath = join(outDir, "clanker-cli.tgz");
-  await execFileAsync("yarn", ["pack", "-o", tarPath], { cwd: repoRoot });
-  return tarPath;
-};
-
-export const extractTarball = async ({
-  tarPath,
-  outDir,
-}: {
-  tarPath: string;
-  outDir: string;
-}): Promise<string> => {
-  await mkdir(outDir, { recursive: true });
-  await execFileAsync("tar", ["-xzf", tarPath, "-C", outDir]);
-  return join(outDir, "package");
-};
-
-export const installPackedDeps = async ({ pkgRoot }: { pkgRoot: string }): Promise<void> => {
-  await copyFile(yarnRcPath, join(pkgRoot, ".yarnrc.yml"));
-  await copyFile(yarnLockPath, join(pkgRoot, "yarn.lock"));
-  const releasePath = await resolveYarnReleasePath();
-  const releaseDir = join(pkgRoot, ".yarn", "releases");
-  await mkdir(releaseDir, { recursive: true });
-  const releaseName = basename(releasePath);
-  await copyFile(releasePath, join(releaseDir, releaseName));
-  await execFileAsync(process.execPath, [join(releaseDir, releaseName), "install", "--immutable"], {
-    cwd: pkgRoot,
-    env: {
-      ...process.env,
-      YARN_CACHE_FOLDER: yarnCacheDir,
-      YARN_ENABLE_NETWORK: "0",
-    },
-  });
 };
 
 export const runCliInteractive = async ({

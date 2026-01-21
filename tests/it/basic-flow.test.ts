@@ -8,6 +8,7 @@ import {
   runCliInteractive,
   runNode,
   resolveCodexCommand,
+  setupRealMode,
   writeConfig,
 } from "./utils.js";
 
@@ -20,6 +21,9 @@ describe("integration: basic flow", () => {
         "Ensure at least two tasks (no upper cap).",
       ],
     });
+    if (isRealMode()) {
+      await setupRealMode({ root });
+    }
     const { codexCommand, stubPath } = await resolveCodexCommand({ root });
     await writeConfig({ root, codexCommand });
 

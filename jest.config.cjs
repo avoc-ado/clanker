@@ -5,6 +5,7 @@ module.exports = {
   moduleNameMapper: {
     "^(\\.{1,2}/.*)\\.js$": "$1",
   },
+  modulePathIgnorePatterns: ["/\\.worktree/"],
   collectCoverageFrom: [
     "src/**/*.ts",
     "!src/commands/**",
@@ -14,7 +15,7 @@ module.exports = {
     "!src/git.ts",
     "!src/worktrees.ts",
   ],
-  testPathIgnorePatterns: ["/dist/", "/tests/it/"],
+  testPathIgnorePatterns: ["/node_modules/", "/dist/", "/tests/it/", "/\\.worktree/"],
   coverageThreshold: {
     global: {
       branches: 85,

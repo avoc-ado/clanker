@@ -14,6 +14,8 @@ export const runStatus = async ({}: {}): Promise<void> => {
   const taskCount = state.tasks.length;
   const pausedLabel = state.paused ? "paused" : "running";
 
+  console.log(`planners=${config.planners}`);
+  console.log(`judges=${config.judges}`);
   console.log(`slaves=${config.slaves}`);
   console.log(`tmuxSession=${config.tmuxSession ?? "-"}`);
   console.log(`codexCommand=${config.codexCommand ?? "-"}`);

@@ -49,6 +49,14 @@ const buildPlannerPrompt = ({
   ].join("\n");
 };
 
+const buildPlannerFilePrompt = (): string =>
+  "Open .clanker/plan-prompt.txt and follow it exactly. Create task packets in .clanker/tasks now.";
+
+const getPromptMode = (): "inline" | "file" => {
+  const raw = process.env.CLANKER_PROMPT_MODE?.trim().toLowerCase();
+  return raw === "file" ? "file" : "inline";
+};
+
 export const runPlan = async (): Promise<void> => {
   const repoRoot = process.cwd();
   const paths = getClankerPaths({ repoRoot });
@@ -70,6 +78,8 @@ export const runPlan = async (): Promise<void> => {
   const prompt = buildPlannerPrompt({ planDocs, recentSummaries });
   await writeFile(join(paths.stateDir, "plan-prompt.txt"), prompt, "utf-8");
 
+  const dispatchPrompt = getPromptMode() === "file" ? buildPlannerFilePrompt() : prompt;
+
   const panes = await listPanes({ sessionName: config.tmuxSession });
   const plannerPane =
     panes.find((pane) => pane.title === "clanker:planner") ??
@@ -79,7 +89,7 @@ export const runPlan = async (): Promise<void> => {
     return;
   }
 
-  await sendKeys({ paneId: plannerPane.paneId, text: prompt });
+  await sendKeys({ paneId: plannerPane.paneId, text: dispatchPrompt });
   await appendEvent({
     eventsLog: paths.eventsLog,
     event: {

@@ -5,6 +5,7 @@ module.exports = {
   moduleNameMapper: {
     "^(\\.{1,2}/.*)\\.js$": "$1",
   },
+  modulePathIgnorePatterns: ["/\\.worktree/"],
   testMatch: ["<rootDir>/tests/it/**/*.test.ts"],
   collectCoverage: false,
   transform: {

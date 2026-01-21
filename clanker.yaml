@@ -1,3 +1,14 @@
+# (experimental) Number of Planner terminals.
+planners: 1
+
+# (experimental) Number of Judge terminals.
+judges: 1
+
+# Number of Slave terminals.
 slaves: 3
+
+# Tmux session filter; leave empty to use clanker-<repo>.
 tmuxSession: ""
-codexCommand: ""
+
+# Command used to launch Codex CLI.
+codexCommand: "codex --no-alt-screen --sandbox workspace-write"

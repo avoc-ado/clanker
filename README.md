@@ -23,9 +23,11 @@ npx clanker-cli@latest judge
 Create `clanker.yaml` at repo root:
 
 ```yaml
+planners: 1
+judges: 1
 slaves: 3
 tmuxSession: "clanker-swarm"
-codexCommand: "codex"
+codexCommand: "codex --no-alt-screen --sandbox workspace-write"
 ```
 
 ## Integration tests

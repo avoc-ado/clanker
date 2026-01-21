@@ -1,16 +1,15 @@
 import { appendFile, readFile, readdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import {
-  ensureCodexInstalled,
   ensureTmuxInstalled,
   getCliPath,
-  initGitRepo,
   isRealMode,
   killTmuxSession,
   makeTmpRepo,
   resolveCodexCommand,
   runCli,
   runTmux,
+  setupRealMode,
   waitFor,
   writeConfig,
 } from "./utils.js";
@@ -31,7 +30,6 @@ describe("integration: real flow", () => {
     async () => {
       const maxMs = parseTimeout({ fallbackMs: 240_000 });
       await ensureTmuxInstalled();
-      await ensureCodexInstalled();
       const repoRoot = resolve(process.cwd());
       const pnpRequire = join(repoRoot, ".pnp.cjs");
       const pnpLoader = join(repoRoot, ".pnp.loader.mjs");
@@ -44,7 +42,7 @@ describe("integration: real flow", () => {
           "Ensure at least two tasks (no upper cap). Split into create + verify tasks.",
         ],
       });
-      await initGitRepo({ root });
+      await setupRealMode({ root });
       const artifactPath = join(root, "artifacts", "it-cli.js");
       const debugLogPath = join(root, ".clanker", "it-debug.log");
 
@@ -76,6 +74,17 @@ describe("integration: real flow", () => {
         } catch {
           return "";
         }
+      };
+      const waitForCodexReady = async ({ window }: { window: string }): Promise<void> => {
+        await waitFor({
+          label: `codex ui ${window}`,
+          timeoutMs: Math.min(60_000, Math.floor(maxMs / 3)),
+          intervalMs: 1_000,
+          check: async () => {
+            const output = await captureWindow({ window });
+            return output.includes("OpenAI Codex");
+          },
+        });
       };
       const emitDebug = async ({ label }: { label: string }): Promise<void> => {
         try {
@@ -113,8 +122,37 @@ describe("integration: real flow", () => {
           console.log(`it-real debug failed: ${String(error)}`);
         }
       };
+      const getPaneIdByTitle = async ({ title }: { title: string }): Promise<string | null> => {
+        const raw = await runTmux({
+          args: [
+            "list-panes",
+            "-a",
+            "-F",
+            "#{session_name}\t#{pane_id}\t#{pane_title}\t#{window_name}",
+          ],
+        });
+        const match = raw
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0)
+          .map((line) => {
+            const [sessionRaw, paneId, paneTitleRaw, windowNameRaw] = line.split("\t");
+            if (sessionRaw !== session) {
+              return null;
+            }
+            const paneTitle = paneTitleRaw?.trim() ?? "";
+            const windowName = windowNameRaw?.trim() ?? "";
+            return {
+              paneId: paneId ?? "",
+              title: paneTitle.length > 0 ? paneTitle : windowName,
+            };
+          })
+          .find((pane) => pane?.title === title);
+        return match?.paneId ?? null;
+      };
       const approvalMatchers = [
         /since this folder is not version controlled/i,
+        /since this folder is version controlled/i,
         /allow commands in this folder/i,
         /allow project commands/i,
         /would you like to run the following command/i,
@@ -125,6 +163,9 @@ describe("integration: real flow", () => {
         if (/since this folder is not version controlled/i.test(output)) {
           return ["Up", "Enter"];
         }
+        if (/since this folder is version controlled/i.test(output)) {
+          return ["Enter"];
+        }
         if (/would you like to run the following command/i.test(output)) {
           return ["Enter"];
         }
@@ -133,6 +174,12 @@ describe("integration: real flow", () => {
         }
         return ["1", "Enter"];
       };
+      const getPaneIdForWindow = async ({ window }: { window: string }): Promise<string | null> => {
+        return (
+          (await getPaneIdByTitle({ title: `clanker:${window}` })) ??
+          (await getPaneIdByTitle({ title: window }))
+        );
+      };
       const approveCodex = async ({ window }: { window: string }): Promise<void> => {
         try {
           const output = await captureWindow({ window });
@@ -140,12 +187,22 @@ describe("integration: real flow", () => {
             return;
           }
           const keys = makeApprovalKeys({ output });
+          const normalizedKeys = keys.map((key) => (key === "Enter" ? "C-m" : key));
+          const paneId = await getPaneIdForWindow({ window });
+          const target = paneId ?? `${session}:${window}`;
+          if (paneId) {
+            await runTmux({ args: ["select-pane", "-t", target] });
+          }
           await runTmux({
-            args: ["send-keys", "-t", `${session}:${window}`, ...keys],
+            args: ["send-keys", "-t", target, ...normalizedKeys],
           });
         } catch {
           // ignore
         }
+      };
+      const hasApprovalPrompt = async ({ window }: { window: string }): Promise<boolean> => {
+        const output = await captureWindow({ window });
+        return approvalMatchers.some((matcher) => matcher.test(output));
       };
       const approveAllCodex = async (): Promise<void> => {
         await Promise.all([
@@ -153,26 +210,6 @@ describe("integration: real flow", () => {
           approveCodex({ window: "c1" }),
           approveCodex({ window: "judge" }),
         ]);
-      };
-      const getPaneIdByTitle = async ({ title }: { title: string }): Promise<string | null> => {
-        const raw = await runTmux({
-          args: ["list-panes", "-t", session, "-F", "#{pane_id}\t#{pane_title}\t#{window_name}"],
-        });
-        const match = raw
-          .split("\n")
-          .map((line) => line.trim())
-          .filter((line) => line.length > 0)
-          .map((line) => {
-            const [paneId, paneTitleRaw, windowNameRaw] = line.split("\t");
-            const paneTitle = paneTitleRaw?.trim() ?? "";
-            const windowName = windowNameRaw?.trim() ?? "";
-            return {
-              paneId: paneId ?? "",
-              title: paneTitle.length > 0 ? paneTitle : windowName,
-            };
-          })
-          .find((pane) => pane.title === title);
-        return match?.paneId ?? null;
       };
       const capturePaneByTitle = async ({
         title,
@@ -200,6 +237,7 @@ describe("integration: real flow", () => {
           args: ["new-session", "-d", "-s", session, "-n", "dashboard", "-c", root, ...nodeBase],
         });
         await runTmux({ args: ["set-environment", "-t", session, "CLANKER_CODEX_TTY", "1"] });
+        await runTmux({ args: ["set-environment", "-t", session, "CLANKER_PROMPT_MODE", "file"] });
         await runTmux({ args: ["set-window-option", "-g", "remain-on-exit", "on"] });
         await runTmux({
           args: ["select-pane", "-t", `${session}:dashboard`, "-T", "clanker:dashboard"],
@@ -258,6 +296,20 @@ describe("integration: real flow", () => {
 
         await emitDebug({ label: "processes-started" });
         await approveAllCodex();
+        await waitFor({
+          label: "codex approvals",
+          timeoutMs: Math.min(30_000, Math.floor(maxMs / 4)),
+          intervalMs: 1_000,
+          check: async () => {
+            await approveAllCodex();
+            const approvals = await Promise.all([
+              hasApprovalPrompt({ window: "planner" }),
+              hasApprovalPrompt({ window: "c1" }),
+              hasApprovalPrompt({ window: "judge" }),
+            ]);
+            return approvals.every((pending) => !pending);
+          },
+        });
 
         await waitFor({
           label: "codex logs",
@@ -312,7 +364,17 @@ describe("integration: real flow", () => {
           );
         }
 
-        const planOutput = await runCli({ cwd: root, args: ["plan"] });
+        await Promise.all([
+          waitForCodexReady({ window: "planner" }),
+          waitForCodexReady({ window: "c1" }),
+          waitForCodexReady({ window: "judge" }),
+        ]);
+
+        const planOutput = await runCli({
+          cwd: root,
+          args: ["plan"],
+          env: { CLANKER_PROMPT_MODE: "file" },
+        });
         if (planOutput.includes("planner pane not found")) {
           const panes = await runTmux({
             args: ["list-panes", "-t", session, "-F", "#{pane_id}\t#{pane_title}\t#{window_name}"],
