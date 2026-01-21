@@ -175,10 +175,14 @@ export const writeConfig = async ({
   promptFile?: string;
 }): Promise<void> => {
   const safeCommand = codexCommand.replace(/"/g, '\"');
-  const sessionLine = tmuxFilter ? `tmuxFilter: "${tmuxFilter}"
-` : "";
-  const promptLine = promptFile ? `promptFile: "${promptFile.replace(/"/g, '\"')}"
-` : "";
+  const sessionLine = tmuxFilter
+    ? `tmuxFilter: "${tmuxFilter}"
+`
+    : "";
+  const promptLine = promptFile
+    ? `promptFile: "${promptFile.replace(/"/g, '\"')}"
+`
+    : "";
   await writeFile(
     join(root, "clanker.yaml"),
     `slaves: 1
