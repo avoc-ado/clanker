@@ -34,6 +34,7 @@ describe("loadConfig", () => {
     expect(config.planners).toBe(1);
     expect(config.judges).toBe(1);
     expect(config.slaves).toBe(2);
+    expect(config.tmuxSession).toBe(`clanker-${basename(root)}`);
     expect(config.codexCommand).toBe("codex --no-alt-screen --sandbox workspace-write");
     expect(config.promptFile).toBeUndefined();
   });

@@ -171,7 +171,11 @@ describe("integration: real flow", () => {
         /press enter to continue/i,
         /press enter to confirm/i,
       ];
+      const approvedWindows = new Set<string>();
       const makeApprovalKeys = ({ output }: { output: string }): string[] => {
+        if (/since this folder is version controlled/i.test(output)) {
+          return ["Up", "Enter"];
+        }
         if (/since this folder is not version controlled/i.test(output)) {
           return ["Up", "Enter"];
         }
@@ -198,6 +202,12 @@ describe("integration: real flow", () => {
           if (!approvalMatchers.some((matcher) => matcher.test(output))) {
             return;
           }
+          const isInitialApproval =
+            /since this folder is not version controlled/i.test(output) ||
+            /since this folder is version controlled/i.test(output);
+          if (isInitialApproval && approvedWindows.has(window)) {
+            return;
+          }
           const keys = makeApprovalKeys({ output });
           const normalizedKeys = keys.map((key) => (key === "Enter" ? "C-m" : key));
           const paneId = await getPaneIdForWindow({ window });
@@ -208,6 +218,9 @@ describe("integration: real flow", () => {
           await runTmux({
             args: ["send-keys", "-t", target, ...normalizedKeys],
           });
+          if (isInitialApproval) {
+            approvedWindows.add(window);
+          }
         } catch {
           // ignore
         }

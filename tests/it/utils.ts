@@ -116,6 +116,9 @@ export const writeCodexStub = async ({ root }: { root: string }): Promise<string
   return stubPath;
 };
 
+const addRealCodexFlags = ({ command }: { command: string }): string =>
+  `${command} --no-alt-screen --sandbox workspace-write -a never`;
+
 export const resolveCodexCommand = async ({
   root,
 }: {
@@ -130,7 +133,7 @@ export const resolveCodexCommand = async ({
   if (!command) {
     throw new Error("missing codex CLI for CLANKER_IT_MODE=real");
   }
-  return { codexCommand: command };
+  return { codexCommand: addRealCodexFlags({ command }) };
 };
 
 export const initGitRepo = async ({ root }: { root: string }): Promise<void> => {

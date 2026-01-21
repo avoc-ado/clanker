@@ -35,7 +35,8 @@ read_when: first-use, onboarding
 
 ## Config
 
-See `clanker.yaml` for `slaves`, `tmuxSession`, `codexCommand`, `promptFile` (testing/automation).
+See `clanker.yaml` for `slaves`, `tmuxFilter`, `codexCommand`, `promptFile` (testing/automation).
+`tmuxFilter` is a tmux session filter; leave empty to use `clanker-<repo>`.
 
 ## Verify
 
