@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { createInterface } from "node:readline/promises";
 import { setTimeout as delay } from "node:timers/promises";
 
 const execFileAsync = promisify(execFile);
@@ -67,35 +66,41 @@ const hasBinary = async ({ name }: { name: string }): Promise<boolean> => {
   }
 };
 
+const resolveBinaryPath = async ({ name }: { name: string }): Promise<string | null> => {
+  try {
+    const { stdout } = await execFileAsync("command", ["-v", name], { shell: true });
+    const resolved = stdout.trim();
+    return resolved.length > 0 ? resolved : null;
+  } catch {
+    return null;
+  }
+};
+
+export const ensureTmuxInstalled = async (): Promise<void> => {
+  if (!(await hasBinary({ name: "tmux" }))) {
+    throw new Error("missing tmux (install with `brew install tmux`)");
+  }
+};
+
+export const ensureCodexInstalled = async (): Promise<void> => {
+  if (process.env.CLANKER_IT_REAL_COMMAND?.trim()) {
+    return;
+  }
+  if (!(await hasBinary({ name: "codex" }))) {
+    throw new Error("missing codex CLI (install with `npm i -g @openai/codex`)");
+  }
+};
+
 const resolveRealCodexCommand = async (): Promise<string | null> => {
   const override = process.env.CLANKER_IT_REAL_COMMAND?.trim();
   if (override && override.length > 0) {
     return override;
   }
-  if (await hasBinary({ name: "c" })) {
-    return 'c "clanker it real mode: reply with OK and then stay idle"';
-  }
-  if (await hasBinary({ name: "codex" })) {
-    return 'codex "clanker it real mode: reply with OK and then stay idle"';
+  const codexPath = await resolveBinaryPath({ name: "codex" });
+  if (codexPath) {
+    return codexPath;
   }
   return null;
-};
-
-const promptInstallCodex = async (): Promise<boolean> => {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    throw new Error(
-      "missing codex CLI (c or codex). Install with `npm i -g @openai/codex` or set CLANKER_IT_REAL_COMMAND.",
-    );
-  }
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const answer = await rl.question("codex not found. Install now? (y/N) ");
-  rl.close();
-  const normalized = answer.trim().toLowerCase();
-  return normalized === "y" || normalized === "yes";
-};
-
-const installCodex = async (): Promise<void> => {
-  await execFileAsync("npm", ["i", "-g", "@openai/codex"], { stdio: "inherit" });
 };
 
 export const makeTmpRepo = async ({ planLines }: { planLines: string[] }): Promise<string> => {
@@ -133,32 +138,35 @@ export const resolveCodexCommand = async ({
     const stubPath = await writeCodexStub({ root });
     return { codexCommand: `node ${stubPath}`, stubPath };
   }
-  let command = await resolveRealCodexCommand();
+  const command = await resolveRealCodexCommand();
   if (!command) {
-    const shouldInstall = await promptInstallCodex();
-    if (!shouldInstall) {
-      throw new Error("missing codex CLI (c or codex) for CLANKER_IT_MODE=real");
-    }
-    await installCodex();
-    command = await resolveRealCodexCommand();
-    if (!command) {
-      throw new Error("codex install failed; command still missing");
-    }
+    throw new Error("missing codex CLI for CLANKER_IT_MODE=real");
   }
   return { codexCommand: command };
+};
+
+export const initGitRepo = async ({ root }: { root: string }): Promise<void> => {
+  try {
+    await execFileAsync("git", ["init"], { cwd: root });
+  } catch (error) {
+    throw new Error(`missing git for real integration tests: ${String(error)}`);
+  }
 };
 
 export const writeConfig = async ({
   root,
   codexCommand,
+  tmuxSession,
 }: {
   root: string;
   codexCommand: string;
+  tmuxSession?: string;
 }): Promise<void> => {
   const safeCommand = codexCommand.replace(/"/g, '\\"');
+  const sessionLine = tmuxSession ? `tmuxSession: "${tmuxSession}"\n` : "";
   await writeFile(
     join(root, "clanker.yaml"),
-    `slaves: 1\ntmuxSession: ""\ncodexCommand: "${safeCommand}"\n`,
+    `slaves: 1\n${sessionLine}codexCommand: "${safeCommand}"\n`,
     "utf-8",
   );
 };
@@ -303,3 +311,39 @@ export const runCliInteractive = async ({
   }
   return { stdout: stdout.trim(), stderr: stderr.trim(), timedOut: false };
 };
+
+export const runTmux = async ({ args }: { args: string[] }): Promise<string> => {
+  const { stdout } = await execFileAsync("tmux", args);
+  return stdout.trim();
+};
+
+export const killTmuxSession = async ({ session }: { session: string }): Promise<void> => {
+  try {
+    await runTmux({ args: ["kill-session", "-t", session] });
+  } catch {
+    // ignore
+  }
+};
+
+export const waitFor = async ({
+  label,
+  timeoutMs,
+  intervalMs,
+  check,
+}: {
+  label: string;
+  timeoutMs: number;
+  intervalMs: number;
+  check: () => Promise<boolean>;
+}): Promise<void> => {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (await check()) {
+      return;
+    }
+    await delay(intervalMs);
+  }
+  throw new Error(`timeout waiting for ${label}`);
+};
+
+export const getCliPath = (): string => cliPath;

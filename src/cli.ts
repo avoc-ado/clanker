@@ -11,6 +11,9 @@ import { runStatus } from "./commands/status.js";
 import { runTask } from "./commands/task.js";
 import { runTail } from "./commands/tail.js";
 import { runResume } from "./commands/resume.js";
+import { getClankerPaths } from "./paths.js";
+import { ensureStateDirs } from "./state/ensure-state.js";
+import { appendEvent } from "./state/events.js";
 
 interface CommandSpec {
   name: string;
@@ -24,6 +27,41 @@ const parseCommand = ({ argv }: { argv: string[] }): CommandSpec => {
     args,
   };
 };
+
+const reportFatal = async ({ label, error }: { label: string; error: unknown }): Promise<void> => {
+  const message = error instanceof Error ? error.message : String(error);
+  const stack = error instanceof Error ? error.stack : undefined;
+  console.error(`${label}: ${message}`);
+  if (stack) {
+    console.error(stack);
+  }
+  try {
+    const repoRoot = process.cwd();
+    const paths = getClankerPaths({ repoRoot });
+    await ensureStateDirs({ paths });
+    await appendEvent({
+      eventsLog: paths.eventsLog,
+      event: {
+        ts: new Date().toISOString(),
+        type: "FATAL",
+        msg: `${label}: ${message}`,
+        data: stack ? { stack } : undefined,
+      },
+    });
+  } catch {}
+};
+
+process.on("uncaughtException", (error) => {
+  void reportFatal({ label: "uncaughtException", error }).finally(() => {
+    process.exit(1);
+  });
+});
+
+process.on("unhandledRejection", (error) => {
+  void reportFatal({ label: "unhandledRejection", error }).finally(() => {
+    process.exit(1);
+  });
+});
 
 const main = async ({ argv }: { argv: string[] }): Promise<void> => {
   const command = parseCommand({ argv });
@@ -78,4 +116,8 @@ const main = async ({ argv }: { argv: string[] }): Promise<void> => {
   }
 };
 
-void main({ argv: process.argv.slice(2) });
+void main({ argv: process.argv.slice(2) }).catch((error) => {
+  void reportFatal({ label: "command failed", error }).finally(() => {
+    process.exit(1);
+  });
+});

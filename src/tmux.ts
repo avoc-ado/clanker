@@ -17,9 +17,9 @@ export const listPanes = async ({ sessionName }: { sessionName?: string } = {}):
   TmuxPane[]
 > => {
   try {
-    const targetArgs = sessionName ? ["list-panes", "-t", sessionName] : ["list-panes", "-a"];
+    const targetArgs = ["list-panes", "-a"];
     const output = await runTmux({
-      args: [...targetArgs, "-F", "#{pane_id} #{pane_title}"],
+      args: [...targetArgs, "-F", "#{session_name}\t#{pane_id}\t#{pane_title}\t#{window_name}"],
     });
     if (!output) {
       return [];
@@ -29,13 +29,18 @@ export const listPanes = async ({ sessionName }: { sessionName?: string } = {}):
       .map((line) => line.trim())
       .filter((line) => line.length > 0)
       .map((line) => {
-        const [paneId, ...titleParts] = line.split(" ");
+        const [sessionRaw, paneId, paneTitleRaw, windowNameRaw] = line.split("\t");
+        if (sessionName && sessionRaw !== sessionName) {
+          return null;
+        }
+        const paneTitle = paneTitleRaw?.trim() ?? "";
+        const windowName = windowNameRaw?.trim() ?? "";
         return {
           paneId: paneId ?? "",
-          title: titleParts.join(" ").trim(),
+          title: paneTitle.length > 0 ? paneTitle : windowName,
         } satisfies TmuxPane;
       })
-      .filter((pane) => pane.paneId.length > 0);
+      .filter((pane): pane is TmuxPane => Boolean(pane && pane.paneId.length > 0));
   } catch {
     return [];
   }

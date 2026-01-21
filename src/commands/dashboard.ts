@@ -142,7 +142,15 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     const liveState = await loadState({ statePath: paths.statePath });
     const panes = await listPanes({ sessionName: config.tmuxSession });
     const tasks = await listTasks({ tasksDir: paths.tasksDir });
-    const slavePanes = panes.filter((pane) => pane.title.startsWith("clanker:c"));
+    const extractSlaveId = ({ title }: { title: string }): string | null => {
+      const normalized = title.startsWith("clanker:") ? title.replace("clanker:", "") : title;
+      return /^c\d+$/.test(normalized) ? normalized : null;
+    };
+    const slavePanes = panes
+      .map((pane) => ({ pane, slaveId: extractSlaveId({ title: pane.title }) }))
+      .filter((entry): entry is { pane: (typeof panes)[number]; slaveId: string } =>
+        Boolean(entry.slaveId),
+      );
     const slavePaneCount = slavePanes.length;
     const readyCount = tasks.filter((task) => task.status === "queued").length;
     const reworkCount = tasks.filter((task) => task.status === "rework").length;
@@ -175,21 +183,18 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     });
     const cappedSlavePanes = slavePanes.slice(0, schedulerCap);
     const slavePaneMap = new Map<string, string>(
-      cappedSlavePanes
-        .map((pane) => ({ paneId: pane.paneId, slaveId: pane.title.replace("clanker:", "") }))
-        .filter((entry) => entry.slaveId.length > 0)
-        .map((entry) => [entry.slaveId, entry.paneId]),
+      cappedSlavePanes.map((entry) => [entry.slaveId, entry.pane.paneId]),
     );
 
     const currentPane = await getCurrentPaneId();
     if (currentPane && currentPane !== dashboardPaneId) {
-      const isSlavePane = slavePanes.some((pane) => pane.paneId === currentPane);
+      const isSlavePane = slavePanes.some((entry) => entry.pane.paneId === currentPane);
       if (isSlavePane) {
         lastSlavePaneId = currentPane;
       }
     }
     if (!lastSlavePaneId && slavePanes.length > 0) {
-      lastSlavePaneId = slavePanes[0]?.paneId ?? null;
+      lastSlavePaneId = slavePanes[0]?.pane.paneId ?? null;
     }
 
     if (pendingEscalationPaneId) {
@@ -210,20 +215,20 @@ export const runDashboard = async ({}: {}): Promise<void> => {
         });
       }
     } else {
-      for (const pane of slavePanes) {
-        const content = await capturePane({ paneId: pane.paneId, lines: 80 });
+      for (const entry of slavePanes) {
+        const content = await capturePane({ paneId: entry.pane.paneId, lines: 80 });
         if (hasEscalationPrompt({ content })) {
-          pendingEscalationPaneId = pane.paneId;
-          lastSlavePaneId = pane.paneId;
+          pendingEscalationPaneId = entry.pane.paneId;
+          lastSlavePaneId = entry.pane.paneId;
           restorePaneId = dashboardPaneId;
-          await selectPane({ paneId: pane.paneId });
+          await selectPane({ paneId: entry.pane.paneId });
           await appendEvent({
             eventsLog: paths.eventsLog,
             event: {
               ts: new Date().toISOString(),
               type: "ESCALATION_PENDING",
-              msg: `command escalation in ${pane.title}`,
-              slaveId: pane.title,
+              msg: `command escalation in ${entry.pane.title}`,
+              slaveId: entry.pane.title,
             },
           });
           break;
@@ -269,9 +274,7 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     }
     staleSlaves = nextStale;
     if (!liveState.paused) {
-      const availableSlaves = cappedSlavePanes
-        .map((pane) => pane.title.replace("clanker:", ""))
-        .filter((slaveId) => slaveId.length > 0);
+      const availableSlaves = cappedSlavePanes.map((entry) => entry.slaveId);
 
       const assigned = await assignQueuedTasks({
         tasks,

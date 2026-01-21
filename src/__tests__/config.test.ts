@@ -16,12 +16,12 @@ describe("loadConfig", () => {
     const root = await mkdtemp(join(tmpdir(), "clanker-config-"));
     await writeFile(
       join(root, "clanker.yaml"),
-      "slaves: 5\ntmuxSession: dev\ncodexCommand: c\n",
+      "slaves: 5\ntmuxSession: dev\ncodexCommand: codex\n",
       "utf-8",
     );
     const config = await loadConfig({ repoRoot: root });
     expect(config.slaves).toBe(5);
     expect(config.tmuxSession).toBe("dev");
-    expect(config.codexCommand).toBe("c");
+    expect(config.codexCommand).toBe("codex");
   });
 });

@@ -1,18 +1,6 @@
-import { spawn, execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
 import { join } from "node:path";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
-
-const hasBinary = async ({ name }: { name: string }): Promise<boolean> => {
-  try {
-    await execFileAsync("command", ["-v", name], { shell: true });
-    return true;
-  } catch {
-    return false;
-  }
-};
 
 const splitCommand = ({ command }: { command: string }): string[] => {
   const parts: string[] = [];
@@ -65,8 +53,20 @@ const resolveCliCommand = async ({
     const [cmd, ...args] = parts;
     return { cmd: cmd ?? "codex", args };
   }
-  const hasC = await hasBinary({ name: "c" });
-  return { cmd: hasC ? "c" : "codex", args: [] };
+  return { cmd: "codex", args: [] };
+};
+
+const wrapWithPty = ({
+  cmd,
+  args,
+}: {
+  cmd: string;
+  args: string[];
+}): { cmd: string; args: string[] } => {
+  return {
+    cmd: "script",
+    args: ["-q", "/dev/null", cmd, ...args],
+  };
 };
 
 const makeLogPath = ({
@@ -103,8 +103,10 @@ export const spawnCodex = async ({
   }
 
   const cli = await resolveCliCommand({ override: command });
+  const usePty = process.env.CLANKER_CODEX_TTY === "1";
+  const finalCli = usePty ? wrapWithPty(cli) : cli;
 
-  const child = spawn(cli.cmd, cli.args, { stdio: ["inherit", "pipe", "pipe"] });
+  const child = spawn(finalCli.cmd, finalCli.args, { stdio: ["inherit", "pipe", "pipe"] });
   child.stdout?.on("data", (chunk) => {
     process.stdout.write(chunk);
     logStream.write(chunk);

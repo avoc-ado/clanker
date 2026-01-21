@@ -25,7 +25,7 @@ Create `clanker.yaml` at repo root:
 ```yaml
 slaves: 3
 tmuxSession: "clanker-swarm"
-codexCommand: "c"
+codexCommand: "codex"
 ```
 
 ## Integration tests
@@ -36,7 +36,7 @@ yarn test:it:stub
 yarn test:it:real
 ```
 
-Real mode needs `c` or `codex` on PATH (override via `CLANKER_IT_REAL_COMMAND`).
+Real mode needs codex CLI on PATH (override via `CLANKER_IT_REAL_COMMAND`).
 
 ## Docs
 

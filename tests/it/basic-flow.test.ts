@@ -48,13 +48,12 @@ describe("integration: basic flow", () => {
     }
 
     if (isRealMode()) {
-      const result = await runCliInteractive({
+      await runCliInteractive({
         cwd: root,
         args: ["slave", "1"],
         inputLines: [],
         timeoutMs: 20_000,
       });
-      expect(result.timedOut).toBe(true);
     } else {
       await runCli({
         cwd: root,

@@ -71,7 +71,9 @@ export const runPlan = async (): Promise<void> => {
   await writeFile(join(paths.stateDir, "plan-prompt.txt"), prompt, "utf-8");
 
   const panes = await listPanes({ sessionName: config.tmuxSession });
-  const plannerPane = panes.find((pane) => pane.title === "clanker:planner");
+  const plannerPane =
+    panes.find((pane) => pane.title === "clanker:planner") ??
+    panes.find((pane) => pane.title === "planner");
   if (!plannerPane) {
     console.log("planner pane not found (title clanker:planner)");
     return;

@@ -1,0 +1,390 @@
+import { appendFile, readFile, readdir, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import {
+  ensureCodexInstalled,
+  ensureTmuxInstalled,
+  getCliPath,
+  initGitRepo,
+  isRealMode,
+  killTmuxSession,
+  makeTmpRepo,
+  resolveCodexCommand,
+  runCli,
+  runTmux,
+  waitFor,
+  writeConfig,
+} from "./utils.js";
+
+const run = isRealMode() ? test : test.skip;
+const parseTimeout = ({ fallbackMs }: { fallbackMs: number }): number => {
+  const raw = process.env.CLANKER_IT_MAX_MS?.trim();
+  if (!raw) {
+    return fallbackMs;
+  }
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackMs;
+};
+
+describe("integration: real flow", () => {
+  run(
+    "planner creates tasks, dashboard assigns, slave produces artifacts",
+    async () => {
+      const maxMs = parseTimeout({ fallbackMs: 240_000 });
+      await ensureTmuxInstalled();
+      await ensureCodexInstalled();
+      const repoRoot = resolve(process.cwd());
+      const pnpRequire = join(repoRoot, ".pnp.cjs");
+      const pnpLoader = join(repoRoot, ".pnp.loader.mjs");
+      const root = await makeTmpRepo({
+        planLines: [
+          'Goal: create artifacts/it-cli.js with the exact contents: console.log("IT_OK");',
+          "Use shell commands to write task packets into .clanker/tasks immediately.",
+          "Write two packets with ids it-1 and it-2.",
+          "Requirement: planner must output a minimum of 2 task packets.",
+          "Ensure at least two tasks (no upper cap). Split into create + verify tasks.",
+        ],
+      });
+      await initGitRepo({ root });
+      const artifactPath = join(root, "artifacts", "it-cli.js");
+      const debugLogPath = join(root, ".clanker", "it-debug.log");
+
+      await runCli({ cwd: root, args: ["doctor", "--fix"] });
+      await writeFile(
+        join(root, ".clanker", "state.json"),
+        JSON.stringify({ paused: false, tasks: [] }),
+        "utf-8",
+      );
+
+      const session = `clanker-it-${Date.now()}`;
+      const cliPath = getCliPath();
+      const { codexCommand } = await resolveCodexCommand({ root });
+      await writeConfig({ root, codexCommand, tmuxSession: session });
+      const nodeBase = [process.execPath, "--require", pnpRequire, "--loader", pnpLoader, cliPath];
+      console.log(`it-real debug log: ${debugLogPath}`);
+      const readEvents = async (): Promise<string> => {
+        try {
+          return await readFile(join(root, ".clanker", "events.log"), "utf-8");
+        } catch {
+          return "";
+        }
+      };
+      const captureWindow = async ({ window }: { window: string }): Promise<string> => {
+        try {
+          return await runTmux({
+            args: ["capture-pane", "-pt", `${session}:${window}`, "-S", "-120"],
+          });
+        } catch {
+          return "";
+        }
+      };
+      const emitDebug = async ({ label }: { label: string }): Promise<void> => {
+        try {
+          const [events, panes, plannerPane, slavePane, judgePane] = await Promise.all([
+            readEvents(),
+            runTmux({
+              args: [
+                "list-panes",
+                "-t",
+                session,
+                "-F",
+                "#{pane_id}\t#{pane_title}\t#{window_name}",
+              ],
+            }),
+            captureWindow({ window: "planner" }),
+            captureWindow({ window: "c1" }),
+            captureWindow({ window: "judge" }),
+          ]);
+          const tail = events.split("\n").slice(-10).join("\n").trim();
+          const payload = [
+            `== it-real ${label} ==`,
+            tail.length > 0 ? tail : "(events empty)",
+            "--- tmux panes ---",
+            panes.trim(),
+            "--- planner pane ---",
+            plannerPane.trim(),
+            "--- slave pane ---",
+            slavePane.trim(),
+            "--- judge pane ---",
+            judgePane.trim(),
+          ].join("\n");
+          console.log(payload);
+          await appendFile(debugLogPath, `${payload}\n`, "utf-8");
+        } catch (error) {
+          console.log(`it-real debug failed: ${String(error)}`);
+        }
+      };
+      const approvalMatchers = [
+        /since this folder is not version controlled/i,
+        /allow commands in this folder/i,
+        /allow project commands/i,
+        /would you like to run the following command/i,
+        /press enter to continue/i,
+        /press enter to confirm/i,
+      ];
+      const makeApprovalKeys = ({ output }: { output: string }): string[] => {
+        if (/since this folder is not version controlled/i.test(output)) {
+          return ["Up", "Enter"];
+        }
+        if (/would you like to run the following command/i.test(output)) {
+          return ["Enter"];
+        }
+        if (/press enter to continue/i.test(output)) {
+          return ["Enter"];
+        }
+        return ["1", "Enter"];
+      };
+      const approveCodex = async ({ window }: { window: string }): Promise<void> => {
+        try {
+          const output = await captureWindow({ window });
+          if (!approvalMatchers.some((matcher) => matcher.test(output))) {
+            return;
+          }
+          const keys = makeApprovalKeys({ output });
+          await runTmux({
+            args: ["send-keys", "-t", `${session}:${window}`, ...keys],
+          });
+        } catch {
+          // ignore
+        }
+      };
+      const approveAllCodex = async (): Promise<void> => {
+        await Promise.all([
+          approveCodex({ window: "planner" }),
+          approveCodex({ window: "c1" }),
+          approveCodex({ window: "judge" }),
+        ]);
+      };
+      const getPaneIdByTitle = async ({ title }: { title: string }): Promise<string | null> => {
+        const raw = await runTmux({
+          args: ["list-panes", "-t", session, "-F", "#{pane_id}\t#{pane_title}\t#{window_name}"],
+        });
+        const match = raw
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0)
+          .map((line) => {
+            const [paneId, paneTitleRaw, windowNameRaw] = line.split("\t");
+            const paneTitle = paneTitleRaw?.trim() ?? "";
+            const windowName = windowNameRaw?.trim() ?? "";
+            return {
+              paneId: paneId ?? "",
+              title: paneTitle.length > 0 ? paneTitle : windowName,
+            };
+          })
+          .find((pane) => pane.title === title);
+        return match?.paneId ?? null;
+      };
+      const capturePaneByTitle = async ({
+        title,
+        fallbackTitle,
+      }: {
+        title: string;
+        fallbackTitle?: string;
+      }): Promise<string> => {
+        const paneId =
+          (await getPaneIdByTitle({ title })) ??
+          (fallbackTitle ? await getPaneIdByTitle({ title: fallbackTitle }) : null);
+        if (!paneId) {
+          return "";
+        }
+        return runTmux({ args: ["capture-pane", "-pt", paneId, "-S", "-120"] });
+      };
+
+      let debugInterval: NodeJS.Timeout | null = null;
+      try {
+        debugInterval = setInterval(() => {
+          void emitDebug({ label: "tick" });
+        }, 15_000);
+        debugInterval.unref?.();
+        await runTmux({
+          args: ["new-session", "-d", "-s", session, "-n", "dashboard", "-c", root, ...nodeBase],
+        });
+        await runTmux({ args: ["set-environment", "-t", session, "CLANKER_CODEX_TTY", "1"] });
+        await runTmux({ args: ["set-window-option", "-g", "remain-on-exit", "on"] });
+        await runTmux({
+          args: ["select-pane", "-t", `${session}:dashboard`, "-T", "clanker:dashboard"],
+        });
+        await runTmux({
+          args: ["new-window", "-t", session, "-n", "planner", "-c", root, ...nodeBase],
+        });
+        await runTmux({
+          args: ["select-pane", "-t", `${session}:planner`, "-T", "clanker:planner"],
+        });
+        await runTmux({
+          args: ["new-window", "-t", session, "-n", "c1", "-c", root, ...nodeBase],
+        });
+        await runTmux({
+          args: ["select-pane", "-t", `${session}:c1`, "-T", "clanker:c1"],
+        });
+        await runTmux({
+          args: ["new-window", "-t", session, "-n", "judge", "-c", root, ...nodeBase],
+        });
+        await runTmux({
+          args: ["select-pane", "-t", `${session}:judge`, "-T", "clanker:judge"],
+        });
+
+        await waitFor({
+          label: "tmux panes",
+          timeoutMs: Math.min(30_000, Math.floor(maxMs / 4)),
+          intervalMs: 1_000,
+          check: async () => {
+            const windows = await runTmux({
+              args: ["list-windows", "-t", session, "-F", "#{window_name}"],
+            });
+            const windowNames = windows
+              .split("\n")
+              .map((line) => line.trim())
+              .filter((line) => line.length > 0);
+            return ["dashboard", "planner", "c1", "judge"].every((name) =>
+              windowNames.includes(name),
+            );
+          },
+        });
+
+        await emitDebug({ label: "panes-ready" });
+
+        await runTmux({
+          args: ["respawn-pane", "-k", "-t", `${session}:dashboard`, ...nodeBase],
+        });
+        await runTmux({
+          args: ["respawn-pane", "-k", "-t", `${session}:planner`, ...nodeBase, "planner"],
+        });
+        await runTmux({
+          args: ["respawn-pane", "-k", "-t", `${session}:c1`, ...nodeBase, "slave", "1"],
+        });
+        await runTmux({
+          args: ["respawn-pane", "-k", "-t", `${session}:judge`, ...nodeBase, "judge"],
+        });
+
+        await emitDebug({ label: "processes-started" });
+        await approveAllCodex();
+
+        await waitFor({
+          label: "codex logs",
+          timeoutMs: Math.min(60_000, Math.floor(maxMs / 3)),
+          intervalMs: 1_000,
+          check: async () => {
+            await approveAllCodex();
+            const raw = await readEvents();
+            return raw.includes('"CHAT_LOG"') && raw.includes('"planner"');
+          },
+        });
+
+        try {
+          await waitFor({
+            label: "planner/slave/judge ready",
+            timeoutMs: Math.min(60_000, Math.floor(maxMs / 3)),
+            intervalMs: 1_000,
+            check: async () => {
+              await approveAllCodex();
+              const raw = await readEvents();
+              return (
+                raw.includes('"PLANNER_READY"') &&
+                raw.includes('"SLAVE_READY"') &&
+                raw.includes('"JUDGE_READY"')
+              );
+            },
+          });
+        } catch (error) {
+          const [plannerOutput, slaveOutput, judgeOutput, events] = await Promise.all([
+            capturePaneByTitle({ title: "clanker:planner", fallbackTitle: "planner" }),
+            capturePaneByTitle({ title: "clanker:c1", fallbackTitle: "c1" }),
+            capturePaneByTitle({ title: "clanker:judge", fallbackTitle: "judge" }),
+            readEvents(),
+          ]);
+          const windows = await runTmux({
+            args: ["list-windows", "-t", session, "-F", "#{window_name}"],
+          });
+          throw new Error(
+            [
+              String(error),
+              "--- events.log ---",
+              events.trim(),
+              "--- planner pane ---",
+              plannerOutput.trim(),
+              "--- slave pane ---",
+              slaveOutput.trim(),
+              "--- judge pane ---",
+              judgeOutput.trim(),
+              "--- tmux windows ---",
+              windows.trim(),
+            ].join("\n"),
+          );
+        }
+
+        const planOutput = await runCli({ cwd: root, args: ["plan"] });
+        if (planOutput.includes("planner pane not found")) {
+          const panes = await runTmux({
+            args: ["list-panes", "-t", session, "-F", "#{pane_id}\t#{pane_title}\t#{window_name}"],
+          });
+          throw new Error([planOutput.trim(), "--- tmux panes ---", panes.trim()].join("\n"));
+        }
+
+        await emitDebug({ label: "plan-sent" });
+
+        try {
+          await waitFor({
+            label: "task packets",
+            timeoutMs: Math.min(180_000, Math.floor(maxMs / 2)),
+            intervalMs: 2_000,
+            check: async () => {
+              await approveAllCodex();
+              const files = await readdir(join(root, ".clanker", "tasks"));
+              return files.filter((file) => file.endsWith(".json")).length >= 2;
+            },
+          });
+        } catch (error) {
+          const plannerOutput = await capturePaneByTitle({
+            title: "clanker:planner",
+            fallbackTitle: "planner",
+          });
+          const windows = await runTmux({
+            args: ["list-windows", "-t", session, "-F", "#{window_name}"],
+          });
+          throw new Error(
+            [
+              String(error),
+              "--- planner pane ---",
+              plannerOutput.trim(),
+              "--- tmux windows ---",
+              windows.trim(),
+            ].join("\n"),
+          );
+        }
+
+        await waitFor({
+          label: "task prompted",
+          timeoutMs: Math.min(180_000, Math.floor(maxMs / 2)),
+          intervalMs: 2_000,
+          check: async () => {
+            await approveAllCodex();
+            const raw = await readEvents();
+            return raw.includes('"TASK_PROMPTED"');
+          },
+        });
+
+        await waitFor({
+          label: "artifact output",
+          timeoutMs: Math.min(240_000, Math.floor(maxMs / 2)),
+          intervalMs: 2_000,
+          check: async () => {
+            await approveAllCodex();
+            try {
+              const raw = await readFile(artifactPath, "utf-8");
+              return raw.includes("IT_OK");
+            } catch {
+              return false;
+            }
+          },
+        });
+      } finally {
+        if (debugInterval) {
+          clearInterval(debugInterval);
+        }
+        await emitDebug({ label: "cleanup" });
+        await killTmuxSession({ session });
+      }
+    },
+    parseTimeout({ fallbackMs: 300_000 }),
+  );
+});

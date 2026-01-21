@@ -21,6 +21,10 @@
 - Add IT: resume CLI toggles paused + emits RESUMED
 - Add IT: task handoff usage persists + emits TASK_USAGE
 - Add IT: tail output includes tok/judge formatting for usage events
+- Add IT: real mode tmux flow (dashboard + planner + slave)
+- Fail fast if tmux/codex missing in real IT mode
+- Real IT: full flow runs dashboard + planner + slaves + judge and checks artifact output
+- Docs + README use "codex CLI" wording (no alias)
 
 ## Now
 
@@ -28,7 +32,6 @@
 
 ## Next
 
-- If codex resolution fails in real IT mode, prompt to install; decline exits nonzero
 - Blind-spot audit: map current IT coverage to features; list gaps (low/medium)
 - Add IT: planner/judge rework routing (CLI-level)
 - Add IT: multi-slave scheduler assignment + stale heartbeat handling (no tmux)
