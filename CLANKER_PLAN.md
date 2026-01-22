@@ -163,8 +163,8 @@ flowchart TD
 - Planner uses read-only `main` snapshot worktree; fast-forward only
 - Slave worktree created at `baseMainSha`
 - On task start (no local commits): fast-forward to latest `main`
-- After work starts: no rebase by slave unless judge requests
-- Judge rebase/merge is the final mainline gate
+- After work starts: rebase only as an explicit step (see Git Sync Policy)
+- Judge rebase/merge is the final mainline gate; judge does not resolve conflicts
 
 ### baseMainSha (Field Spec)
 
@@ -177,7 +177,9 @@ flowchart TD
 
 - Planner: `git fetch` + `git pull --ff-only` before each planning run
 - Slave: `git fetch` at task start; `git pull --ff-only` only if clean
-- Judge: `git fetch` before verify; rebase slave branch onto `main` for mainline
+- Planner does not run test suites
+- Slave (rebase step): run full test suite, rebase onto `main`, run full test suite again, handoff to judge
+- Judge: rebase slave branch onto `main`, run full test suite (skip pre-rebase suite); conflicts or failures hand off to slave
 - Scope change failure: do not rebase; mark failed and replan
 
 ## Worktree Map + Commands
@@ -257,6 +259,7 @@ flowchart TD
 ROLE: planner. Build tasks from plan docs. No user co-edit.
 INPUTS: {planDocs} {currentTasks} {recentSummaries} {repoSignals} {constraints}
 OUTPUT: tasks with goal, ownerDirs, deps, done criteria, tests, risks.
+RULE: planner does not run test suites.
 ```
 
 #### Slave
@@ -266,6 +269,7 @@ ROLE: slave. Execute assigned task. No user questions.
 TASK: {taskSpec}
 CONTEXT: {contextPack}
 GUARDRAILS: no destructive ops; use trash; run tests; log risks.
+REBASE: when requested, run full test suite → rebase onto main → run full test suite → handoff to judge.
 OUTPUT: summary + tests + touched files + TODOs.
 ```
 
@@ -275,8 +279,8 @@ OUTPUT: summary + tests + touched files + TODOs.
 ROLE: judge. Independent verification. No edits unless rework needed.
 TASK: {taskSpec}
 SLAVE_SUMMARY: {slaveSummary}
-VERIFY: {acceptanceChecklist}
-OUTPUT: verdict done/rework + verify steps + regressions.
+VERIFY: {acceptanceChecklist} + rebase onto main + run full test suite (skip pre-rebase suite).
+OUTPUT: verdict done/rework + verify steps + regressions. Conflicts/test failures hand off to slave.
 ```
 
 #### Rework
@@ -338,9 +342,9 @@ STATE: {pausedTasks} {assignments} {staleHeartbeats}
 ## Mainlining + Conflicts + Regressions
 
 - Mainlining performed by judge (integration phase, low N)
-- Flow: judge rebases task worktree onto `main`, resolves conflicts, runs gate
-- Conflict policy: fix in same task/worktree; if overlap indicates bad plan, planner re-scopes and reassigns
-- If conflicts exceed budget, task goes `rework` or `split`
+- Flow: judge rebases task worktree onto `main`, runs full gate (no pre-rebase suite)
+- Conflict/test failure policy: judge hands off to slave for fix + rebase flow
+- If conflicts exceed budget, task goes `rework` or `split` (planner may re-scope and reassign)
 - Regression detection: local gate failures or local tests create auto regression tasks
 - Regression tasks: tagged `regression`, highest priority, assigned immediately
 - Periodic health-check task: verify `main` app behavior matches current plan/state

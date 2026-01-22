@@ -1,0 +1,10 @@
+.pnp.cjs
+.pnp.loader.mjs
+.yarn/
+dist/
+coverage/
+.clanker/
+*.log
+.worktree/
+node_modules/
+.DS_Store
