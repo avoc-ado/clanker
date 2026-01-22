@@ -8,6 +8,7 @@ import { appendEvent } from "../state/events.js";
 import type { ClankerEvent } from "../state/events.js";
 import { listTasks, loadTask, saveTask } from "../state/tasks.js";
 import { readHeartbeats } from "../state/read-heartbeats.js";
+import { isHeartbeatStale } from "../state/heartbeat.js";
 import { assignQueuedTasks } from "../state/assign.js";
 import { computeSlaveCap } from "../scheduler.js";
 import { appendMetricSeries, loadMetrics, saveMetrics } from "../state/metrics.js";
@@ -381,7 +382,7 @@ export const runDashboard = async ({}: {}): Promise<void> => {
 
     const conflictCount = countLockConflicts({
       tasks: tasks.filter((task) =>
-        ["running", "needs_judge", "rework", "blocked", "handoff_fix"].includes(task.status),
+        ["running", "needs_judge", "rework", "blocked"].includes(task.status),
       ),
     });
     const schedulerCap = computeSlaveCap({
@@ -449,14 +450,14 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     }
 
     const heartbeats = await readHeartbeats({ heartbeatDir: paths.heartbeatDir });
-    const staleCount = heartbeats.filter((hb) => {
-      const deltaMs = Date.now() - new Date(hb.ts).getTime();
-      return deltaMs > 30_000;
-    }).length;
+    const nowMs = Date.now();
+    const staleThresholdMs = 30_000;
+    const staleCount = heartbeats.filter((hb) =>
+      isHeartbeatStale({ heartbeat: hb, nowMs, thresholdMs: staleThresholdMs }),
+    ).length;
     const nextStale = new Set<string>();
     for (const hb of heartbeats) {
-      const deltaMs = Date.now() - new Date(hb.ts).getTime();
-      if (deltaMs > 30_000) {
+      if (isHeartbeatStale({ heartbeat: hb, nowMs, thresholdMs: staleThresholdMs })) {
         nextStale.add(hb.slaveId);
         if (!staleSlaves.has(hb.slaveId)) {
           await appendEvent({
@@ -486,12 +487,15 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     }
     staleSlaves = nextStale;
     if (!liveState.paused) {
-      const availableSlaves = cappedSlavePanes.map((entry) => entry.slaveId);
+      const availableSlaves = cappedSlavePanes
+        .map((entry) => entry.slaveId)
+        .filter((slaveId) => !staleSlaves.has(slaveId));
 
       const assigned = await assignQueuedTasks({
         tasks,
         availableSlaves,
         paths,
+        staleSlaves,
       });
 
       for (const task of assigned) {
