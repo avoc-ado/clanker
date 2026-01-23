@@ -1,7 +1,8 @@
 import type { TaskRecord } from "./tasks.js";
-import { saveTask } from "./tasks.js";
+import { loadTask, saveTask } from "./tasks.js";
 import type { ClankerPaths } from "../paths.js";
 import { buildLockState, hasLockConflict } from "./locks.js";
+import { acquireTaskLock } from "./task-claim.js";
 
 const BUSY_STATUSES = new Set(["running", "needs_judge", "rework", "blocked", "paused"]);
 
@@ -38,18 +39,36 @@ export const assignQueuedTasks = async ({
     if (hasLockConflict({ task, lockState })) {
       continue;
     }
-    const preferred = task.resumeSlaveId;
-    const slaveId =
-      preferred && freeSlaves.has(preferred) ? preferred : freeSlaves.values().next().value;
-    if (!slaveId) {
-      break;
+    const claim = await acquireTaskLock({
+      locksDir: paths.locksDir,
+      key: `assign-${task.id}`,
+    });
+    if (!claim) {
+      continue;
     }
-    task.status = "running";
-    task.assignedSlaveId = slaveId;
-    task.resumeSlaveId = undefined;
-    await saveTask({ tasksDir: paths.tasksDir, task });
-    updated.push(task);
-    freeSlaves.delete(slaveId);
+    try {
+      const latest = await loadTask({ tasksDir: paths.tasksDir, id: task.id });
+      if (!latest || latest.status !== "queued") {
+        continue;
+      }
+      if (hasLockConflict({ task: latest, lockState })) {
+        continue;
+      }
+      const preferred = latest.resumeSlaveId;
+      const slaveId =
+        preferred && freeSlaves.has(preferred) ? preferred : freeSlaves.values().next().value;
+      if (!slaveId) {
+        break;
+      }
+      latest.status = "running";
+      latest.assignedSlaveId = slaveId;
+      latest.resumeSlaveId = undefined;
+      await saveTask({ tasksDir: paths.tasksDir, task: latest });
+      updated.push(latest);
+      freeSlaves.delete(slaveId);
+    } finally {
+      await claim.release();
+    }
   }
 
   return updated;

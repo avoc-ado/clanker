@@ -1,4 +1,5 @@
-const shouldIgnoreWorktree = process.env.JEST_INCLUDE_WORKTREE !== "1";
+const isInWorktree = process.cwd().includes("/.worktree/");
+const shouldIgnoreWorktree = process.env.JEST_INCLUDE_WORKTREE !== "1" && !isInWorktree;
 
 module.exports = {
   preset: "ts-jest/presets/default-esm",

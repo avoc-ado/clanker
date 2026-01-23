@@ -8,6 +8,7 @@ export const ensureStateDirs = async ({ paths }: { paths: ClankerPaths }): Promi
   await mkdir(paths.historyDir, { recursive: true });
   await mkdir(paths.heartbeatDir, { recursive: true });
   await mkdir(paths.logsDir, { recursive: true });
+  await mkdir(paths.locksDir, { recursive: true });
   await mkdir(paths.archiveTasksDir, { recursive: true });
   try {
     await stat(paths.statePath);

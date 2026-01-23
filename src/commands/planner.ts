@@ -4,14 +4,15 @@ import { appendEvent } from "../state/events.js";
 import { writeHeartbeat } from "../state/heartbeat.js";
 import { spawnCodex } from "./spawn-codex.js";
 import { loadConfig } from "../config.js";
+import { formatPlannerId } from "../agent-ids.js";
 
-export const runPlanner = async (): Promise<void> => {
+export const runPlanner = async ({ idRaw }: { idRaw?: string } = {}): Promise<void> => {
   const repoRoot = process.cwd();
   const paths = getClankerPaths({ repoRoot });
   await ensureStateDirs({ paths });
   const config = await loadConfig({ repoRoot });
 
-  const plannerId = "planner";
+  const plannerId = formatPlannerId({ idRaw });
   await appendEvent({
     eventsLog: paths.eventsLog,
     event: {

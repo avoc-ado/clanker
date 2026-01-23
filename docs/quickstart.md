@@ -14,6 +14,8 @@ read_when: first-use, onboarding
 - `clanker slave 1` (worker pane)
 - `clanker judge` (integration pane)
 - `clanker planner` (planner pane)
+- `clanker judge 2` (extra judge pane)
+- `clanker planner 2` (extra planner pane)
 
 ## Dashboard
 

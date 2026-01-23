@@ -4,14 +4,15 @@ import { appendEvent } from "../state/events.js";
 import { writeHeartbeat } from "../state/heartbeat.js";
 import { spawnCodex } from "./spawn-codex.js";
 import { loadConfig } from "../config.js";
+import { formatJudgeId } from "../agent-ids.js";
 
-export const runJudge = async (): Promise<void> => {
+export const runJudge = async ({ idRaw }: { idRaw?: string } = {}): Promise<void> => {
   const repoRoot = process.cwd();
   const paths = getClankerPaths({ repoRoot });
   await ensureStateDirs({ paths });
   const config = await loadConfig({ repoRoot });
 
-  const judgeId = "judge";
+  const judgeId = formatJudgeId({ idRaw });
   await appendEvent({
     eventsLog: paths.eventsLog,
     event: {

@@ -4,6 +4,7 @@ import { getClankerPaths } from "../paths.js";
 import { ensureStateDirs } from "../state/ensure-state.js";
 import { appendEvent } from "../state/events.js";
 import { listPanes, sendKeys } from "../tmux.js";
+import type { TmuxPane } from "../tmux.js";
 import { formatTaskSchema } from "../plan/schema.js";
 import { buildContextPack } from "../context/context-pack.js";
 import { loadConfig } from "../config.js";
@@ -50,6 +51,48 @@ const buildPlannerPrompt = ({
   ].join("\n");
 };
 
+export const selectPlannerPane = ({ panes }: { panes: TmuxPane[] }): TmuxPane | null => {
+  const planners = panes
+    .map((pane) => {
+      const normalized = pane.title.startsWith("clanker:")
+        ? pane.title.replace("clanker:", "")
+        : pane.title;
+      const match = /^planner(?:-(.+))?$/.exec(normalized);
+      if (!match) {
+        return null;
+      }
+      return {
+        pane,
+        isDefault: !match[1],
+        id: match[1] ?? "",
+      };
+    })
+    .filter((entry): entry is { pane: TmuxPane; isDefault: boolean; id: string } => Boolean(entry));
+
+  if (planners.length === 0) {
+    return null;
+  }
+
+  planners.sort((a, b) => {
+    if (a.isDefault !== b.isDefault) {
+      return a.isDefault ? -1 : 1;
+    }
+    const aNum = Number(a.id);
+    const bNum = Number(b.id);
+    const aIsNum = Number.isFinite(aNum);
+    const bIsNum = Number.isFinite(bNum);
+    if (aIsNum && bIsNum) {
+      return aNum - bNum;
+    }
+    if (aIsNum !== bIsNum) {
+      return aIsNum ? -1 : 1;
+    }
+    return a.id.localeCompare(b.id);
+  });
+
+  return planners[0]?.pane ?? null;
+};
+
 export const runPlan = async (): Promise<void> => {
   const repoRoot = process.cwd();
   const paths = getClankerPaths({ repoRoot });
@@ -79,11 +122,9 @@ export const runPlan = async (): Promise<void> => {
       : prompt;
 
   const panes = await listPanes({ sessionName: config.tmuxFilter });
-  const plannerPane =
-    panes.find((pane) => pane.title === "clanker:planner") ??
-    panes.find((pane) => pane.title === "planner");
+  const plannerPane = selectPlannerPane({ panes });
   if (!plannerPane) {
-    console.log("planner pane not found (title clanker:planner)");
+    console.log("planner pane not found (title planner or planner-<id>)");
     return;
   }
 

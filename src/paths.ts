@@ -10,6 +10,7 @@ export interface ClankerPaths {
   heartbeatDir: string;
   metricsPath: string;
   logsDir: string;
+  locksDir: string;
   archiveDir: string;
   archiveTasksDir: string;
   commandHistoryPath: string;
@@ -27,6 +28,7 @@ export const getClankerPaths = ({ repoRoot }: { repoRoot: string }): ClankerPath
     heartbeatDir: join(stateDir, "heartbeat"),
     metricsPath: join(stateDir, "metrics.json"),
     logsDir: join(stateDir, "logs"),
+    locksDir: join(stateDir, "locks"),
     archiveDir: join(stateDir, "archive"),
     archiveTasksDir: join(stateDir, "archive", "tasks"),
     commandHistoryPath: join(stateDir, "command-history.json"),

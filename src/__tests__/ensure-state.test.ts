@@ -17,6 +17,7 @@ describe("ensureStateDirs", () => {
       heartbeatDir: join(root, ".clanker", "heartbeat"),
       metricsPath: join(root, ".clanker", "metrics.json"),
       logsDir: join(root, ".clanker", "logs"),
+      locksDir: join(root, ".clanker", "locks"),
       archiveDir: join(root, ".clanker", "archive"),
       archiveTasksDir: join(root, ".clanker", "archive", "tasks"),
       commandHistoryPath: join(root, ".clanker", "command-history.json"),

@@ -157,11 +157,13 @@ const main = async ({ argv }: { argv: string[] }): Promise<void> => {
       return;
     }
     case "planner": {
-      await runPlanner();
+      const [idRaw] = command.args;
+      await runPlanner({ idRaw });
       return;
     }
     case "judge": {
-      await runJudge();
+      const [idRaw] = command.args;
+      await runJudge({ idRaw });
       return;
     }
     case "plan": {

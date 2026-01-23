@@ -10,6 +10,7 @@ import { listTasks, loadTask, saveTask } from "../state/tasks.js";
 import { readHeartbeats } from "../state/read-heartbeats.js";
 import { isHeartbeatStale } from "../state/heartbeat.js";
 import { assignQueuedTasks } from "../state/assign.js";
+import { acquireTaskLock } from "../state/task-claim.js";
 import { computeSlaveCap } from "../scheduler.js";
 import { appendMetricSeries, loadMetrics, saveMetrics } from "../state/metrics.js";
 import { transitionTaskStatus } from "../state/task-status.js";
@@ -398,6 +399,54 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     const slavePaneMap = new Map<string, string>(
       cappedSlavePanes.map((entry) => [entry.slaveId, entry.pane.paneId]),
     );
+    const promptTask = async ({
+      taskId,
+      assignedSlaveId,
+    }: {
+      taskId: string;
+      assignedSlaveId?: string;
+    }): Promise<void> => {
+      const claim = await acquireTaskLock({
+        locksDir: paths.locksDir,
+        key: `prompt-${taskId}`,
+      });
+      if (!claim) {
+        return;
+      }
+      try {
+        const latest = await loadTask({ tasksDir: paths.tasksDir, id: taskId });
+        if (!latest || !latest.prompt || latest.promptedAt) {
+          return;
+        }
+        const slaveId = latest.assignedSlaveId ?? assignedSlaveId;
+        if (!slaveId) {
+          return;
+        }
+        const paneId = slavePaneMap.get(slaveId);
+        if (!paneId) {
+          return;
+        }
+        const prompt =
+          promptSettings.mode === "file"
+            ? buildTaskFileDispatch({ taskId: latest.id })
+            : latest.prompt;
+        await sendKeys({ paneId, text: prompt });
+        latest.promptedAt = new Date().toISOString();
+        await saveTask({ tasksDir: paths.tasksDir, task: latest });
+        await appendEvent({
+          eventsLog: paths.eventsLog,
+          event: {
+            ts: new Date().toISOString(),
+            type: "TASK_PROMPTED",
+            msg: "sent task prompt",
+            slaveId,
+            taskId: latest.id,
+          },
+        });
+      } finally {
+        await claim.release();
+      }
+    };
 
     const currentPane = await getCurrentPaneId();
     if (currentPane && currentPane !== dashboardPaneId) {
@@ -509,28 +558,7 @@ export const runDashboard = async ({}: {}): Promise<void> => {
             taskId: task.id,
           },
         });
-        if (task.prompt && !task.promptedAt) {
-          const paneId = task.assignedSlaveId ? slavePaneMap.get(task.assignedSlaveId) : null;
-          if (paneId) {
-            const prompt =
-              promptSettings.mode === "file"
-                ? buildTaskFileDispatch({ taskId: task.id })
-                : task.prompt;
-            await sendKeys({ paneId, text: prompt });
-            task.promptedAt = new Date().toISOString();
-            await saveTask({ tasksDir: paths.tasksDir, task });
-            await appendEvent({
-              eventsLog: paths.eventsLog,
-              event: {
-                ts: new Date().toISOString(),
-                type: "TASK_PROMPTED",
-                msg: "sent task prompt",
-                slaveId: task.assignedSlaveId,
-                taskId: task.id,
-              },
-            });
-          }
-        }
+        await promptTask({ taskId: task.id, assignedSlaveId: task.assignedSlaveId });
       }
     }
 
@@ -538,25 +566,7 @@ export const runDashboard = async ({}: {}): Promise<void> => {
       if (!task.assignedSlaveId || !task.prompt || task.promptedAt) {
         continue;
       }
-      const paneId = slavePaneMap.get(task.assignedSlaveId);
-      if (!paneId) {
-        continue;
-      }
-      const prompt =
-        promptSettings.mode === "file" ? buildTaskFileDispatch({ taskId: task.id }) : task.prompt;
-      await sendKeys({ paneId, text: prompt });
-      task.promptedAt = new Date().toISOString();
-      await saveTask({ tasksDir: paths.tasksDir, task });
-      await appendEvent({
-        eventsLog: paths.eventsLog,
-        event: {
-          ts: new Date().toISOString(),
-          type: "TASK_PROMPTED",
-          msg: "sent task prompt",
-          slaveId: task.assignedSlaveId,
-          taskId: task.id,
-        },
-      });
+      await promptTask({ taskId: task.id, assignedSlaveId: task.assignedSlaveId });
     }
 
     const statusLine = [
