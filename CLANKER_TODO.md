@@ -49,6 +49,7 @@
 
 ## Now
 
+- Switch to yargs for args parsing everywhere (CLI + dashboard commands).
 - Usage limit handling: detect Codex "You've hit your usage limit" message in production, pause + poll `/status` until reset, then resume (IT real should still fail fast).
 - Multi-account split: relaunch Codex per agent/profile so limits stay isolated; allow mixed-account run.
 
