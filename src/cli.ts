@@ -16,6 +16,7 @@ import { getClankerPaths } from "./paths.js";
 import { ensureStateDirs } from "./state/ensure-state.js";
 import { appendEvent } from "./state/events.js";
 import { setRuntimeOverrides } from "./runtime/overrides.js";
+import { getCliHelp } from "./cli-help.js";
 
 interface CommandSpec {
   name: string;
@@ -24,6 +25,7 @@ interface CommandSpec {
 
 interface ParsedArgs {
   command: CommandSpec;
+  helpRequested: boolean;
   overrides: {
     codexCommand?: string;
     codexTty?: boolean;
@@ -42,8 +44,13 @@ const requireFlagValue = ({ value, flag }: { value: string | undefined; flag: st
 const parseArgs = ({ argv }: { argv: string[] }): ParsedArgs => {
   const overrides: ParsedArgs["overrides"] = {};
   const remaining: string[] = [];
+  let helpRequested = false;
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i] ?? "";
+    if (arg === "-h" || arg === "--help") {
+      helpRequested = true;
+      continue;
+    }
     if (arg === "--codex-command") {
       overrides.codexCommand = requireFlagValue({ value: argv[i + 1], flag: "--codex-command" });
       i += 1;
@@ -84,6 +91,7 @@ const parseArgs = ({ argv }: { argv: string[] }): ParsedArgs => {
       name: name ?? "",
       args,
     },
+    helpRequested,
     overrides,
   };
 };
@@ -124,9 +132,13 @@ process.on("unhandledRejection", (error) => {
 });
 
 const main = async ({ argv }: { argv: string[] }): Promise<void> => {
+  const parsed = parseArgs({ argv });
+  if (parsed.helpRequested || parsed.command.name === "help") {
+    console.log(getCliHelp());
+    return;
+  }
   const repoRoot = process.cwd();
   await ensureConfigFile({ repoRoot });
-  const parsed = parseArgs({ argv });
   setRuntimeOverrides({ overrides: parsed.overrides });
   const command = parsed.command;
 
