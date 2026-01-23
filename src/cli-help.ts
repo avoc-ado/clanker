@@ -12,6 +12,7 @@ Commands:
   status
   tail
   resume
+  relaunch
   task <subcommand>
   health
   doctor

@@ -22,6 +22,7 @@ read_when: first-use, onboarding
 - Native scrollback (no alt-screen)
 - Commands: `/pause`, `/resume`, `/task <id> <status>`, `/focus`
 - Command history persists (last 50 entries)
+- Slash list: `/` to list and filter, `/help` to list
 
 ## Task Flow
 

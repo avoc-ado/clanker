@@ -8,7 +8,9 @@ module.exports = {
   moduleNameMapper: {
     "^(\\.{1,2}/.*)\\.js$": "$1",
   },
-  modulePathIgnorePatterns: shouldIgnoreWorktree ? ["/\\.worktree/"] : [],
+  modulePathIgnorePatterns: shouldIgnoreWorktree
+    ? ["/\\.worktree/", "/\\.vendor/"]
+    : ["/\\.vendor/"],
   collectCoverageFrom: [
     "src/**/*.ts",
     "!src/commands/**",
@@ -22,6 +24,7 @@ module.exports = {
     "/node_modules/",
     "/dist/",
     "/tests/it/",
+    "/\\.vendor/",
     ...(shouldIgnoreWorktree ? ["/\\.worktree/"] : []),
   ],
   coverageThreshold: {

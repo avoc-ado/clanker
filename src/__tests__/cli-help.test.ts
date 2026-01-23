@@ -6,6 +6,7 @@ describe("cli help", () => {
     expect(help).toContain("clanker — agent harness");
     expect(help).toContain("Commands:");
     expect(help).toContain("dashboard");
+    expect(help).toContain("relaunch");
     expect(help).toContain("--prompt-file");
     expect(help).toContain("--help");
   });

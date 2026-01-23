@@ -9,7 +9,9 @@ module.exports = {
   moduleNameMapper: {
     "^(\\.{1,2}/.*)\\.js$": "$1",
   },
-  modulePathIgnorePatterns: shouldIgnoreWorktree ? ["/\\.worktree/"] : [],
+  modulePathIgnorePatterns: shouldIgnoreWorktree
+    ? ["/\\.worktree/", "/\\.vendor/"]
+    : ["/\\.vendor/"],
   testMatch: ["<rootDir>/tests/it/**/*.test.ts"],
   collectCoverage: false,
   transform: {

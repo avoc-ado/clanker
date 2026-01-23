@@ -3,6 +3,60 @@ import { createWriteStream } from "node:fs";
 import { join } from "node:path";
 import { getRuntimeOverrides } from "../runtime/overrides.js";
 
+const YARN_LOG_LINE_REGEX = /^(?:\s*➤\s*)?YN\d{4}:/;
+const YARN_INSTALL_LINE_REGEX = /\byarn install\b/i;
+
+export const shouldSuppressYarnInstallLine = ({ line }: { line: string }): boolean => {
+  const trimmed = line.trim();
+  if (trimmed.length === 0) {
+    return false;
+  }
+  return YARN_LOG_LINE_REGEX.test(trimmed) || YARN_INSTALL_LINE_REGEX.test(trimmed);
+};
+
+const attachFilteredPipe = ({
+  source,
+  target,
+  logStream,
+}: {
+  source: NodeJS.ReadableStream | null | undefined;
+  target: NodeJS.WriteStream;
+  logStream: NodeJS.WritableStream;
+}): { flush: () => void } => {
+  let buffer = "";
+  const flush = () => {
+    if (buffer.length === 0) {
+      return;
+    }
+    const pending = buffer;
+    buffer = "";
+    if (!shouldSuppressYarnInstallLine({ line: pending })) {
+      target.write(pending);
+    }
+  };
+  if (!source) {
+    return { flush };
+  }
+  source.on("data", (chunk) => {
+    const text = buffer + chunk.toString("utf-8");
+    const lines = text.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const hasCarriageReturn = line.endsWith("\r");
+      const outputLine = hasCarriageReturn ? line.slice(0, -1) : line;
+      const newline = hasCarriageReturn ? "\r\n" : "\n";
+      if (!shouldSuppressYarnInstallLine({ line: outputLine })) {
+        target.write(outputLine + newline);
+      }
+    }
+    logStream.write(chunk);
+  });
+  source.on("end", () => {
+    flush();
+  });
+  return { flush };
+};
+
 const splitCommand = ({ command }: { command: string }): string[] => {
   const parts: string[] = [];
   let current = "";
@@ -108,15 +162,19 @@ export const spawnCodex = async ({
   const finalCli = usePty ? wrapWithPty(cli) : cli;
 
   const child = spawn(finalCli.cmd, finalCli.args, { stdio: ["inherit", "pipe", "pipe"] });
-  child.stdout?.on("data", (chunk) => {
-    process.stdout.write(chunk);
-    logStream.write(chunk);
+  const stdoutPipe = attachFilteredPipe({
+    source: child.stdout,
+    target: process.stdout,
+    logStream,
   });
-  child.stderr?.on("data", (chunk) => {
-    process.stderr.write(chunk);
-    logStream.write(chunk);
+  const stderrPipe = attachFilteredPipe({
+    source: child.stderr,
+    target: process.stderr,
+    logStream,
   });
   child.on("exit", () => {
+    stdoutPipe.flush();
+    stderrPipe.flush();
     logStream.end();
   });
 

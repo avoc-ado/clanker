@@ -28,10 +28,8 @@ const RAW_RUNTIME_STATE =
       [null, {\
         "packageLocation": "./",\
         "packageDependencies": [\
-          ["@types/blessed", "npm:0.1.27"],\
           ["@types/jest", "npm:30.0.0"],\
           ["@types/node", "npm:22.19.7"],\
-          ["blessed", "npm:0.1.81"],\
           ["chokidar", "npm:3.6.0"],\
           ["clanker-cli", "workspace:."],\
           ["jest", "virtual:a7748238f4b78a89c1e2ff639cd247cc405a1affb58616ff79473803c81eb49a3a252594fa10d2e0bfba82537e0fda3b8c27fb498971ab0b8d8d86d0cdef7cdb#npm:30.2.0"],\
@@ -1522,16 +1520,6 @@ const RAW_RUNTIME_STATE =
         "linkType": "HARD"\
       }]\
     ]],\
-    ["@types/blessed", [\
-      ["npm:0.1.27", {\
-        "packageLocation": "../../.yarn/berry/cache/@types-blessed-npm-0.1.27-9efe7406b0-10c0.zip/node_modules/@types/blessed/",\
-        "packageDependencies": [\
-          ["@types/blessed", "npm:0.1.27"],\
-          ["@types/node", "npm:25.0.9"]\
-        ],\
-        "linkType": "HARD"\
-      }]\
-    ]],\
     ["@types/istanbul-lib-coverage", [\
       ["npm:2.0.6", {\
         "packageLocation": "../../.yarn/berry/cache/@types-istanbul-lib-coverage-npm-2.0.6-2ea31fda9c-10c0.zip/node_modules/@types/istanbul-lib-coverage/",\
@@ -2083,15 +2071,6 @@ const RAW_RUNTIME_STATE =
         "linkType": "HARD"\
       }]\
     ]],\
-    ["blessed", [\
-      ["npm:0.1.81", {\
-        "packageLocation": "../../.yarn/berry/cache/blessed-npm-0.1.81-7da02fe8f4-10c0.zip/node_modules/blessed/",\
-        "packageDependencies": [\
-          ["blessed", "npm:0.1.81"]\
-        ],\
-        "linkType": "HARD"\
-      }]\
-    ]],\
     ["brace-expansion", [\
       ["npm:1.1.12", {\
         "packageLocation": "../../.yarn/berry/cache/brace-expansion-npm-1.1.12-329e9ad7a1-10c0.zip/node_modules/brace-expansion/",\
@@ -2286,10 +2265,8 @@ const RAW_RUNTIME_STATE =
       ["workspace:.", {\
         "packageLocation": "./",\
         "packageDependencies": [\
-          ["@types/blessed", "npm:0.1.27"],\
           ["@types/jest", "npm:30.0.0"],\
           ["@types/node", "npm:22.19.7"],\
-          ["blessed", "npm:0.1.81"],\
           ["chokidar", "npm:3.6.0"],\
           ["clanker-cli", "workspace:."],\
           ["jest", "virtual:a7748238f4b78a89c1e2ff639cd247cc405a1affb58616ff79473803c81eb49a3a252594fa10d2e0bfba82537e0fda3b8c27fb498971ab0b8d8d86d0cdef7cdb#npm:30.2.0"],\

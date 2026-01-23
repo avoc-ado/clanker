@@ -24,6 +24,13 @@ import {
   loadCommandHistory,
   saveCommandHistory,
 } from "../state/command-history.js";
+import {
+  filterSlashCommands,
+  formatSlashCommandList,
+  getSlashCompletions,
+  parseSlashInput,
+  type SlashCommandDefinition,
+} from "./slash-commands.js";
 import { createReadStream, watch } from "node:fs";
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -43,6 +50,10 @@ type CommandHandler = (value: string) => void;
 interface ReadlineWithHistory extends readline.Interface {
   history: string[];
   output: NodeJS.WriteStream;
+}
+
+interface SlashCommandHandler extends SlashCommandDefinition {
+  run: ({ args }: { args: string }) => Promise<string | null> | string | null;
 }
 
 const makeCommandPrompt = (): string => {
@@ -81,11 +92,21 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     maxEntries: COMMAND_HISTORY_LIMIT,
   });
 
+  let slashCommands: SlashCommandHandler[] = [];
+  const commandCompleter = (line: string): [string[], string] => {
+    const { completions, completionBase } = getSlashCompletions({
+      commands: slashCommands,
+      input: line,
+    });
+    return [completions, completionBase];
+  };
+
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
     terminal: true,
     historySize: COMMAND_HISTORY_LIMIT,
+    completer: commandCompleter,
   }) as ReadlineWithHistory;
   rl.setPrompt(makeCommandPrompt());
   rl.history = [...commandHistory].reverse();
@@ -133,12 +154,87 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     }
   };
 
+  const writeCommandList = ({
+    commands,
+    title,
+  }: {
+    commands: SlashCommandDefinition[];
+    title: string;
+  }): void => {
+    const lines = formatSlashCommandList({ commands });
+    const content = [title, ...lines].join("\n");
+    writeLine(content);
+  };
+
+  slashCommands = [
+    {
+      name: "help",
+      description: "list dashboard slash commands",
+      usage: "/help",
+      run: () => {
+        writeCommandList({ commands: slashCommands, title: "commands:" });
+        return "listed commands";
+      },
+    },
+    {
+      name: "resume",
+      description: "resume queued work",
+      usage: "/resume",
+      run: async () => {
+        await setPaused({ paused: false });
+        return "resumed work";
+      },
+    },
+    {
+      name: "pause",
+      description: "pause new work",
+      usage: "/pause",
+      run: async () => {
+        await setPaused({ paused: true });
+        return "paused work";
+      },
+    },
+    {
+      name: "focus",
+      description: "toggle focus to last active slave pane",
+      usage: "/focus",
+      run: async () => {
+        await toggleFocus();
+        return "toggled focus";
+      },
+    },
+    {
+      name: "task",
+      description: "set a task status",
+      usage: "/task <id> <status>",
+      run: async ({ args }) => {
+        const [id, status] = args.split(/\s+/);
+        if (!id || !status) {
+          writeLine(`${ANSI.gray}usage: /task <id> <status>${ANSI.reset}`);
+          return null;
+        }
+        if (!TASK_SCHEMA.status.includes(status)) {
+          writeLine(`${ANSI.gray}invalid status: ${status}${ANSI.reset}`);
+          return null;
+        }
+        const task = await loadTask({ tasksDir: paths.tasksDir, id });
+        if (!task) {
+          writeLine(`${ANSI.gray}task not found: ${id}${ANSI.reset}`);
+          return null;
+        }
+        await transitionTaskStatus({ task, status: status as typeof task.status, paths });
+        return `task ${id} -> ${status}`;
+      },
+    },
+  ];
+
   const handleCommand: CommandHandler = (raw) => {
     const value = raw.trim();
     if (!value) {
       return;
     }
-    if (!value.startsWith("/")) {
+    const parsed = parseSlashInput({ input: value });
+    if (!parsed.hasLeadingSlash) {
       writeLine(`${ANSI.gray}commands must start with '/'${ANSI.reset}`);
       return;
     }
@@ -156,38 +252,38 @@ export const runDashboard = async ({}: {}): Promise<void> => {
       maxEntries: COMMAND_HISTORY_LIMIT,
     });
 
-    if (value.startsWith("/resume")) {
-      void setPaused({ paused: false });
+    if (parsed.name.length === 0) {
+      writeCommandList({ commands: slashCommands, title: "commands:" });
       return;
     }
-    if (value.startsWith("/pause")) {
-      void setPaused({ paused: true });
-      return;
-    }
-    if (value.startsWith("/focus")) {
-      void toggleFocus();
-      return;
-    }
-    if (value.startsWith("/task")) {
-      const [, id, status] = value.split(/\s+/);
-      if (!id || !status) {
-        writeLine(`${ANSI.gray}usage: /task <id> <status>${ANSI.reset}`);
+
+    const { exact, matches } = filterSlashCommands({
+      commands: slashCommands,
+      token: parsed.name,
+    });
+
+    if (!exact || exact.name.toLowerCase() !== parsed.name.toLowerCase()) {
+      if (matches.length > 0) {
+        writeCommandList({ commands: matches, title: `matches for /${parsed.name}:` });
         return;
       }
-      if (!TASK_SCHEMA.status.includes(status)) {
-        writeLine(`${ANSI.gray}invalid status: ${status}${ANSI.reset}`);
-        return;
-      }
-      void loadTask({ tasksDir: paths.tasksDir, id }).then((task) => {
-        if (!task) {
-          writeLine(`${ANSI.gray}task not found: ${id}${ANSI.reset}`);
+      writeLine(`${ANSI.gray}unknown command: /${parsed.name}${ANSI.reset}`);
+      return;
+    }
+
+    const runArgs = parsed.rest.trim();
+    const commandLabel = runArgs.length > 0 ? `/${exact.name} ${runArgs}` : `/${exact.name}`;
+    Promise.resolve(exact.run({ args: runArgs }))
+      .then((result) => {
+        if (!result) {
           return;
         }
-        void transitionTaskStatus({ task, status: status as typeof task.status, paths });
+        writeLine(`${ANSI.gray}ran ${commandLabel} (${result})${ANSI.reset}`);
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        writeLine(`${ANSI.gray}command failed: ${message}${ANSI.reset}`);
       });
-      return;
-    }
-    writeLine(`${ANSI.gray}unknown command: ${value}${ANSI.reset}`);
   };
 
   const toggleFocus = async (): Promise<void> => {

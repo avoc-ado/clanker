@@ -947,15 +947,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/blessed@npm:^0.1.21":
-  version: 0.1.27
-  resolution: "@types/blessed@npm:0.1.27"
-  dependencies:
-    "@types/node": "npm:*"
-  checksum: 10c0/0ae3f4a707d1cdade3d7ee86e3d6569b43f97c578a802709d191e8baa861170fd25fd2cfb75c846f6f67658ef44b401af5776966a89a0152a960ce377220f9e0
-  languageName: node
-  linkType: hard
-
 "@types/istanbul-lib-coverage@npm:*, @types/istanbul-lib-coverage@npm:^2.0.1, @types/istanbul-lib-coverage@npm:^2.0.6":
   version: 2.0.6
   resolution: "@types/istanbul-lib-coverage@npm:2.0.6"
@@ -1377,15 +1368,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"blessed@npm:^0.1.81":
-  version: 0.1.81
-  resolution: "blessed@npm:0.1.81"
-  bin:
-    blessed: ./bin/tput.js
-  checksum: 10c0/19515ff7899e8af0dd6c080e30e849833ee9518508cc4eabae5a2ea5f17440537a2526169081f20c79d73fbbeca26cc798cc4b037ec250f91f4952b3a75a2143
-  languageName: node
-  linkType: hard
-
 "brace-expansion@npm:^1.1.7":
   version: 1.1.12
   resolution: "brace-expansion@npm:1.1.12"
@@ -1562,10 +1544,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "clanker-cli@workspace:."
   dependencies:
-    "@types/blessed": "npm:^0.1.21"
     "@types/jest": "npm:^30.0.0"
     "@types/node": "npm:^22.12.0"
-    blessed: "npm:^0.1.81"
     chokidar: "npm:^3.6.0"
     jest: "npm:^30.2.0"
     jest-util: "npm:^30.2.0"
