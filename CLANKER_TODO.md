@@ -50,6 +50,7 @@
 ## Now
 
 - Blind-spot audit: map current IT coverage to features; list gaps (low/medium)
+- Usage limit handling: detect Codex "You've hit your usage limit" message in production, pause + poll `/status` until reset, then resume (IT real should still fail fast).
 
 ## Blind-Spot Audit
 
@@ -65,3 +66,4 @@
 
 - Escalation auto-focus + restore behavior in IT
 - Resume-after-sleep / offline recovery (paused state consistency)
+- Usage-limit recovery in production (pause + resume after reset)
