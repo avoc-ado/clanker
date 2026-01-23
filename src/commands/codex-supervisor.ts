@@ -4,6 +4,7 @@ import { writeHeartbeat } from "../state/heartbeat.js";
 import { loadState } from "../state/state.js";
 import { spawnCodex } from "./spawn-codex.js";
 import { extractResumeCommand } from "../codex/resume.js";
+import { getRelaunchPrompt } from "./relaunch-prompt.js";
 
 type RelaunchMode = "resume" | "fresh";
 
@@ -52,9 +53,13 @@ export const runCodexSupervisor = async ({
   const startCodex = async ({
     override,
     autoContinue,
+    promptText,
+    promptMeta,
   }: {
     override?: string;
     autoContinue?: boolean;
+    promptText?: string | null;
+    promptMeta?: { kind: string; taskId?: string } | null;
   }): Promise<void> => {
     const { child, logPath } = await spawnCodex({
       logsDir: paths.logsDir,
@@ -77,6 +82,25 @@ export const runCodexSupervisor = async ({
     child.on("exit", (code) => {
       void handleExit({ code });
     });
+    if (promptText && promptText.trim().length > 0) {
+      await appendEvent({
+        eventsLog: paths.eventsLog,
+        event: {
+          ts: new Date().toISOString(),
+          type: "CODEX_RELAUNCH_PROMPT",
+          msg: "sent relaunch prompt",
+          slaveId: id,
+          taskId: promptMeta?.taskId,
+          data: promptMeta?.kind ? { kind: promptMeta.kind } : undefined,
+        },
+      });
+      setTimeout(() => {
+        if (activeChild?.stdin?.writable) {
+          activeChild.stdin.write(`${promptText}\n`);
+        }
+      }, 500);
+      return;
+    }
     if (autoContinue) {
       setTimeout(() => {
         if (activeChild?.stdin?.writable) {
@@ -101,6 +125,10 @@ export const runCodexSupervisor = async ({
       relaunchMode === "resume" ? await extractResumeCommand({ logPath: activeLogPath }) : null;
     const state = await loadState({ statePath: paths.statePath });
     const shouldAutoContinue = Boolean(resumeCommand) && !state.paused;
+    const freshPrompt =
+      relaunchMode === "fresh" && !state.paused
+        ? await getRelaunchPrompt({ paths, role, id })
+        : null;
     await appendEvent({
       eventsLog: paths.eventsLog,
       event: {
@@ -108,10 +136,19 @@ export const runCodexSupervisor = async ({
         type: "CODEX_RELAUNCH",
         msg: resumeCommand ? "relaunch with resume" : "relaunch fresh",
         slaveId: id,
-        data: resumeCommand ? { command: resumeCommand } : undefined,
+        data: {
+          ...(resumeCommand ? { command: resumeCommand } : {}),
+          ...(freshPrompt?.kind ? { promptKind: freshPrompt.kind } : {}),
+          ...(freshPrompt?.taskId ? { taskId: freshPrompt.taskId } : {}),
+        },
       },
     });
-    await startCodex({ override: resumeCommand ?? command, autoContinue: shouldAutoContinue });
+    await startCodex({
+      override: resumeCommand ?? command,
+      autoContinue: shouldAutoContinue,
+      promptText: freshPrompt?.text,
+      promptMeta: freshPrompt ? { kind: freshPrompt.kind, taskId: freshPrompt.taskId } : null,
+    });
   };
 
   const requestRelaunch = ({ mode }: { mode: RelaunchMode }): void => {
