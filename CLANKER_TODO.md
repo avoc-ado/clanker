@@ -45,12 +45,16 @@
 
 ## Stack Rank
 
-1. Blind-spot audit: map current IT coverage to features; list gaps (low/medium)
+1. Usage limit handling: detect Codex "You've hit your usage limit" message in production, pause + poll `/status` until reset, then resume (IT real should still fail fast).
 
 ## Now
 
-- Blind-spot audit: map current IT coverage to features; list gaps (low/medium)
 - Usage limit handling: detect Codex "You've hit your usage limit" message in production, pause + poll `/status` until reset, then resume (IT real should still fail fast).
+- Multi-account split: relaunch Codex per agent/profile so limits stay isolated; allow mixed-account run.
+
+## Blind-Spot Audit (List)
+
+- Map current IT coverage to features; list gaps (low/medium).
 
 ## Blind-Spot Audit
 

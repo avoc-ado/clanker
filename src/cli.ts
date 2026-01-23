@@ -11,6 +11,7 @@ import { runStatus } from "./commands/status.js";
 import { runTask } from "./commands/task.js";
 import { runTail } from "./commands/tail.js";
 import { runResume } from "./commands/resume.js";
+import { runRelaunch } from "./commands/relaunch.js";
 import { ensureConfigFile } from "./config.js";
 import { getClankerPaths } from "./paths.js";
 import { ensureStateDirs } from "./state/ensure-state.js";
@@ -180,6 +181,10 @@ const main = async ({ argv }: { argv: string[] }): Promise<void> => {
     }
     case "resume": {
       await runResume();
+      return;
+    }
+    case "relaunch": {
+      await runRelaunch({ args: command.args });
       return;
     }
     case "task": {
