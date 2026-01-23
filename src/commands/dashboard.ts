@@ -19,6 +19,7 @@ import { listDirtyFiles } from "../git.js";
 import { countLockConflicts } from "../state/locks.js";
 import { buildTaskFileDispatch, getPromptSettings } from "../prompting.js";
 import { formatDateDivider, formatDateKey, formatStreamLine } from "../dashboard/stream-format.js";
+import { runRelaunch } from "./relaunch.js";
 import {
   appendHistoryEntry,
   loadCommandHistory,
@@ -166,6 +167,14 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     }
     if (value.startsWith("/focus")) {
       void toggleFocus();
+      return;
+    }
+    if (value.startsWith("/relaunch")) {
+      const [, ...args] = value.split(/\s+/);
+      void runRelaunch({ args, log: (message) => writeLine(message) }).catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        writeLine(`${ANSI.gray}${message}${ANSI.reset}`);
+      });
       return;
     }
     if (value.startsWith("/task")) {

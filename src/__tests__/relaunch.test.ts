@@ -20,6 +20,10 @@ describe("parseRelaunchArgs", () => {
     expect(parseRelaunchArgs({ args: ["2"] })).toEqual({ mode: "resume", target: "c2" });
   });
 
+  test("allows relaunch all without target", () => {
+    expect(parseRelaunchArgs({ args: [] })).toEqual({ mode: "resume", target: null });
+  });
+
   test("parses fresh mode", () => {
     expect(parseRelaunchArgs({ args: ["--fresh", "planner-2"] })).toEqual({
       mode: "fresh",

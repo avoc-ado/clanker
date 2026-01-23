@@ -1,6 +1,7 @@
 import type { ClankerPaths } from "../paths.js";
 import { appendEvent } from "../state/events.js";
 import { writeHeartbeat } from "../state/heartbeat.js";
+import { loadState } from "../state/state.js";
 import { spawnCodex } from "./spawn-codex.js";
 import { extractResumeCommand } from "../codex/resume.js";
 
@@ -48,7 +49,13 @@ export const runCodexSupervisor = async ({
     });
   }, 10_000);
 
-  const startCodex = async ({ override }: { override?: string }): Promise<void> => {
+  const startCodex = async ({
+    override,
+    autoContinue,
+  }: {
+    override?: string;
+    autoContinue?: boolean;
+  }): Promise<void> => {
     const { child, logPath } = await spawnCodex({
       logsDir: paths.logsDir,
       role,
@@ -70,6 +77,13 @@ export const runCodexSupervisor = async ({
     child.on("exit", (code) => {
       void handleExit({ code });
     });
+    if (autoContinue) {
+      setTimeout(() => {
+        if (activeChild?.stdin?.writable) {
+          activeChild.stdin.write("continue\n");
+        }
+      }, 500);
+    }
   };
 
   const handleExit = async ({ code }: { code: number | null }): Promise<void> => {
@@ -85,6 +99,8 @@ export const runCodexSupervisor = async ({
     pendingRelaunch = null;
     const resumeCommand =
       relaunchMode === "resume" ? await extractResumeCommand({ logPath: activeLogPath }) : null;
+    const state = await loadState({ statePath: paths.statePath });
+    const shouldAutoContinue = Boolean(resumeCommand) && !state.paused;
     await appendEvent({
       eventsLog: paths.eventsLog,
       event: {
@@ -95,7 +111,7 @@ export const runCodexSupervisor = async ({
         data: resumeCommand ? { command: resumeCommand } : undefined,
       },
     });
-    await startCodex({ override: resumeCommand ?? command });
+    await startCodex({ override: resumeCommand ?? command, autoContinue: shouldAutoContinue });
   };
 
   const requestRelaunch = ({ mode }: { mode: RelaunchMode }): void => {

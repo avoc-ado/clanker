@@ -107,7 +107,21 @@ export const spawnCodex = async ({
   const usePty = Boolean(overrides.codexTty);
   const finalCli = usePty ? wrapWithPty(cli) : cli;
 
-  const child = spawn(finalCli.cmd, finalCli.args, { stdio: ["inherit", "pipe", "pipe"] });
+  const child = spawn(finalCli.cmd, finalCli.args, { stdio: ["pipe", "pipe", "pipe"] });
+  if (child.stdin) {
+    const handleData = (chunk: Buffer): void => {
+      if (child.stdin?.writable) {
+        child.stdin.write(chunk);
+      }
+    };
+    process.stdin.on("data", handleData);
+    process.stdin.resume();
+    const cleanup = (): void => {
+      process.stdin.off("data", handleData);
+    };
+    child.on("exit", cleanup);
+    child.on("close", cleanup);
+  }
   child.stdout?.on("data", (chunk) => {
     process.stdout.write(chunk);
     logStream.write(chunk);
