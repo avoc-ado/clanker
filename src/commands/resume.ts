@@ -9,17 +9,16 @@ export const runResume = async (): Promise<void> => {
   const paths = getClankerPaths({ repoRoot });
   await ensureStateDirs({ paths });
   const state = await loadState({ statePath: paths.statePath });
-  if (state.paused) {
-    state.paused = false;
-    await saveState({ statePath: paths.statePath, state });
-    await appendEvent({
-      eventsLog: paths.eventsLog,
-      event: {
-        ts: new Date().toISOString(),
-        type: "RESUMED",
-        msg: "resume via cli",
-      },
-    });
-  }
+  state.paused = false;
+  state.pausedRoles = { planner: false, judge: false, slave: false };
+  await saveState({ statePath: paths.statePath, state });
+  await appendEvent({
+    eventsLog: paths.eventsLog,
+    event: {
+      ts: new Date().toISOString(),
+      type: "RESUMED",
+      msg: "resume via cli",
+    },
+  });
   await runDashboard({});
 };

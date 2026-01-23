@@ -2,17 +2,16 @@
 
 import { runDashboard } from "./commands/dashboard.js";
 import { runDoctor } from "./commands/doctor.js";
-import { runPlan } from "./commands/plan.js";
+import { runLaunch } from "./commands/launch.js";
 import { runPlanner } from "./commands/planner.js";
 import { runHealth } from "./commands/health.js";
 import { runJudge } from "./commands/judge.js";
+import { runRelaunch } from "./commands/relaunch.js";
 import { runSlave } from "./commands/slave.js";
 import { runStatus } from "./commands/status.js";
 import { runTask } from "./commands/task.js";
 import { runTail } from "./commands/tail.js";
 import { runResume } from "./commands/resume.js";
-import { runRelaunch } from "./commands/relaunch.js";
-import { ensureConfigFile } from "./config.js";
 import { getClankerPaths } from "./paths.js";
 import { ensureStateDirs } from "./state/ensure-state.js";
 import { appendEvent } from "./state/events.js";
@@ -138,12 +137,14 @@ const main = async ({ argv }: { argv: string[] }): Promise<void> => {
     console.log(getCliHelp());
     return;
   }
-  const repoRoot = process.cwd();
-  await ensureConfigFile({ repoRoot });
   setRuntimeOverrides({ overrides: parsed.overrides });
   const command = parsed.command;
 
   switch (command.name) {
+    case "dashboard": {
+      await runDashboard({});
+      return;
+    }
     case "slave": {
       const [idRaw] = command.args;
       await runSlave({ idRaw });
@@ -163,10 +164,6 @@ const main = async ({ argv }: { argv: string[] }): Promise<void> => {
     }
     case "judge": {
       await runJudge();
-      return;
-    }
-    case "plan": {
-      await runPlan();
       return;
     }
     case "health": {
@@ -191,7 +188,7 @@ const main = async ({ argv }: { argv: string[] }): Promise<void> => {
     }
     case "":
     default: {
-      await runDashboard({});
+      await runLaunch();
       return;
     }
   }

@@ -7,6 +7,8 @@ const makeConfig = ({ promptFile }: { promptFile?: string }): ClankerConfig => (
   planners: 1,
   judges: 1,
   slaves: 1,
+  backlog: 1,
+  startImmediately: true,
   tmuxFilter: undefined,
   codexCommand: "codex",
   promptFile,

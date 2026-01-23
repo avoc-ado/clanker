@@ -11,15 +11,15 @@ flowchart TD
   E --> F[Judge]
   F -->|done| G[Mainline]
   F -->|rework| D
-  F -->|blocked| B
+  F -->|blocked| H
   F -->|failed| H
   G --> H[Follow-up Tasks]
-  H --> B
+  H --> C
 ```
 
 ## Signals
 
 - `needs_judge`: slave complete
 - `rework`: return to same slave
-- `blocked`: wait for input
+- `blocked`: clanker auto-queues a follow-up task
 - `failed`: task rejected; planner may split follow-up

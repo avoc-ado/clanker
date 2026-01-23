@@ -9,6 +9,7 @@ import { formatTaskSchema } from "../plan/schema.js";
 import { buildContextPack } from "../context/context-pack.js";
 import { loadConfig } from "../config.js";
 import { buildPlanFileDispatch, getPromptSettings } from "../prompting.js";
+import { buildBasePrompt, ClankerRole } from "../prompting/role-prompts.js";
 
 const formatContextEntries = ({
   entries,
@@ -27,7 +28,7 @@ const formatContextEntries = ({
     .join("\n");
 };
 
-const buildPlannerPrompt = ({
+export const buildPlannerPrompt = ({
   planDocs,
   recentSummaries,
 }: {
@@ -35,11 +36,15 @@ const buildPlannerPrompt = ({
   recentSummaries: string;
 }): string => {
   const docList = planDocs.map((doc) => `- ${doc}`).join("\n");
+  const basePrompt = buildBasePrompt({ role: ClankerRole.Planner });
   return [
-    "You are the planner.",
+    basePrompt,
+    "",
     "Use the plan docs included below and create task packets in .clanker/tasks/.",
     "Task packets are JSON files. Keep tasks small and non-overlapping.",
     "If a task looks too large or risks running out of tokens, split it into smaller tasks.",
+    "Emit exactly one task packet per prompt; clanker will re-prompt for more.",
+    "Do not require clanker-specific commands inside the task prompt.",
     "Handoff rules: tasks must be self-contained; include tests to run and done criteria in the prompt.",
     "Acceptance checklist: done criteria met, tests run + pass, risks noted.",
     formatTaskSchema(),
@@ -57,7 +62,7 @@ export const selectPlannerPane = ({ panes }: { panes: TmuxPane[] }): TmuxPane | 
       const normalized = pane.title.startsWith("clanker:")
         ? pane.title.replace("clanker:", "")
         : pane.title;
-      const match = /^planner(?:-(.+))?$/.exec(normalized);
+      const match = /^planner(?:-?(.+))?$/.exec(normalized);
       if (!match) {
         return null;
       }
@@ -93,26 +98,39 @@ export const selectPlannerPane = ({ panes }: { panes: TmuxPane[] }): TmuxPane | 
   return planners[0]?.pane ?? null;
 };
 
-export const runPlan = async (): Promise<void> => {
-  const repoRoot = process.cwd();
-  const paths = getClankerPaths({ repoRoot });
-  await ensureStateDirs({ paths });
-  const config = await loadConfig({ repoRoot });
+export interface PlannerDispatchResult {
+  promptPath: string;
+  dispatched: boolean;
+}
 
-  const docsDir = join(repoRoot, "docs");
+export const dispatchPlannerPrompt = async ({
+  repoRoot,
+  plannerPaneId,
+}: {
+  repoRoot?: string;
+  plannerPaneId?: string | null;
+}): Promise<PlannerDispatchResult | null> => {
+  const resolvedRoot = repoRoot ?? process.cwd();
+  const paths = getClankerPaths({ repoRoot: resolvedRoot });
+  await ensureStateDirs({ paths });
+  const config = await loadConfig({ repoRoot: resolvedRoot });
+
+  const docsDir = join(resolvedRoot, "docs");
   let planDocs: string[] = [];
   try {
     const files = await readdir(docsDir);
     planDocs = files.filter((file) => file.startsWith("plan-") && file.endsWith(".md"));
   } catch {
-    console.log("plan scan: no docs/ directory found");
-    return;
+    return null;
   }
 
-  const contextPack = await buildContextPack({ repoRoot, historyDir: paths.historyDir });
+  const contextPack = await buildContextPack({
+    repoRoot: resolvedRoot,
+    historyDir: paths.historyDir,
+  });
   const recentSummaries = formatContextEntries({ entries: contextPack.entries });
   const prompt = buildPlannerPrompt({ planDocs, recentSummaries });
-  const promptSettings = getPromptSettings({ repoRoot, config });
+  const promptSettings = getPromptSettings({ repoRoot: resolvedRoot, config });
   await mkdir(dirname(promptSettings.planPromptAbsolutePath), { recursive: true });
   await writeFile(promptSettings.planPromptAbsolutePath, prompt, "utf-8");
 
@@ -121,14 +139,16 @@ export const runPlan = async (): Promise<void> => {
       ? buildPlanFileDispatch({ promptPath: promptSettings.planPromptPath })
       : prompt;
 
-  const panes = await listPanes({ sessionName: config.tmuxFilter });
-  const plannerPane = selectPlannerPane({ panes });
-  if (!plannerPane) {
-    console.log("planner pane not found (title planner or planner-<id>)");
-    return;
+  let targetPaneId = plannerPaneId ?? null;
+  if (!targetPaneId) {
+    const panes = await listPanes({ sessionName: config.tmuxFilter });
+    const plannerPane = selectPlannerPane({ panes });
+    targetPaneId = plannerPane?.paneId ?? null;
   }
 
-  await sendKeys({ paneId: plannerPane.paneId, text: dispatchPrompt });
+  if (targetPaneId) {
+    await sendKeys({ paneId: targetPaneId, text: dispatchPrompt });
+  }
   await appendEvent({
     eventsLog: paths.eventsLog,
     event: {
@@ -138,6 +158,5 @@ export const runPlan = async (): Promise<void> => {
       slaveId: "planner",
     },
   });
-
-  console.log("plan prompt sent to planner");
+  return { promptPath: promptSettings.planPromptPath, dispatched: Boolean(targetPaneId) };
 };

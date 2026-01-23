@@ -33,6 +33,9 @@ const STREAM_TAGS = {
   TASK_USAGE: { tag: "USGE", color: "gray" },
   PLAN_SENT: { tag: "PLAN", color: "blue" },
   DASH_STATUS: { tag: "STAT", color: "gray" },
+  PAUSED: { tag: "PAUS", color: "yellow" },
+  RESUMED: { tag: "RSUM", color: "green" },
+  BASE_PROMPT: { tag: "BASE", color: "gray" },
 } satisfies Record<string, StreamTag>;
 
 export interface StreamLine {

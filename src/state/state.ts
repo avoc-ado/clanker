@@ -17,11 +17,21 @@ export interface TaskState {
 
 export interface ClankerState {
   paused: boolean;
+  pausedRoles: {
+    planner: boolean;
+    judge: boolean;
+    slave: boolean;
+  };
   tasks: TaskState[];
 }
 
 export const DEFAULT_STATE: ClankerState = {
   paused: true,
+  pausedRoles: {
+    planner: false,
+    judge: false,
+    slave: false,
+  },
   tasks: [],
 };
 
@@ -43,6 +53,10 @@ export const loadState = async ({ statePath }: { statePath: string }): Promise<C
     return {
       ...DEFAULT_STATE,
       ...parsed,
+      pausedRoles: {
+        ...DEFAULT_STATE.pausedRoles,
+        ...(parsed.pausedRoles ?? {}),
+      },
       tasks: parsed.tasks ?? DEFAULT_STATE.tasks,
     } satisfies ClankerState;
   } catch {

@@ -10,6 +10,7 @@ describe("state", () => {
 
     const initial = await loadState({ statePath: path });
     expect(initial.paused).toBe(true);
+    expect(initial.pausedRoles).toEqual({ planner: false, judge: false, slave: false });
 
     const updated = { ...initial, paused: false };
     await saveState({ statePath: path, state: updated });
@@ -25,6 +26,7 @@ describe("state", () => {
 
     const state = await loadState({ statePath: path });
     expect(state.paused).toBe(true);
+    expect(state.pausedRoles).toEqual({ planner: false, judge: false, slave: false });
   });
 
   test("loads tasks from state", async () => {
@@ -41,6 +43,7 @@ describe("state", () => {
     const state = await loadState({ statePath: path });
     expect(state.tasks.length).toBe(1);
     expect(state.paused).toBe(false);
+    expect(state.pausedRoles).toEqual({ planner: false, judge: false, slave: false });
   });
 
   test("defaults tasks when missing in state file", async () => {
@@ -53,5 +56,6 @@ describe("state", () => {
     const state = await loadState({ statePath: path });
     expect(state.tasks.length).toBe(0);
     expect(state.paused).toBe(false);
+    expect(state.pausedRoles).toEqual({ planner: false, judge: false, slave: false });
   });
 });

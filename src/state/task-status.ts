@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { TaskRecord, TaskStatus } from "./tasks.js";
 import { saveTask } from "./tasks.js";
 import type { ClankerPaths } from "../paths.js";
@@ -13,6 +14,7 @@ export const transitionTaskStatus = async ({
   paths: ClankerPaths;
 }): Promise<TaskRecord> => {
   const previousAssigned = task.assignedSlaveId;
+  const previousStatus = task.status;
   const eventType = (() => {
     switch (status) {
       case "rework":
@@ -62,5 +64,34 @@ export const transitionTaskStatus = async ({
         : undefined,
     },
   });
+  if (status === "blocked" && previousStatus !== "blocked") {
+    const followupId = `followup-${task.id}-${randomUUID().split("-")[0] ?? "x"}`;
+    const followupTask: TaskRecord = {
+      id: followupId,
+      status: "queued",
+      title: task.title ? `Follow-up: ${task.title}` : `Follow-up: ${task.id}`,
+      prompt: [
+        `Follow-up for blocked task ${task.id}.`,
+        "Review .clanker/history for prior handoffs and notes.",
+        "Resolve the blocker, then complete the original goal.",
+      ].join("\n"),
+      ownerDirs: task.ownerDirs,
+      ownerFiles: task.ownerFiles,
+      baseMainSha: task.baseMainSha,
+      resumeSlaveId: previousAssigned,
+    };
+    await saveTask({ tasksDir: paths.tasksDir, task: followupTask });
+    await appendEvent({
+      eventsLog: paths.eventsLog,
+      event: {
+        ts: new Date().toISOString(),
+        type: "TASK_CREATED",
+        msg: `follow-up queued for ${task.id}`,
+        taskId: followupId,
+        slaveId: previousAssigned,
+        data: { blockedTaskId: task.id },
+      },
+    });
+  }
   return task;
 };

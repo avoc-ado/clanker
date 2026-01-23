@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { ensureExists, makeTmpRepo, runCli, runNode } from "./utils.js";
+import { ensureExists, makeTmpRepo, runCliInteractive, runNode } from "./utils.js";
 
 describe("integration: cli artifact", () => {
   test("plan names files and cli behavior matches", async () => {
@@ -43,7 +43,13 @@ describe("integration: cli artifact", () => {
       "utf-8",
     );
 
-    await runCli({ cwd: root, args: ["plan"] });
+    const result = await runCliInteractive({
+      cwd: root,
+      args: ["resume"],
+      inputLines: [],
+      timeoutMs: 1500,
+    });
+    expect(result.timedOut).toBe(true);
     const prompt = await readFile(join(root, ".clanker", "plan-prompt.txt"), "utf-8");
     expect(prompt).toContain("tools/echo-cli.js");
     expect(prompt).toContain("tools/echo-cli.test.js");

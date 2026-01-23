@@ -1,6 +1,12 @@
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
-import { ensureExists, makeTmpRepo, resolveCodexCommand, runCli, writeConfig } from "./utils.js";
+import {
+  ensureExists,
+  makeTmpRepo,
+  resolveCodexCommand,
+  runCliInteractive,
+  writeConfig,
+} from "./utils.js";
 
 describe("integration: plan prompt", () => {
   test("includes plan directive for minimum tasks", async () => {
@@ -11,7 +17,13 @@ describe("integration: plan prompt", () => {
     const { codexCommand } = await resolveCodexCommand({ root });
     await writeConfig({ root, codexCommand });
 
-    await runCli({ cwd: root, args: ["plan"] });
+    const result = await runCliInteractive({
+      cwd: root,
+      args: ["resume"],
+      inputLines: [],
+      timeoutMs: 1500,
+    });
+    expect(result.timedOut).toBe(true);
 
     const promptPath = join(root, ".clanker", "plan-prompt.txt");
     await ensureExists({ path: promptPath, label: "plan prompt" });

@@ -10,25 +10,30 @@ npx clanker-cli@latest --help
 
 ```bash
 # dashboard
-npx clanker-cli@latest
+npx clanker-cli@latest dashboard
 
 # planner/slave/judge in tmux panes
 npx clanker-cli@latest planner
 npx clanker-cli@latest slave 1
 npx clanker-cli@latest judge
+
+# full tmux layout + onboarding
+npx clanker-cli@latest
 ```
 
 ## Config
 
-Create `clanker.yaml` at repo root:
+Create `clanker.yaml` at repo root (use `default` to track latest defaults):
 
 ```yaml
-planners: 1
-judges: 1
-slaves: 3
-tmuxFilter: ""
-codexCommand: "codex --no-alt-screen --sandbox workspace-write"
-promptFile: ""
+planners: default
+judges: default
+slaves: default
+backlog: default
+startImmediately: default
+tmuxFilter: default
+codexCommand: default
+promptFile: default
 ```
 
 `tmuxFilter` is a tmux session filter. Leave it empty to use `clanker-<repo>`.

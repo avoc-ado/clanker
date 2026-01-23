@@ -17,6 +17,8 @@ export const runStatus = async ({}: {}): Promise<void> => {
   console.log(`planners=${config.planners}`);
   console.log(`judges=${config.judges}`);
   console.log(`slaves=${config.slaves}`);
+  console.log(`backlog=${config.backlog}`);
+  console.log(`startImmediately=${config.startImmediately}`);
   console.log(`tmuxFilter=${config.tmuxFilter ?? "-"}`);
   console.log(`codexCommand=${config.codexCommand ?? "-"}`);
   console.log(`promptFile=${config.promptFile ?? "-"}`);

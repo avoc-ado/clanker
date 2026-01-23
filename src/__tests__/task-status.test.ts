@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { transitionTaskStatus } from "../state/task-status.js";
 import type { ClankerPaths } from "../paths.js";
-import { saveTask } from "../state/tasks.js";
+import { listTasks, saveTask } from "../state/tasks.js";
 
 const makePaths = async (): Promise<ClankerPaths> => {
   const root = await mkdtemp(join(tmpdir(), "clanker-status-"));
@@ -130,5 +130,11 @@ describe("transitionTaskStatus", () => {
 
     const eventRaw = await readFile(paths.eventsLog, "utf-8");
     expect(eventRaw).toContain("TASK_BLOCKED");
+    expect(eventRaw).toContain("TASK_CREATED");
+
+    const tasks = await listTasks({ tasksDir: paths.tasksDir });
+    const followup = tasks.find((entry) => entry.id.startsWith("followup-t4-"));
+    expect(followup?.status).toBe("queued");
+    expect(followup?.prompt).toContain("blocked task t4");
   });
 });

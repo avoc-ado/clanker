@@ -8,7 +8,7 @@ export interface TmuxPane {
 
 const execFileAsync = promisify(execFile);
 
-const runTmux = async ({ args }: { args: string[] }): Promise<string> => {
+export const runTmux = async ({ args }: { args: string[] }): Promise<string> => {
   const socket = process.env.CLANKER_TMUX_SOCKET?.trim();
   const baseArgs = socket ? ["-S", socket, ...args] : args;
   const { stdout } = await execFileAsync("tmux", baseArgs);
@@ -114,6 +114,14 @@ export const sendKeys = async ({
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     await runTmux({ args: ["send-keys", "-t", paneId, "C-m"] });
+  } catch {
+    // ignore
+  }
+};
+
+export const sendKey = async ({ paneId, key }: { paneId: string; key: string }): Promise<void> => {
+  try {
+    await runTmux({ args: ["send-keys", "-t", paneId, key] });
   } catch {
     // ignore
   }

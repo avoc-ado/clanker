@@ -1,17 +1,23 @@
-# (experimental) Number of Planner terminals.
-planners: 1
+# default: 1. Number of Planner terminals.
+planners: default
 
-# (experimental) Number of Judge terminals.
-judges: 1
+# default: 1. Number of Judge terminals.
+judges: default
 
-# Number of Slave terminals.
-slaves: 3
+# default: 3. Number of Slave terminals.
+slaves: default
 
-# Tmux session filter overide; leave empty to use 'clanker-<repo>''.
-tmuxFilter: ""
+# default: 3. Queued task backlog target.
+backlog: default
 
-# Command used to launch Codex CLI.
-codexCommand: "codex --no-alt-screen --sandbox workspace-write"
+# default: true. Start in /resume state.
+startImmediately: default
 
-# (testing/automation) Prompt file path for plan dispatch.
-promptFile: ""
+# default: clanker-<repo>. Tmux session filter override.
+tmuxFilter: default
+
+# default: codex --no-alt-screen --sandbox workspace-write. Command used to launch Codex CLI.
+codexCommand: default
+
+# default: "". (testing/automation) Prompt file path for plan dispatch.
+promptFile: default

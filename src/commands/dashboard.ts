@@ -2,7 +2,14 @@ import { loadConfig } from "../config.js";
 import { getClankerPaths } from "../paths.js";
 import { ensureStateDirs } from "../state/ensure-state.js";
 import { loadState, saveState } from "../state/state.js";
-import { capturePane, getCurrentPaneId, listPanes, selectPane, sendKeys } from "../tmux.js";
+import {
+  capturePane,
+  getCurrentPaneId,
+  listPanes,
+  selectPane,
+  sendKey,
+  sendKeys,
+} from "../tmux.js";
 import { readRecentEvents } from "../state/read-events.js";
 import { appendEvent } from "../state/events.js";
 import type { ClankerEvent } from "../state/events.js";
@@ -18,6 +25,7 @@ import { TASK_SCHEMA } from "../plan/schema.js";
 import { listDirtyFiles } from "../git.js";
 import { countLockConflicts } from "../state/locks.js";
 import { buildTaskFileDispatch, getPromptSettings } from "../prompting.js";
+import { dispatchPlannerPrompt } from "./plan.js";
 import { formatDateDivider, formatDateKey, formatStreamLine } from "../dashboard/stream-format.js";
 import { runRelaunch } from "./relaunch.js";
 import {
@@ -36,9 +44,12 @@ import { createReadStream, watch } from "node:fs";
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import * as readline from "node:readline";
+import { buildBasePrompt, ClankerRole } from "../prompting/role-prompts.js";
 
 const COMMAND_HISTORY_LIMIT = 50;
 const STREAM_LIMIT = 200;
+const PAUSE_RETRY_MS = 1000;
+const PLANNER_PROMPT_TIMEOUT_MS = 120_000;
 
 const ANSI = {
   reset: "\x1b[0m",
@@ -47,6 +58,20 @@ const ANSI = {
 } as const;
 
 type CommandHandler = (value: string) => void;
+
+interface CodexPaneState {
+  hasPrompt: boolean;
+  isWorking: boolean;
+  isPaused: boolean;
+  hasEscalation: boolean;
+}
+
+interface PendingAction {
+  kind: "pause" | "resume";
+  role: ClankerRole;
+  requestedAt: number;
+  lastSentAt?: number;
+}
 
 interface ReadlineWithHistory extends readline.Interface {
   history: string[];
@@ -60,6 +85,9 @@ interface SlashCommandHandler extends SlashCommandDefinition {
 const makeCommandPrompt = (): string => {
   return `${ANSI.gray}[/]${ANSI.reset} ${ANSI.cyan}/command${ANSI.reset} `;
 };
+
+const PROMPT_MARKER = /^\u203A/;
+const WORKING_MATCH = "esc to interrupt";
 
 export const runDashboard = async ({}: {}): Promise<void> => {
   const repoRoot = process.cwd();
@@ -87,6 +115,13 @@ export const runDashboard = async ({}: {}): Promise<void> => {
   const promptSettings = getPromptSettings({ repoRoot, config });
   const knownTaskIds = new Set<string>();
   let lastDateKey: string | null = null;
+  const pendingActions = new Map<string, PendingAction>();
+  const basePromptSent = new Set<string>();
+  const plannerDispatchState = {
+    pending: false,
+    sentAt: 0,
+    taskCountAt: 0,
+  };
 
   const commandHistory = await loadCommandHistory({
     path: paths.commandHistoryPath,
@@ -167,6 +202,30 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     writeLine(content);
   };
 
+  const parseRoleArg = ({
+    args,
+    commandName,
+  }: {
+    args: string;
+    commandName: string;
+  }): ClankerRole | "all" | null => {
+    const token = args.trim().split(/\s+/)[0];
+    if (!token) {
+      return "all";
+    }
+    if (token === "planner") {
+      return ClankerRole.Planner;
+    }
+    if (token === "judge") {
+      return ClankerRole.Judge;
+    }
+    if (token === "slave") {
+      return ClankerRole.Slave;
+    }
+    writeLine(`${ANSI.gray}usage: /${commandName} [planner|judge|slave]${ANSI.reset}`);
+    return null;
+  };
+
   slashCommands = [
     {
       name: "help",
@@ -181,8 +240,12 @@ export const runDashboard = async ({}: {}): Promise<void> => {
       name: "resume",
       description: "resume queued work",
       usage: "/resume",
-      run: async () => {
-        await setPaused({ paused: false });
+      run: async ({ args }) => {
+        const role = parseRoleArg({ args, commandName: "resume" });
+        if (!role) {
+          return null;
+        }
+        await setPaused({ paused: false, role });
         return "resumed work";
       },
     },
@@ -190,8 +253,12 @@ export const runDashboard = async ({}: {}): Promise<void> => {
       name: "pause",
       description: "pause new work",
       usage: "/pause",
-      run: async () => {
-        await setPaused({ paused: true });
+      run: async ({ args }) => {
+        const role = parseRoleArg({ args, commandName: "pause" });
+        if (!role) {
+          return null;
+        }
+        await setPaused({ paused: true, role });
         return "paused work";
       },
     },
@@ -310,21 +377,100 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     await selectPane({ paneId: dashboardPaneId });
   };
 
-  const setPaused = async ({ paused }: { paused: boolean }): Promise<void> => {
+  const setPaused = async ({
+    paused,
+    role,
+  }: {
+    paused: boolean;
+    role: ClankerRole | "all";
+  }): Promise<void> => {
     const current = await loadState({ statePath: paths.statePath });
-    if (current.paused === paused) {
-      return;
+    if (role === "all") {
+      if (current.paused === paused && !paused) {
+        current.pausedRoles = {
+          planner: false,
+          judge: false,
+          slave: false,
+        };
+      } else {
+        current.paused = paused;
+        if (!paused) {
+          current.pausedRoles = {
+            planner: false,
+            judge: false,
+            slave: false,
+          };
+        }
+      }
+    } else {
+      const key =
+        role === ClankerRole.Planner ? "planner" : role === ClankerRole.Judge ? "judge" : "slave";
+      if (current.pausedRoles[key] === paused) {
+        return;
+      }
+      current.pausedRoles[key] = paused;
     }
-    current.paused = paused;
     await saveState({ statePath: paths.statePath, state: current });
     await appendEvent({
       eventsLog: paths.eventsLog,
       event: {
         ts: new Date().toISOString(),
         type: paused ? "PAUSED" : "RESUMED",
-        msg: paused ? "paused all work" : "resumed work",
+        msg:
+          role === "all"
+            ? paused
+              ? "paused all work"
+              : "resumed work"
+            : paused
+              ? `paused ${role}`
+              : `resumed ${role}`,
       },
     });
+    const panes = await listPanes({ sessionName: config.tmuxFilter });
+    const plannerPanes = panes.filter((pane) =>
+      ["clanker:planner", "planner"].includes(pane.title),
+    );
+    const judgePanes = panes.filter((pane) => ["clanker:judge", "judge"].includes(pane.title));
+    const slavePanes = panes.filter((pane) => /^clanker:c\d+$/.test(pane.title));
+    const queueForPane = ({
+      paneId,
+      actionRole,
+    }: {
+      paneId: string;
+      actionRole: ClankerRole;
+    }): void => {
+      pendingActions.set(paneId, {
+        kind: paused ? "pause" : "resume",
+        role: actionRole,
+        requestedAt: Date.now(),
+      });
+    };
+    const queueRole = ({
+      actionRole,
+      targets,
+    }: {
+      actionRole: ClankerRole;
+      targets: typeof panes;
+    }) => {
+      for (const pane of targets) {
+        queueForPane({ paneId: pane.paneId, actionRole });
+      }
+    };
+    if (role === "all") {
+      queueRole({ actionRole: ClankerRole.Planner, targets: plannerPanes });
+      queueRole({ actionRole: ClankerRole.Judge, targets: judgePanes });
+      queueRole({ actionRole: ClankerRole.Slave, targets: slavePanes });
+      return;
+    }
+    if (role === ClankerRole.Planner) {
+      queueRole({ actionRole: ClankerRole.Planner, targets: plannerPanes });
+      return;
+    }
+    if (role === ClankerRole.Judge) {
+      queueRole({ actionRole: ClankerRole.Judge, targets: judgePanes });
+      return;
+    }
+    queueRole({ actionRole: ClankerRole.Slave, targets: slavePanes });
   };
 
   const ensureEventsLog = async (): Promise<void> => {
@@ -428,6 +574,81 @@ export const runDashboard = async ({}: {}): Promise<void> => {
   const hasEscalationPrompt = ({ content }: { content: string }): boolean =>
     escalationPromptMatches.some((pattern) => content.includes(pattern));
 
+  const inspectCodexPane = async ({ paneId }: { paneId: string }): Promise<CodexPaneState> => {
+    const content = await capturePane({ paneId, lines: 80 });
+    const lines = content.split("\n");
+    const hasPrompt = lines.some((line) => PROMPT_MARKER.test(line.trimStart()));
+    const hasEscalation = hasEscalationPrompt({ content });
+    const isWorking = lines.some(
+      (line) => line.includes("Working") && line.toLowerCase().includes(WORKING_MATCH),
+    );
+    const isPaused = lines.some((line) => line.toLowerCase().includes("paused"));
+    return { hasPrompt, isWorking, isPaused, hasEscalation };
+  };
+
+  const shouldSendAction = ({ action }: { action: PendingAction }): boolean => {
+    if (!action.lastSentAt) {
+      return true;
+    }
+    return Date.now() - action.lastSentAt > PAUSE_RETRY_MS;
+  };
+
+  const processPendingActions = async (): Promise<void> => {
+    for (const [paneId, action] of pendingActions) {
+      const state = await inspectCodexPane({ paneId });
+      if (action.kind === "pause") {
+        if (state.hasEscalation) {
+          continue;
+        }
+        if (state.isPaused || !state.isWorking) {
+          pendingActions.delete(paneId);
+          continue;
+        }
+        if (shouldSendAction({ action })) {
+          await sendKey({ paneId, key: "Escape" });
+          pendingActions.set(paneId, { ...action, lastSentAt: Date.now() });
+        }
+        continue;
+      }
+      if (!state.isPaused) {
+        pendingActions.delete(paneId);
+        continue;
+      }
+      if (shouldSendAction({ action })) {
+        await sendKey({ paneId, key: "Escape" });
+        pendingActions.set(paneId, { ...action, lastSentAt: Date.now() });
+      }
+    }
+  };
+
+  const maybeSendBasePrompt = async ({
+    paneId,
+    role,
+  }: {
+    paneId: string;
+    role: ClankerRole;
+  }): Promise<void> => {
+    if (basePromptSent.has(paneId)) {
+      return;
+    }
+    const state = await inspectCodexPane({ paneId });
+    if (state.hasEscalation || state.isWorking || !state.hasPrompt) {
+      return;
+    }
+    const prompt = buildBasePrompt({ role });
+    await sendKeys({ paneId, text: prompt });
+    basePromptSent.add(paneId);
+    await appendEvent({
+      eventsLog: paths.eventsLog,
+      event: {
+        ts: new Date().toISOString(),
+        type: "BASE_PROMPT",
+        msg: `base prompt sent (${role})`,
+        slaveId: role,
+      },
+    });
+  };
+
   let idleStartedAt = Date.now();
 
   const tick = async (): Promise<void> => {
@@ -465,11 +686,16 @@ export const runDashboard = async ({}: {}): Promise<void> => {
       const normalized = title.startsWith("clanker:") ? title.replace("clanker:", "") : title;
       return /^c\d+$/.test(normalized) ? normalized : null;
     };
+    const plannerPanes = panes.filter((pane) =>
+      ["clanker:planner", "planner"].includes(pane.title),
+    );
+    const judgePanes = panes.filter((pane) => ["clanker:judge", "judge"].includes(pane.title));
     const slavePanes = panes
       .map((pane) => ({ pane, slaveId: extractSlaveId({ title: pane.title }) }))
       .filter((entry): entry is { pane: (typeof panes)[number]; slaveId: string } =>
         Boolean(entry.slaveId),
       );
+    const plannerPaneId = plannerPanes[0]?.paneId ?? null;
     const slavePaneCount = slavePanes.length;
     const readyCount = tasks.filter((task) => task.status === "queued").length;
     const reworkCount = tasks.filter((task) => task.status === "rework").length;
@@ -565,6 +791,26 @@ export const runDashboard = async ({}: {}): Promise<void> => {
       lastSlavePaneId = slavePanes[0]?.pane.paneId ?? null;
     }
 
+    const plannerRolePaused = liveState.paused || liveState.pausedRoles.planner;
+    const judgeRolePaused = liveState.paused || liveState.pausedRoles.judge;
+    const slaveRolePaused = liveState.paused || liveState.pausedRoles.slave;
+
+    if (!plannerRolePaused) {
+      for (const pane of plannerPanes) {
+        await maybeSendBasePrompt({ paneId: pane.paneId, role: ClankerRole.Planner });
+      }
+    }
+    if (!judgeRolePaused) {
+      for (const pane of judgePanes) {
+        await maybeSendBasePrompt({ paneId: pane.paneId, role: ClankerRole.Judge });
+      }
+    }
+    if (!slaveRolePaused) {
+      for (const entry of slavePanes) {
+        await maybeSendBasePrompt({ paneId: entry.pane.paneId, role: ClankerRole.Slave });
+      }
+    }
+
     if (pendingEscalationPaneId) {
       const content = await capturePane({ paneId: pendingEscalationPaneId, lines: 80 });
       if (!hasEscalationPrompt({ content })) {
@@ -604,6 +850,8 @@ export const runDashboard = async ({}: {}): Promise<void> => {
       }
     }
 
+    await processPendingActions();
+
     const heartbeats = await readHeartbeats({ heartbeatDir: paths.heartbeatDir });
     const nowMs = Date.now();
     const staleThresholdMs = 30_000;
@@ -641,7 +889,26 @@ export const runDashboard = async ({}: {}): Promise<void> => {
       }
     }
     staleSlaves = nextStale;
-    if (!liveState.paused) {
+    if (plannerDispatchState.pending) {
+      if (tasks.length > plannerDispatchState.taskCountAt) {
+        plannerDispatchState.pending = false;
+      } else if (Date.now() - plannerDispatchState.sentAt > PLANNER_PROMPT_TIMEOUT_MS) {
+        plannerDispatchState.pending = false;
+      }
+    }
+    const plannerPaused = liveState.paused || liveState.pausedRoles.planner;
+    if (!plannerPaused && readyCount < config.backlog && !plannerDispatchState.pending) {
+      const dispatched = await dispatchPlannerPrompt({ repoRoot, plannerPaneId });
+      if (dispatched) {
+        plannerDispatchState.pending = true;
+        plannerDispatchState.sentAt = Date.now();
+        plannerDispatchState.taskCountAt = tasks.length;
+      }
+    }
+
+    const assignmentsPaused =
+      liveState.paused || liveState.pausedRoles.slave || liveState.pausedRoles.planner;
+    if (!assignmentsPaused) {
       const availableSlaves = cappedSlavePanes
         .map((entry) => entry.slaveId)
         .filter((slaveId) => !staleSlaves.has(slaveId));
@@ -772,7 +1039,7 @@ export const runDashboard = async ({}: {}): Promise<void> => {
   await tick();
   const interval = setInterval(() => {
     void tick();
-  }, 2000);
+  }, 1000);
 
   const shutdown = (): void => {
     clearInterval(interval);

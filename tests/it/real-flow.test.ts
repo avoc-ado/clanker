@@ -41,7 +41,7 @@ describe("integration: real flow", () => {
         planLines: [
           'Goal: create artifacts/it-cli.js with the exact contents: console.log("IT_OK");',
           "Use shell commands to write task packets into .clanker/tasks immediately.",
-          "Write two packets with ids it-1 and it-2.",
+          "Write task packets with ids it-1 and it-2 (one per prompt).",
           "Requirement: planner must output a minimum of 2 task packets.",
           "Ensure at least two tasks (no upper cap). Split into create + verify tasks.",
         ],
@@ -322,7 +322,7 @@ describe("integration: real flow", () => {
         await emitDebug({ label: "panes-ready" });
 
         await runTmux({
-          args: ["respawn-pane", "-k", "-t", `${session}:dashboard`, ...nodeBase],
+          args: ["respawn-pane", "-k", "-t", `${session}:dashboard`, ...nodeBase, "dashboard"],
         });
         await runTmux({
           args: [
@@ -435,18 +435,7 @@ describe("integration: real flow", () => {
           waitForCodexReady({ window: "judge" }),
         ]);
 
-        const planOutput = await runCli({
-          cwd: root,
-          args: ["plan", "--prompt-file", ".clanker/plan-prompt.txt"],
-        });
-        if (planOutput.includes("planner pane not found")) {
-          const panes = await runTmux({
-            args: ["list-panes", "-t", session, "-F", "#{pane_id}\t#{pane_title}\t#{window_name}"],
-          });
-          throw new Error([planOutput.trim(), "--- tmux panes ---", panes.trim()].join("\n"));
-        }
-
-        await emitDebug({ label: "plan-sent" });
+        await emitDebug({ label: "plan-auto" });
 
         try {
           await waitFor({
