@@ -153,7 +153,7 @@ flowchart TD
 
 ## Plan Docs Lifecycle
 
-- Plan docs are authored by the developer; clanker does not generate them
+- Plan docs are authored by the user; clanker does not generate them
 - Plan docs are versioned and updateable; new docs can be added anytime
 - Planner reads `docs/` each run; uses latest intent + history to build task packets
 - Doc updates can trigger new tasks without rewriting past tasks
@@ -209,7 +209,7 @@ flowchart TD
 
 ## Interaction Policy (Questions + Permissions)
 
-- If slave asks for input, do not escalate to developer by default
+- If slave asks for input, do not escalate to user by default
 - Controller replies with a role reminder + proceed-with-best-effort prompt
 - If missing critical info, mark `rework` or `failed` (do not ping planner directly)
 - Command permissions: handled by Codex CLI rules (default `~/.codex/rules/default.rules`)
