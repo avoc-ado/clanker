@@ -1,8 +1,6 @@
 import { getClankerPaths } from "../paths.js";
 import { ensureStateDirs } from "../state/ensure-state.js";
-import { appendEvent } from "../state/events.js";
-import { writeHeartbeat } from "../state/heartbeat.js";
-import { spawnCodex } from "./spawn-codex.js";
+import { runCodexSupervisor } from "./codex-supervisor.js";
 import { loadConfig } from "../config.js";
 import { formatJudgeId } from "../agent-ids.js";
 
@@ -13,45 +11,11 @@ export const runJudge = async ({ idRaw }: { idRaw?: string } = {}): Promise<void
   const config = await loadConfig({ repoRoot });
 
   const judgeId = formatJudgeId({ idRaw });
-  await appendEvent({
-    eventsLog: paths.eventsLog,
-    event: {
-      ts: new Date().toISOString(),
-      type: "JUDGE_READY",
-      msg: "judge ready",
-      slaveId: judgeId,
-    },
-  });
-
-  const heartbeatTimer = setInterval(() => {
-    void writeHeartbeat({ heartbeatDir: paths.heartbeatDir, slaveId: judgeId });
-  }, 10_000);
-
-  const { child, logPath } = await spawnCodex({
-    logsDir: paths.logsDir,
+  await runCodexSupervisor({
+    paths,
     role: "judge",
     id: judgeId,
     command: config.codexCommand,
-  });
-  await appendEvent({
-    eventsLog: paths.eventsLog,
-    event: {
-      ts: new Date().toISOString(),
-      type: "CHAT_LOG",
-      msg: `logging to ${logPath}`,
-      slaveId: judgeId,
-      data: { path: logPath },
-    },
-  });
-
-  child.on("exit", (code) => {
-    clearInterval(heartbeatTimer);
-    process.exit(code ?? 0);
-  });
-  process.on("SIGINT", () => {
-    child.kill("SIGINT");
-  });
-  process.on("SIGTERM", () => {
-    child.kill("SIGTERM");
+    readyEvent: { type: "JUDGE_READY", msg: "judge ready" },
   });
 };
