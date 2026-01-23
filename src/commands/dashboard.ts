@@ -19,6 +19,7 @@ import { listDirtyFiles } from "../git.js";
 import { countLockConflicts } from "../state/locks.js";
 import { buildTaskFileDispatch, getPromptSettings } from "../prompting.js";
 import { formatDateDivider, formatDateKey, formatStreamLine } from "../dashboard/stream-format.js";
+import { runRelaunch } from "./relaunch.js";
 import {
   appendHistoryEntry,
   loadCommandHistory,
@@ -204,6 +205,16 @@ export const runDashboard = async ({}: {}): Promise<void> => {
       },
     },
     {
+      name: "relaunch",
+      description: "relaunch codex agents",
+      usage: "/relaunch [--fresh] [target]",
+      run: async ({ args }) => {
+        const parts = args.length > 0 ? args.split(/\s+/) : [];
+        await runRelaunch({ args: parts, log: (message) => writeLine(message) });
+        return "relaunch requested";
+      },
+    },
+    {
       name: "task",
       description: "set a task status",
       usage: "/task <id> <status>",
@@ -256,7 +267,6 @@ export const runDashboard = async ({}: {}): Promise<void> => {
       writeCommandList({ commands: slashCommands, title: "commands:" });
       return;
     }
-
     const { exact, matches } = filterSlashCommands({
       commands: slashCommands,
       token: parsed.name,
@@ -265,9 +275,9 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     if (!exact || exact.name.toLowerCase() !== parsed.name.toLowerCase()) {
       if (matches.length > 0) {
         writeCommandList({ commands: matches, title: `matches for /${parsed.name}:` });
-        return;
+      } else {
+        writeLine(`${ANSI.gray}unknown command: /${parsed.name}${ANSI.reset}`);
       }
-      writeLine(`${ANSI.gray}unknown command: /${parsed.name}${ANSI.reset}`);
       return;
     }
 

@@ -16,11 +16,13 @@ read_when: first-use, onboarding
 - `clanker planner` (planner pane)
 - `clanker judge 2` (extra judge pane)
 - `clanker planner 2` (extra planner pane)
+- `clanker relaunch` (restart all agents with resume)
+- `clanker relaunch --fresh planner` (restart planner without resume)
 
 ## Dashboard
 
 - Native scrollback (no alt-screen)
-- Commands: `/pause`, `/resume`, `/task <id> <status>`, `/focus`
+- Commands: `/pause`, `/resume`, `/relaunch [--fresh] [target]`, `/task <id> <status>`, `/focus`
 - Command history persists (last 50 entries)
 - Slash list: `/` to list and filter, `/help` to list
 

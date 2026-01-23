@@ -26,7 +26,7 @@ export const parseRelaunchArgs = ({
   args,
 }: {
   args: string[];
-}): { mode: RelaunchMode; target: string } => {
+}): { mode: RelaunchMode; target: string | null } => {
   let mode: RelaunchMode = "resume";
   let target: string | null = null;
   for (const arg of args) {
@@ -46,52 +46,80 @@ export const parseRelaunchArgs = ({
     }
     target = normalizeRelaunchTarget({ target: arg });
   }
-  if (!target) {
-    throw new Error("Missing relaunch target");
-  }
   return { mode, target };
 };
 
-export const runRelaunch = async ({ args }: { args: string[] }): Promise<void> => {
+export const runRelaunch = async ({
+  args,
+  log,
+}: {
+  args: string[];
+  log?: (message: string) => void;
+}): Promise<void> => {
+  const writeLine = log ?? console.log;
   const repoRoot = process.cwd();
   const paths = getClankerPaths({ repoRoot });
   await ensureStateDirs({ paths });
   const { mode, target } = parseRelaunchArgs({ args });
   const heartbeats = await readHeartbeats({ heartbeatDir: paths.heartbeatDir });
-  const heartbeat = heartbeats.find((entry) => entry.slaveId === target);
-  if (!heartbeat) {
+  const nowMs = Date.now();
+  const signal = mode === "fresh" ? "SIGUSR1" : "SIGUSR2";
+  if (!heartbeats.length) {
+    throw new Error("No active heartbeats found");
+  }
+
+  const selected = target ? heartbeats.filter((entry) => entry.slaveId === target) : heartbeats;
+  if (target && selected.length === 0) {
     const known = heartbeats
       .map((entry) => entry.slaveId)
       .sort()
       .join(", ");
     throw new Error(`Unknown relaunch target ${target}${known ? ` (known: ${known})` : ""}`);
   }
-  if (!heartbeat.pid) {
-    throw new Error(`Heartbeat missing pid for ${target}`);
+
+  const failures: string[] = [];
+  const skipped: string[] = [];
+  let successCount = 0;
+
+  for (const heartbeat of selected) {
+    if (!heartbeat.pid) {
+      skipped.push(`${heartbeat.slaveId} (missing pid)`);
+      continue;
+    }
+    if (isHeartbeatStale({ heartbeat, nowMs, thresholdMs: STALE_THRESHOLD_MS })) {
+      skipped.push(`${heartbeat.slaveId} (stale)`);
+      continue;
+    }
+    try {
+      process.kill(heartbeat.pid, signal);
+      await appendEvent({
+        eventsLog: paths.eventsLog,
+        event: {
+          ts: new Date().toISOString(),
+          type: "CODEX_RELAUNCH_REQUEST",
+          msg: `relaunch ${mode}`,
+          slaveId: heartbeat.slaveId,
+          data: {
+            mode,
+            pid: heartbeat.pid,
+          },
+        },
+      });
+      writeLine(`relaunch signal sent to ${heartbeat.slaveId} (${mode})`);
+      successCount += 1;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push(`${heartbeat.slaveId} (${message})`);
+    }
   }
-  const nowMs = Date.now();
-  if (isHeartbeatStale({ heartbeat, nowMs, thresholdMs: STALE_THRESHOLD_MS })) {
-    throw new Error(`Heartbeat for ${target} is stale`);
+
+  if (skipped.length > 0) {
+    writeLine(`relaunch skipped: ${skipped.join(", ")}`);
   }
-  const signal = mode === "fresh" ? "SIGUSR1" : "SIGUSR2";
-  try {
-    process.kill(heartbeat.pid, signal);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to signal ${target} (${signal}): ${message}`);
+  if (failures.length > 0) {
+    throw new Error(`Relaunch failed for: ${failures.join(", ")}`);
   }
-  await appendEvent({
-    eventsLog: paths.eventsLog,
-    event: {
-      ts: new Date().toISOString(),
-      type: "CODEX_RELAUNCH_REQUEST",
-      msg: `relaunch ${mode}`,
-      slaveId: target,
-      data: {
-        mode,
-        pid: heartbeat.pid,
-      },
-    },
-  });
-  console.log(`relaunch signal sent to ${target} (${mode})`);
+  if (successCount === 0) {
+    throw new Error("No relaunch targets were eligible");
+  }
 };
