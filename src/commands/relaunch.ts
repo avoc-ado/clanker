@@ -6,6 +6,21 @@ import { isHeartbeatStale } from "../state/heartbeat.js";
 import type { Heartbeat } from "../state/heartbeat.js";
 import { readHeartbeats } from "../state/read-heartbeats.js";
 import { HEARTBEAT_STALE_MS, RELAUNCH_SIGNALS, type RelaunchMode } from "../constants.js";
+import yargs from "yargs";
+
+const resolveRelaunchMode = ({ args }: { args: string[] }): RelaunchMode => {
+  let mode: RelaunchMode = "resume";
+  for (const arg of args) {
+    if (arg === "--fresh") {
+      mode = "fresh";
+      continue;
+    }
+    if (arg === "--resume") {
+      mode = "resume";
+    }
+  }
+  return mode;
+};
 
 export const normalizeRelaunchTarget = ({ target }: { target: string }): string => {
   const trimmed = target.trim();
@@ -26,25 +41,26 @@ export const parseRelaunchArgs = ({
 }: {
   args: string[];
 }): { mode: RelaunchMode; target: string | null } => {
-  let mode: RelaunchMode = "resume";
-  let target: string | null = null;
-  for (const arg of args) {
-    if (arg === "--fresh") {
-      mode = "fresh";
-      continue;
-    }
-    if (arg === "--resume") {
-      mode = "resume";
-      continue;
-    }
-    if (arg.startsWith("-")) {
-      throw new Error(`Unknown option ${arg}`);
-    }
-    if (target) {
-      throw new Error("Multiple targets provided");
-    }
-    target = normalizeRelaunchTarget({ target: arg });
+  const parsed = yargs(args)
+    .option("fresh", { type: "boolean", default: false })
+    .option("resume", { type: "boolean", default: false })
+    .strictOptions()
+    .exitProcess(false)
+    .fail((message: string, error?: Error) => {
+      if (message.includes("Unknown argument")) {
+        const suffix = message.split(":").slice(1).join(":").trim();
+        throw new Error(`Unknown option ${suffix || "(unknown)"}`.trim());
+      }
+      throw error ?? new Error(message);
+    })
+    .parseSync();
+  const rawTargets = parsed._ as unknown[];
+  const targets = rawTargets.map((value) => String(value));
+  if (targets.length > 1) {
+    throw new Error("Multiple targets provided");
   }
+  const target = targets[0] ? normalizeRelaunchTarget({ target: targets[0] }) : null;
+  const mode = resolveRelaunchMode({ args });
   return { mode, target };
 };
 

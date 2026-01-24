@@ -17,6 +17,7 @@ import { ensureStateDirs } from "./state/ensure-state.js";
 import { appendEvent } from "./state/events.js";
 import { setRuntimeOverrides } from "./runtime/overrides.js";
 import { getCliHelp } from "./cli-help.js";
+import yargs from "yargs";
 
 interface CommandSpec {
   name: string;
@@ -34,65 +35,32 @@ interface ParsedArgs {
   };
 }
 
-const requireFlagValue = ({ value, flag }: { value: string | undefined; flag: string }): string => {
-  if (!value || value.length === 0) {
-    throw new Error(`Missing value for ${flag}`);
-  }
-  return value;
-};
-
 const parseArgs = ({ argv }: { argv: string[] }): ParsedArgs => {
-  const overrides: ParsedArgs["overrides"] = {};
-  const remaining: string[] = [];
-  let helpRequested = false;
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i] ?? "";
-    if (arg === "-h" || arg === "--help") {
-      helpRequested = true;
-      continue;
-    }
-    if (arg === "--codex-command") {
-      overrides.codexCommand = requireFlagValue({ value: argv[i + 1], flag: "--codex-command" });
-      i += 1;
-      continue;
-    }
-    if (arg.startsWith("--codex-command=")) {
-      overrides.codexCommand = requireFlagValue({
-        value: arg.slice("--codex-command=".length),
-        flag: "--codex-command",
-      });
-      continue;
-    }
-    if (arg === "--codex-tty") {
-      overrides.codexTty = true;
-      continue;
-    }
-    if (arg === "--disable-codex") {
-      overrides.disableCodex = true;
-      continue;
-    }
-    if (arg === "--prompt-file") {
-      overrides.promptFile = requireFlagValue({ value: argv[i + 1], flag: "--prompt-file" });
-      i += 1;
-      continue;
-    }
-    if (arg.startsWith("--prompt-file=")) {
-      overrides.promptFile = requireFlagValue({
-        value: arg.slice("--prompt-file=".length),
-        flag: "--prompt-file",
-      });
-      continue;
-    }
-    remaining.push(arg);
-  }
-  const [name, ...args] = remaining;
+  const parser = yargs(argv)
+    .parserConfiguration({ "unknown-options-as-args": true })
+    .option("codex-command", { type: "string" })
+    .option("codex-tty", { type: "boolean", default: false })
+    .option("disable-codex", { type: "boolean", default: false })
+    .option("prompt-file", { type: "string" })
+    .option("help", { type: "boolean", alias: "h", default: false })
+    .help(false)
+    .version(false);
+  const parsed = parser.parseSync();
+  const rawArgs = parsed._ as unknown[];
+  const parsedArgs = rawArgs.map((value) => String(value));
+  const [name, ...args] = parsedArgs;
   return {
     command: {
       name: name ?? "",
       args,
     },
-    helpRequested,
-    overrides,
+    helpRequested: Boolean(parsed.help),
+    overrides: {
+      codexCommand: parsed.codexCommand ? String(parsed.codexCommand) : undefined,
+      codexTty: parsed.codexTty ? true : undefined,
+      disableCodex: parsed.disableCodex ? true : undefined,
+      promptFile: parsed.promptFile ? String(parsed.promptFile) : undefined,
+    },
   };
 };
 

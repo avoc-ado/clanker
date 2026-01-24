@@ -4,6 +4,7 @@ import { formatEventLine } from "../tui/format-event.js";
 import { getClankerPaths } from "../paths.js";
 import { ensureStateDirs } from "../state/ensure-state.js";
 import type { ClankerEvent } from "../state/events.js";
+import yargs from "yargs";
 
 const stripTags = ({ line }: { line: string }): string => {
   return line.replace(/\{[^}]+\}/g, "");
@@ -37,9 +38,17 @@ export const runTail = async ({ args }: { args: string[] }): Promise<void> => {
   } catch {
     await writeFile(paths.eventsLog, "", "utf-8");
   }
-  const limitArg = args.find((arg) => arg.startsWith("--limit="));
-  const limit = limitArg ? Number(limitArg.split("=")[1]) : 30;
-  const follow = !args.includes("--no-follow");
+  const parsed = yargs(args)
+    .option("limit", { type: "number", default: 30 })
+    .option("follow", { type: "boolean", default: true })
+    .strict()
+    .exitProcess(false)
+    .parseSync();
+  const limit = Number(parsed.limit ?? 30);
+  if (!Number.isFinite(limit) || limit <= 0) {
+    throw new Error("Invalid --limit value");
+  }
+  const follow = Boolean(parsed.follow);
 
   let offset = 0;
   try {
