@@ -51,4 +51,4 @@ Real mode needs codex CLI on PATH (override via `CLANKER_IT_REAL_COMMAND`).
 
 ## Docs
 
-See `docs/quickstart.md` and `docs/integration-tests.md`.
+See `docs/quickstart.md`, `docs/observability.md`, and `docs/integration-tests.md`.

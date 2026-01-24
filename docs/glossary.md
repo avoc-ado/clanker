@@ -9,3 +9,5 @@ read_when: onboarding, reference
 - **Handoff**: Structured summary written to `.clanker/history/`.
 - **Owner Dir**: Top-level directory lock for conflict avoidance.
 - **Owner File**: File-level lock override for hot dirs.
+- **Events Log**: `.clanker/events.log` JSONL timeline for tasks + agent activity.
+- **Metrics**: `.clanker/metrics.json` rolling stats snapshot.

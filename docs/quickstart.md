@@ -66,6 +66,7 @@ read_when: first-use, onboarding
 
 - Primary runtime trace lives in `.clanker/events.log`; keep it for diagnosing agent pathologies.
 - Handoffs and summaries in `.clanker/history/`.
+- See `docs/observability.md` for the full artifact map.
 
 ## Task Flow
 
