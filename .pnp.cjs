@@ -30,6 +30,7 @@ const RAW_RUNTIME_STATE =
         "packageDependencies": [\
           ["@types/jest", "npm:30.0.0"],\
           ["@types/node", "npm:22.19.7"],\
+          ["@types/yargs", "npm:17.0.35"],\
           ["chokidar", "npm:3.6.0"],\
           ["clanker-cli", "workspace:."],\
           ["jest", "virtual:a7748238f4b78a89c1e2ff639cd247cc405a1affb58616ff79473803c81eb49a3a252594fa10d2e0bfba82537e0fda3b8c27fb498971ab0b8d8d86d0cdef7cdb#npm:30.2.0"],\
@@ -38,7 +39,8 @@ const RAW_RUNTIME_STATE =
           ["ts-jest", "virtual:a7748238f4b78a89c1e2ff639cd247cc405a1affb58616ff79473803c81eb49a3a252594fa10d2e0bfba82537e0fda3b8c27fb498971ab0b8d8d86d0cdef7cdb#npm:29.4.6"],\
           ["ts-node", "virtual:a7748238f4b78a89c1e2ff639cd247cc405a1affb58616ff79473803c81eb49a3a252594fa10d2e0bfba82537e0fda3b8c27fb498971ab0b8d8d86d0cdef7cdb#npm:10.9.2"],\
           ["typescript", "patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>::version=5.9.3&hash=5786d5"],\
-          ["yaml", "npm:2.8.2"]\
+          ["yaml", "npm:2.8.2"],\
+          ["yargs", "npm:18.0.0"]\
         ],\
         "linkType": "SOFT"\
       }]\
@@ -2267,6 +2269,7 @@ const RAW_RUNTIME_STATE =
         "packageDependencies": [\
           ["@types/jest", "npm:30.0.0"],\
           ["@types/node", "npm:22.19.7"],\
+          ["@types/yargs", "npm:17.0.35"],\
           ["chokidar", "npm:3.6.0"],\
           ["clanker-cli", "workspace:."],\
           ["jest", "virtual:a7748238f4b78a89c1e2ff639cd247cc405a1affb58616ff79473803c81eb49a3a252594fa10d2e0bfba82537e0fda3b8c27fb498971ab0b8d8d86d0cdef7cdb#npm:30.2.0"],\
@@ -2275,7 +2278,8 @@ const RAW_RUNTIME_STATE =
           ["ts-jest", "virtual:a7748238f4b78a89c1e2ff639cd247cc405a1affb58616ff79473803c81eb49a3a252594fa10d2e0bfba82537e0fda3b8c27fb498971ab0b8d8d86d0cdef7cdb#npm:29.4.6"],\
           ["ts-node", "virtual:a7748238f4b78a89c1e2ff639cd247cc405a1affb58616ff79473803c81eb49a3a252594fa10d2e0bfba82537e0fda3b8c27fb498971ab0b8d8d86d0cdef7cdb#npm:10.9.2"],\
           ["typescript", "patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>::version=5.9.3&hash=5786d5"],\
-          ["yaml", "npm:2.8.2"]\
+          ["yaml", "npm:2.8.2"],\
+          ["yargs", "npm:18.0.0"]\
         ],\
         "linkType": "SOFT"\
       }]\
@@ -2288,6 +2292,16 @@ const RAW_RUNTIME_STATE =
           ["string-width", "npm:4.2.3"],\
           ["strip-ansi", "npm:6.0.1"],\
           ["wrap-ansi", "npm:7.0.0"]\
+        ],\
+        "linkType": "HARD"\
+      }],\
+      ["npm:9.0.1", {\
+        "packageLocation": "../../../../.yarn/berry/cache/cliui-npm-9.0.1-cf73083eb0-10c0.zip/node_modules/cliui/",\
+        "packageDependencies": [\
+          ["cliui", "npm:9.0.1"],\
+          ["string-width", "npm:7.2.0"],\
+          ["strip-ansi", "npm:7.1.2"],\
+          ["wrap-ansi", "npm:9.0.2"]\
         ],\
         "linkType": "HARD"\
       }]\
@@ -2468,6 +2482,13 @@ const RAW_RUNTIME_STATE =
       }]\
     ]],\
     ["emoji-regex", [\
+      ["npm:10.6.0", {\
+        "packageLocation": "../../../../.yarn/berry/cache/emoji-regex-npm-10.6.0-c849a5dbe0-10c0.zip/node_modules/emoji-regex/",\
+        "packageDependencies": [\
+          ["emoji-regex", "npm:10.6.0"]\
+        ],\
+        "linkType": "HARD"\
+      }],\
       ["npm:8.0.0", {\
         "packageLocation": "../../../../.yarn/berry/cache/emoji-regex-npm-8.0.0-213764015c-10c0.zip/node_modules/emoji-regex/",\
         "packageDependencies": [\
@@ -2715,6 +2736,15 @@ const RAW_RUNTIME_STATE =
         "packageLocation": "../../../../.yarn/berry/cache/get-caller-file-npm-2.0.5-80e8a86305-10c0.zip/node_modules/get-caller-file/",\
         "packageDependencies": [\
           ["get-caller-file", "npm:2.0.5"]\
+        ],\
+        "linkType": "HARD"\
+      }]\
+    ]],\
+    ["get-east-asian-width", [\
+      ["npm:1.4.0", {\
+        "packageLocation": "../../../../.yarn/berry/cache/get-east-asian-width-npm-1.4.0-1e67c6ac3b-10c0.zip/node_modules/get-east-asian-width/",\
+        "packageDependencies": [\
+          ["get-east-asian-width", "npm:1.4.0"]\
         ],\
         "linkType": "HARD"\
       }]\
@@ -4495,6 +4525,16 @@ const RAW_RUNTIME_STATE =
           ["strip-ansi", "npm:7.1.2"]\
         ],\
         "linkType": "HARD"\
+      }],\
+      ["npm:7.2.0", {\
+        "packageLocation": "../../../../.yarn/berry/cache/string-width-npm-7.2.0-93572222c9-10c0.zip/node_modules/string-width/",\
+        "packageDependencies": [\
+          ["emoji-regex", "npm:10.6.0"],\
+          ["get-east-asian-width", "npm:1.4.0"],\
+          ["string-width", "npm:7.2.0"],\
+          ["strip-ansi", "npm:7.1.2"]\
+        ],\
+        "linkType": "HARD"\
       }]\
     ]],\
     ["strip-ansi", [\
@@ -4949,6 +4989,16 @@ const RAW_RUNTIME_STATE =
           ["wrap-ansi", "npm:8.1.0"]\
         ],\
         "linkType": "HARD"\
+      }],\
+      ["npm:9.0.2", {\
+        "packageLocation": "../../../../.yarn/berry/cache/wrap-ansi-npm-9.0.2-b66ec4013c-10c0.zip/node_modules/wrap-ansi/",\
+        "packageDependencies": [\
+          ["ansi-styles", "npm:6.2.3"],\
+          ["string-width", "npm:7.2.0"],\
+          ["strip-ansi", "npm:7.1.2"],\
+          ["wrap-ansi", "npm:9.0.2"]\
+        ],\
+        "linkType": "HARD"\
       }]\
     ]],\
     ["wrappy", [\
@@ -5026,6 +5076,19 @@ const RAW_RUNTIME_STATE =
           ["yargs-parser", "npm:21.1.1"]\
         ],\
         "linkType": "HARD"\
+      }],\
+      ["npm:18.0.0", {\
+        "packageLocation": "../../../../.yarn/berry/cache/yargs-npm-18.0.0-ec82bf7b61-10c0.zip/node_modules/yargs/",\
+        "packageDependencies": [\
+          ["cliui", "npm:9.0.1"],\
+          ["escalade", "npm:3.2.0"],\
+          ["get-caller-file", "npm:2.0.5"],\
+          ["string-width", "npm:7.2.0"],\
+          ["y18n", "npm:5.0.8"],\
+          ["yargs", "npm:18.0.0"],\
+          ["yargs-parser", "npm:22.0.0"]\
+        ],\
+        "linkType": "HARD"\
       }]\
     ]],\
     ["yargs-parser", [\
@@ -5033,6 +5096,13 @@ const RAW_RUNTIME_STATE =
         "packageLocation": "../../../../.yarn/berry/cache/yargs-parser-npm-21.1.1-8fdc003314-10c0.zip/node_modules/yargs-parser/",\
         "packageDependencies": [\
           ["yargs-parser", "npm:21.1.1"]\
+        ],\
+        "linkType": "HARD"\
+      }],\
+      ["npm:22.0.0", {\
+        "packageLocation": "../../../../.yarn/berry/cache/yargs-parser-npm-22.0.0-47d50889f2-10c0.zip/node_modules/yargs-parser/",\
+        "packageDependencies": [\
+          ["yargs-parser", "npm:22.0.0"]\
         ],\
         "linkType": "HARD"\
       }]\

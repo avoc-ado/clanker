@@ -1,6 +1,7 @@
 import { access } from "node:fs/promises";
 import { getClankerPaths } from "../paths.js";
 import { ensureStateDirs } from "../state/ensure-state.js";
+import yargs from "yargs";
 
 const checkPath = async ({ label, path }: { label: string; path: string }): Promise<string> => {
   try {
@@ -14,7 +15,12 @@ const checkPath = async ({ label, path }: { label: string; path: string }): Prom
 export const runDoctor = async ({ args }: { args: string[] }): Promise<void> => {
   const repoRoot = process.cwd();
   const paths = getClankerPaths({ repoRoot });
-  const shouldFix = args.includes("--fix");
+  const parsed = yargs(args)
+    .option("fix", { type: "boolean", default: false })
+    .strict()
+    .exitProcess(false)
+    .parseSync();
+  const shouldFix = Boolean(parsed.fix);
   if (shouldFix) {
     await ensureStateDirs({ paths });
   }
