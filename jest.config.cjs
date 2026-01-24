@@ -20,6 +20,7 @@ module.exports = {
     "!src/git.ts",
     "!src/worktrees.ts",
   ],
+  coverageReporters: ["text-summary"],
   testPathIgnorePatterns: [
     "/node_modules/",
     "/dist/",

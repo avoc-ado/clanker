@@ -28,6 +28,7 @@ interface ParsedArgs {
   command: CommandSpec;
   helpRequested: boolean;
   attachRequested: boolean;
+  tmuxRequested: boolean;
   overrides: {
     codexCommand?: string;
     codexTty?: boolean;
@@ -44,6 +45,7 @@ const parseArgs = ({ argv }: { argv: string[] }): ParsedArgs => {
     .option("disable-codex", { type: "boolean", default: false })
     .option("prompt-file", { type: "string" })
     .option("attach", { type: "boolean", default: false })
+    .option("tmux", { type: "boolean", default: false })
     .option("help", { type: "boolean", alias: "h", default: false })
     .help(false)
     .version(false);
@@ -58,6 +60,7 @@ const parseArgs = ({ argv }: { argv: string[] }): ParsedArgs => {
     },
     helpRequested: Boolean(parsed.help),
     attachRequested: Boolean(parsed.attach),
+    tmuxRequested: Boolean(parsed.tmux),
     overrides: {
       codexCommand: parsed.codexCommand ? String(parsed.codexCommand) : undefined,
       codexTty: parsed.codexTty ? true : undefined,
@@ -161,7 +164,8 @@ const main = async ({ argv }: { argv: string[] }): Promise<void> => {
     }
     case "":
     default: {
-      await runLaunch({ attach: parsed.attachRequested });
+      const forceTmux = parsed.attachRequested || parsed.tmuxRequested;
+      await runLaunch({ attach: parsed.attachRequested, forceTmux });
       return;
     }
   }

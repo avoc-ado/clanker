@@ -4,7 +4,7 @@ Usage:
   clanker [command] [options]
 
 Commands:
-  (default) launch tmux session + panes
+  (default) launch iTerm2 window + panes
   dashboard
   planner
   slave [id]
@@ -23,5 +23,6 @@ Options:
   --disable-codex
   --prompt-file <path>
   --attach
+  --tmux
   -h, --help
 `;

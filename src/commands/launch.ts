@@ -8,6 +8,7 @@ import { loadState, saveState } from "../state/state.js";
 import { appendEvent } from "../state/events.js";
 import { runTmux } from "../tmux.js";
 import { runOnboardingIfNeeded } from "./onboarding.js";
+import { launchIterm } from "../iterm.js";
 
 interface PaneSpec {
   title: string;
@@ -132,6 +133,26 @@ const buildPaneSpecs = ({
   return specs;
 };
 
+const escapeShellArg = ({ value }: { value: string }): string => {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+};
+
+const buildItermCommands = ({
+  cliPath,
+  specs,
+}: {
+  cliPath: string;
+  specs: PaneSpec[];
+}): string[] => {
+  return specs.map((spec) => {
+    const args = spec.usesCodex ? ["--codex-tty", ...spec.args] : spec.args;
+    const parts = [process.execPath, cliPath, ...args].map((part) =>
+      escapeShellArg({ value: part }),
+    );
+    return parts.join(" ");
+  });
+};
+
 const configurePanes = async ({
   sessionName,
   paneIds,
@@ -166,7 +187,13 @@ const configurePanes = async ({
   }
 };
 
-export const runLaunch = async ({ attach }: { attach?: boolean } = {}): Promise<void> => {
+export const runLaunch = async ({
+  attach,
+  forceTmux,
+}: {
+  attach?: boolean;
+  forceTmux?: boolean;
+} = {}): Promise<void> => {
   const repoRoot = process.cwd();
   await runOnboardingIfNeeded({ repoRoot });
   const config = await loadConfig({ repoRoot });
@@ -187,18 +214,31 @@ export const runLaunch = async ({ attach }: { attach?: boolean } = {}): Promise<
   });
 
   const sessionName = config.tmuxFilter ?? `clanker-${repoRoot.split("/").pop() ?? "repo"}`;
+  const specs = buildPaneSpecs({
+    planners: config.planners,
+    judges: config.judges,
+    slaves: config.slaves,
+  });
+  const cliPath = await resolveCliPath({ repoRoot });
+
+  if (!forceTmux && process.platform === "darwin") {
+    try {
+      const commands = buildItermCommands({ cliPath, specs });
+      await launchIterm({ cwd: repoRoot, commands });
+      console.log("clanker started iTerm2 window");
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`iTerm2 launch failed; falling back to tmux (${message})`);
+    }
+  }
+
   if (!(await hasSession({ sessionName }))) {
-    const specs = buildPaneSpecs({
-      planners: config.planners,
-      judges: config.judges,
-      slaves: config.slaves,
-    });
     const paneIds = await createLayout({
       sessionName,
       cwd: repoRoot,
       paneCount: specs.length,
     });
-    const cliPath = await resolveCliPath({ repoRoot });
     await configurePanes({ sessionName, paneIds, specs, cliPath });
   }
 

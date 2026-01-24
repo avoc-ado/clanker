@@ -17,10 +17,10 @@ npx clanker-cli@latest planner
 npx clanker-cli@latest slave 1
 npx clanker-cli@latest judge
 
-# full tmux layout + onboarding (detached)
+# full iTerm2 layout + onboarding (detached)
 npx clanker-cli@latest
-# attach
-tmux attach -t clanker-<repo>
+# tmux fallback
+npx clanker-cli@latest --tmux
 ```
 
 ## Config
