@@ -19,7 +19,7 @@ npx clanker-cli@latest judge
 
 # full iTerm2 layout + onboarding (detached)
 npx clanker-cli@latest
-# tmux fallback
+# tmux fallback (for tmux control)
 npx clanker-cli@latest --tmux
 ```
 

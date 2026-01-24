@@ -10,6 +10,7 @@ read_when: first-use, onboarding
 ## Start
 
 - macOS default uses iTerm2 (install iTerm2 or pass `--tmux`).
+- iTerm2 mode does not create a tmux session; use `--tmux` for tmux control.
 - `clanker` (onboarding + spawn iTerm2 window; exits)
 - `clanker --tmux` (onboarding + spawn tmux session; exits)
 - `clanker --tmux --attach` (spawn + attach)

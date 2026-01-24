@@ -18,18 +18,16 @@ const buildCommand = ({ cwd, command }: { cwd: string; command: string }): strin
 
 export const buildGridLayout = ({
   paneCount,
-  maxColumns = 3,
+  maxRows = 2,
 }: {
   paneCount: number;
-  maxColumns?: number;
+  maxRows?: number;
 }): { columns: string[][]; maxRows: number } => {
-  const columnsCount = Math.min(maxColumns, paneCount);
-  const maxRows = Math.ceil(paneCount / columnsCount);
+  const columnsCount = Math.ceil(paneCount / maxRows);
   const rowsPerColumn: number[] = [];
   let remaining = paneCount;
   for (let col = 0; col < columnsCount; col += 1) {
-    const remainingColumns = columnsCount - col;
-    const rowsForColumn = Math.min(maxRows, Math.ceil(remaining / remainingColumns));
+    const rowsForColumn = Math.min(maxRows, remaining);
     rowsPerColumn.push(rowsForColumn);
     remaining -= rowsForColumn;
   }
@@ -51,6 +49,8 @@ export const buildItermScript = ({
     'tell application "iTerm"',
     "  activate",
     "  set newWindow to (create window with default profile)",
+    "  set currentBounds to bounds of newWindow",
+    "  set bounds of newWindow to {item 1 of currentBounds, item 2 of currentBounds, (item 3 of currentBounds) + 400, item 4 of currentBounds}",
     "  tell newWindow",
     "    set session1 to current session of current tab",
   ];
@@ -108,6 +108,14 @@ export const launchIterm = async ({
   cwd: string;
   commands: string[];
 }): Promise<void> => {
+  try {
+    await execFileAsync("osascript", ["-e", 'tell application "iTerm" to version']);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `iTerm2 is required on macOS; install it or run with --tmux (details: ${message})`,
+    );
+  }
   const script = buildItermScript({ cwd, commands });
   await execFileAsync(
     "osascript",

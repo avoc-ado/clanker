@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { stat } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { loadConfig } from "../config.js";
 import { getClankerPaths } from "../paths.js";
 import { ensureStateDirs } from "../state/ensure-state.js";
@@ -33,6 +33,46 @@ const resolveCliPath = async ({ repoRoot }: { repoRoot: string }): Promise<strin
   } catch {
     return process.argv[1] ?? distPath;
   }
+};
+
+const findPnpRoot = async ({ startPath }: { startPath: string }): Promise<string | null> => {
+  let current = startPath;
+  for (let i = 0; i < 10; i += 1) {
+    const candidate = join(current, ".pnp.cjs");
+    try {
+      await stat(candidate);
+      return current;
+    } catch {
+      const parent = dirname(current);
+      if (parent === current) {
+        break;
+      }
+      current = parent;
+    }
+  }
+  return null;
+};
+
+const resolvePnpArgs = async ({ cliPath }: { cliPath: string }): Promise<string[]> => {
+  const pnpRoot = await findPnpRoot({ startPath: dirname(cliPath) });
+  if (!pnpRoot) {
+    return [];
+  }
+  const pnpPath = join(pnpRoot, ".pnp.cjs");
+  const loaderPath = join(pnpRoot, ".pnp.loader.mjs");
+  try {
+    await stat(pnpPath);
+  } catch {
+    return [];
+  }
+  const args = ["--require", pnpPath];
+  try {
+    await stat(loaderPath);
+    args.push("--loader", loaderPath);
+  } catch {
+    // ignore missing loader
+  }
+  return args;
 };
 
 const listPaneIds = async ({ sessionName }: { sessionName: string }): Promise<string[]> => {
@@ -140,13 +180,15 @@ const escapeShellArg = ({ value }: { value: string }): string => {
 const buildItermCommands = ({
   cliPath,
   specs,
+  nodeArgs,
 }: {
   cliPath: string;
   specs: PaneSpec[];
+  nodeArgs: string[];
 }): string[] => {
   return specs.map((spec) => {
     const args = spec.usesCodex ? ["--codex-tty", ...spec.args] : spec.args;
-    const parts = [process.execPath, cliPath, ...args].map((part) =>
+    const parts = [process.execPath, ...nodeArgs, cliPath, ...args].map((part) =>
       escapeShellArg({ value: part }),
     );
     return parts.join(" ");
@@ -158,11 +200,13 @@ const configurePanes = async ({
   paneIds,
   specs,
   cliPath,
+  nodeArgs,
 }: {
   sessionName: string;
   paneIds: string[];
   specs: PaneSpec[];
   cliPath: string;
+  nodeArgs: string[];
 }): Promise<void> => {
   const tmuxSocket = process.env.CLANKER_TMUX_SOCKET;
   if (tmuxSocket && tmuxSocket.length > 0) {
@@ -179,7 +223,7 @@ const configurePanes = async ({
     }
     const args = spec.usesCodex ? ["--codex-tty", ...spec.args] : spec.args;
     await runTmux({
-      args: ["respawn-pane", "-k", "-t", paneId, process.execPath, cliPath, ...args],
+      args: ["respawn-pane", "-k", "-t", paneId, process.execPath, ...nodeArgs, cliPath, ...args],
     });
     await runTmux({
       args: ["select-pane", "-t", paneId, "-T", `clanker:${spec.title}`],
@@ -220,17 +264,13 @@ export const runLaunch = async ({
     slaves: config.slaves,
   });
   const cliPath = await resolveCliPath({ repoRoot });
+  const nodeArgs = await resolvePnpArgs({ cliPath });
 
   if (!forceTmux && process.platform === "darwin") {
-    try {
-      const commands = buildItermCommands({ cliPath, specs });
-      await launchIterm({ cwd: repoRoot, commands });
-      console.log("clanker started iTerm2 window");
-      return;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn(`iTerm2 launch failed; falling back to tmux (${message})`);
-    }
+    const commands = buildItermCommands({ cliPath, specs, nodeArgs });
+    await launchIterm({ cwd: repoRoot, commands });
+    console.log("clanker started iTerm2 window");
+    return;
   }
 
   if (!(await hasSession({ sessionName }))) {
@@ -239,7 +279,7 @@ export const runLaunch = async ({
       cwd: repoRoot,
       paneCount: specs.length,
     });
-    await configurePanes({ sessionName, paneIds, specs, cliPath });
+    await configurePanes({ sessionName, paneIds, specs, cliPath, nodeArgs });
   }
 
   if (attach) {
