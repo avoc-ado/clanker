@@ -55,6 +55,9 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
 - Before handoff: run full gate (lint/typecheck/tests/docs).
 - Always run `yarn verify` after code changes; report results.
+- All changes: run `yarn verify` + `yarn test:it:real`.
+- `yarn test:it:real` failure: rerun `yarn test:it:real:debug` (logs), diagnose before handoff.
+- All failures: diagnose root cause + note it.
 - Behavioral changes: run swarm verify (local), note if blocked by tmux permissions.
 - If tmux fails with "Operation not permitted", report in chat and stop (do not work around).
 - Add/extend integration tests when behavior spans planner/slave/judge flow; prefer fast tmpdir harness + stub `codexCommand`.
