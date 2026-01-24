@@ -1,4 +1,9 @@
-import { normalizeRelaunchTarget, parseRelaunchArgs } from "../commands/relaunch.js";
+import type { Heartbeat } from "../state/heartbeat.js";
+import {
+  normalizeRelaunchTarget,
+  parseRelaunchArgs,
+  selectRelaunchTargets,
+} from "../commands/relaunch.js";
 
 describe("normalizeRelaunchTarget", () => {
   test("accepts canonical cN ids", () => {
@@ -37,5 +42,43 @@ describe("parseRelaunchArgs", () => {
 
   test("errors when multiple targets provided", () => {
     expect(() => parseRelaunchArgs({ args: ["c1", "c2"] })).toThrow("Multiple targets");
+  });
+});
+
+describe("selectRelaunchTargets", () => {
+  const nowMs = new Date("2026-01-24T00:00:00.000Z").getTime();
+  const makeHeartbeat = (overrides: Partial<Heartbeat>): Heartbeat => {
+    return {
+      slaveId: overrides.slaveId ?? "c1",
+      ts: overrides.ts ?? new Date(nowMs).toISOString(),
+      pid: overrides.pid,
+      role: overrides.role,
+    };
+  };
+
+  test("marks unknown target", () => {
+    const result = selectRelaunchTargets({
+      heartbeats: [makeHeartbeat({ slaveId: "c1", pid: 123 })],
+      target: "c2",
+      nowMs,
+      staleMs: 30_000,
+    });
+    expect(result.unknownTarget).toBe(true);
+    expect(result.eligible).toEqual([]);
+  });
+
+  test("filters stale and missing pid", () => {
+    const result = selectRelaunchTargets({
+      heartbeats: [
+        makeHeartbeat({ slaveId: "c1", pid: 11 }),
+        makeHeartbeat({ slaveId: "c2" }),
+        makeHeartbeat({ slaveId: "c3", pid: 22, ts: new Date(nowMs - 60_000).toISOString() }),
+      ],
+      target: null,
+      nowMs,
+      staleMs: 30_000,
+    });
+    expect(result.eligible.map((hb) => hb.slaveId)).toEqual(["c1"]);
+    expect(result.skipped.map((entry) => entry.slaveId).sort()).toEqual(["c2", "c3"]);
   });
 });

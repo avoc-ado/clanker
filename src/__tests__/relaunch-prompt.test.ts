@@ -1,5 +1,11 @@
 import type { TaskRecord } from "../state/tasks.js";
-import { buildJudgeRelaunchPrompt, selectAssignedTask } from "../commands/relaunch-prompt.js";
+import {
+  buildJudgeRelaunchPrompt,
+  buildRelaunchPromptForJudge,
+  buildRelaunchPromptForPlanner,
+  buildRelaunchPromptForSlave,
+  selectAssignedTask,
+} from "../prompting.js";
 
 const makeTask = (overrides: Partial<TaskRecord>): TaskRecord => {
   return {
@@ -30,6 +36,14 @@ describe("selectAssignedTask", () => {
     const tasks = [makeTask({ id: "a", status: "queued", assignedSlaveId: "c1" })];
     expect(selectAssignedTask({ tasks, slaveId: "c1" })).toBeNull();
   });
+
+  test("breaks ties by id when statuses match", () => {
+    const tasks = [
+      makeTask({ id: "b", status: "running", assignedSlaveId: "c1" }),
+      makeTask({ id: "a", status: "running", assignedSlaveId: "c1" }),
+    ];
+    expect(selectAssignedTask({ tasks, slaveId: "c1" })?.id).toBe("a");
+  });
 });
 
 describe("buildJudgeRelaunchPrompt", () => {
@@ -47,5 +61,55 @@ describe("buildJudgeRelaunchPrompt", () => {
     expect(prompt).toContain("needs_judge");
     expect(prompt).toContain("- a: Check auth");
     expect(prompt).toContain("- b");
+  });
+});
+
+describe("buildRelaunchPromptForSlave", () => {
+  test("uses file dispatch when promptSettings mode is file", () => {
+    const task = makeTask({ id: "t9", status: "running", assignedSlaveId: "c1", prompt: "do it" });
+    const prompt = buildRelaunchPromptForSlave({
+      promptSettings: {
+        mode: "file",
+        planPromptPath: ".clanker/plan-prompt.txt",
+        planPromptAbsolutePath: "/tmp/plan-prompt.txt",
+      },
+      task,
+    });
+    expect(prompt.text).toContain(".clanker/tasks/t9.json");
+  });
+
+  test("uses inline prompt when available", () => {
+    const task = makeTask({ id: "t3", status: "running", assignedSlaveId: "c1", prompt: "hello" });
+    const prompt = buildRelaunchPromptForSlave({
+      promptSettings: {
+        mode: "inline",
+        planPromptPath: ".clanker/plan-prompt.txt",
+        planPromptAbsolutePath: "/tmp/plan-prompt.txt",
+      },
+      task,
+    });
+    expect(prompt.text).toBe("hello");
+  });
+});
+
+describe("buildRelaunchPromptForPlanner", () => {
+  test("uses plan prompt path", () => {
+    const prompt = buildRelaunchPromptForPlanner({
+      promptSettings: {
+        mode: "inline",
+        planPromptPath: ".clanker/plan-prompt.txt",
+        planPromptAbsolutePath: "/tmp/plan-prompt.txt",
+      },
+    });
+    expect(prompt.text).toContain(".clanker/plan-prompt.txt");
+  });
+});
+
+describe("buildRelaunchPromptForJudge", () => {
+  test("returns null when no judge tasks", () => {
+    const prompt = buildRelaunchPromptForJudge({
+      tasks: [makeTask({ id: "a", status: "running" })],
+    });
+    expect(prompt).toBeNull();
   });
 });

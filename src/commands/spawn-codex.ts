@@ -2,60 +2,7 @@ import { spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
 import { join } from "node:path";
 import { getRuntimeOverrides } from "../runtime/overrides.js";
-
-const YARN_LOG_LINE_REGEX = /^(?:\s*➤\s*)?YN\d{4}:/;
-const YARN_INSTALL_LINE_REGEX = /\byarn install\b/i;
-
-export const shouldSuppressYarnInstallLine = ({ line }: { line: string }): boolean => {
-  const trimmed = line.trim();
-  if (trimmed.length === 0) {
-    return false;
-  }
-  return YARN_LOG_LINE_REGEX.test(trimmed) || YARN_INSTALL_LINE_REGEX.test(trimmed);
-};
-
-const attachFilteredPipe = ({
-  source,
-  target,
-  logStream,
-}: {
-  source: NodeJS.ReadableStream | null | undefined;
-  target: NodeJS.WriteStream;
-  logStream: NodeJS.WritableStream;
-}): { flush: () => void } => {
-  let buffer = "";
-  const flush = () => {
-    if (buffer.length === 0) {
-      return;
-    }
-    const pending = buffer;
-    buffer = "";
-    if (!shouldSuppressYarnInstallLine({ line: pending })) {
-      target.write(pending);
-    }
-  };
-  if (!source) {
-    return { flush };
-  }
-  source.on("data", (chunk) => {
-    const text = buffer + chunk.toString("utf-8");
-    const lines = text.split("\n");
-    buffer = lines.pop() ?? "";
-    for (const line of lines) {
-      const hasCarriageReturn = line.endsWith("\r");
-      const outputLine = hasCarriageReturn ? line.slice(0, -1) : line;
-      const newline = hasCarriageReturn ? "\r\n" : "\n";
-      if (!shouldSuppressYarnInstallLine({ line: outputLine })) {
-        target.write(outputLine + newline);
-      }
-    }
-    logStream.write(chunk);
-  });
-  source.on("end", () => {
-    flush();
-  });
-  return { flush };
-};
+import { attachFilteredPipe, wireStdin } from "../codex/process-io.js";
 
 const splitCommand = ({ command }: { command: string }): string[] => {
   const parts: string[] = [];
@@ -162,20 +109,7 @@ export const spawnCodex = async ({
   const finalCli = usePty ? wrapWithPty(cli) : cli;
 
   const child = spawn(finalCli.cmd, finalCli.args, { stdio: ["pipe", "pipe", "pipe"] });
-  if (child.stdin) {
-    const handleData = (chunk: Buffer): void => {
-      if (child.stdin?.writable) {
-        child.stdin.write(chunk);
-      }
-    };
-    process.stdin.on("data", handleData);
-    process.stdin.resume();
-    const cleanup = (): void => {
-      process.stdin.off("data", handleData);
-    };
-    child.on("exit", cleanup);
-    child.on("close", cleanup);
-  }
+  wireStdin({ child });
   const stdoutPipe = attachFilteredPipe({
     source: child.stdout,
     target: process.stdout,

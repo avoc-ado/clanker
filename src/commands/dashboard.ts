@@ -28,6 +28,7 @@ import { buildTaskFileDispatch, getPromptSettings } from "../prompting.js";
 import { dispatchPlannerPrompt } from "./plan.js";
 import { formatDateDivider, formatDateKey, formatStreamLine } from "../dashboard/stream-format.js";
 import { runRelaunch } from "./relaunch.js";
+import { HEARTBEAT_STALE_MS } from "../constants.js";
 import {
   appendHistoryEntry,
   loadCommandHistory,
@@ -854,7 +855,7 @@ export const runDashboard = async ({}: {}): Promise<void> => {
 
     const heartbeats = await readHeartbeats({ heartbeatDir: paths.heartbeatDir });
     const nowMs = Date.now();
-    const staleThresholdMs = 30_000;
+    const staleThresholdMs = HEARTBEAT_STALE_MS;
     const staleCount = heartbeats.filter((hb) =>
       isHeartbeatStale({ heartbeat: hb, nowMs, thresholdMs: staleThresholdMs }),
     ).length;

@@ -5,8 +5,7 @@ import { loadState } from "../state/state.js";
 import { spawnCodex } from "./spawn-codex.js";
 import { extractResumeCommand } from "../codex/resume.js";
 import { getRelaunchPrompt } from "./relaunch-prompt.js";
-
-type RelaunchMode = "resume" | "fresh";
+import { RELAUNCH_SIGNALS, type RelaunchMode } from "../constants.js";
 
 export const runCodexSupervisor = async ({
   paths,
@@ -156,10 +155,10 @@ export const runCodexSupervisor = async ({
     activeChild?.kill("SIGINT");
   };
 
-  process.on("SIGUSR1", () => {
+  process.on(RELAUNCH_SIGNALS.fresh, () => {
     requestRelaunch({ mode: "fresh" });
   });
-  process.on("SIGUSR2", () => {
+  process.on(RELAUNCH_SIGNALS.resume, () => {
     requestRelaunch({ mode: "resume" });
   });
   process.on("SIGINT", () => {

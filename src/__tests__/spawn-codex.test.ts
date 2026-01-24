@@ -1,4 +1,4 @@
-import { shouldSuppressYarnInstallLine } from "../commands/spawn-codex.js";
+import { shouldSuppressYarnInstallLine } from "../codex/process-io.js";
 
 describe("shouldSuppressYarnInstallLine", () => {
   test("suppresses Yarn Berry lines", () => {
