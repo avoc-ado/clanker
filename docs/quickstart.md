@@ -9,7 +9,8 @@ read_when: first-use, onboarding
 
 ## Start
 
-- `clanker` (onboarding + launch all panes)
+- `clanker` (onboarding + spawn tmux session; exits)
+- `clanker --attach` (onboarding + spawn + attach)
 - `clanker dashboard` (dashboard only; skips onboarding)
 - `clanker slave 1` (worker pane)
 - `clanker judge` (integration pane)
@@ -35,7 +36,8 @@ read_when: first-use, onboarding
 
 1. `clanker` (onboarding; creates `clanker.yaml` + `.clanker/` if missing)
 2. Accept defaults or edit missing `clanker.yaml` fields (prompted one-by-one)
-3. `clanker` launches a 3x2 tmux layout: dashboard + planner + judge + 3 slaves
+3. `clanker` spawns a 3x2 tmux layout: dashboard + planner + judge + 3 slaves
+4. Attach with `tmux attach -t clanker-<repo>` (or `--attach`)
 
 ### Plan + Execute
 

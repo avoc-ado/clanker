@@ -69,9 +69,25 @@ const createLayout = async ({
   await runTmux({ args: ["set-window-option", "-t", sessionName, "allow-rename", "off"] });
   await runTmux({ args: ["set-window-option", "-t", sessionName, "automatic-rename", "off"] });
   await runTmux({ args: ["set-option", "-t", sessionName, "set-titles", "off"] });
+  await runTmux({
+    args: ["set-window-option", "-t", `${sessionName}:0`, "pane-min-height", "1"],
+  });
+  await runTmux({
+    args: ["set-window-option", "-t", `${sessionName}:0`, "pane-min-width", "1"],
+  });
 
   for (let i = 1; i < paneCount; i += 1) {
-    await runTmux({ args: ["split-window", "-t", `${sessionName}:0`, "-c", cwd] });
+    try {
+      await runTmux({ args: ["split-window", "-t", `${sessionName}:0`, "-c", cwd] });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("no space for new pane")) {
+        throw new Error(
+          `tmux window too small for ${paneCount} panes; resize terminal or lower planners/judges/slaves`,
+        );
+      }
+      throw error;
+    }
   }
   await runTmux({ args: ["select-layout", "-t", `${sessionName}:0`, "tiled"] });
   return listPaneIds({ sessionName });
@@ -150,7 +166,7 @@ const configurePanes = async ({
   }
 };
 
-export const runLaunch = async (): Promise<void> => {
+export const runLaunch = async ({ attach }: { attach?: boolean } = {}): Promise<void> => {
   const repoRoot = process.cwd();
   await runOnboardingIfNeeded({ repoRoot });
   const config = await loadConfig({ repoRoot });
@@ -186,5 +202,10 @@ export const runLaunch = async (): Promise<void> => {
     await configurePanes({ sessionName, paneIds, specs, cliPath });
   }
 
-  await attachSession({ sessionName });
+  if (attach) {
+    await attachSession({ sessionName });
+    return;
+  }
+  console.log(`clanker started tmux session ${sessionName}`);
+  console.log(`attach with: tmux attach -t ${sessionName}`);
 };

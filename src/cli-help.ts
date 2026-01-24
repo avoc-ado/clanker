@@ -4,8 +4,8 @@ Usage:
   clanker [command] [options]
 
 Commands:
-  dashboard (default)
-  plan
+  (default) launch tmux session + panes
+  dashboard
   planner
   slave [id]
   judge
@@ -22,5 +22,6 @@ Options:
   --codex-tty
   --disable-codex
   --prompt-file <path>
+  --attach
   -h, --help
 `;
