@@ -8,8 +8,9 @@ import type { TmuxPane } from "../tmux.js";
 import { formatTaskSchema } from "../plan/schema.js";
 import { buildContextPack } from "../context/context-pack.js";
 import { loadConfig } from "../config.js";
-import { buildPlanFileDispatch, getPromptSettings } from "../prompting.js";
-import { buildBasePrompt, ClankerRole } from "../prompting/role-prompts.js";
+import { getPromptSettings } from "../prompting.js";
+import { buildBasePrompt, buildPlanFileDispatch, ClankerRole } from "../prompting/role-prompts.js";
+import { parsePlannerTitle } from "../tmux-title-utils.js";
 
 const formatContextEntries = ({
   entries,
@@ -61,17 +62,14 @@ export const buildPlannerPrompt = ({
 export const selectPlannerPane = ({ panes }: { panes: TmuxPane[] }): TmuxPane | null => {
   const planners = panes
     .map((pane) => {
-      const normalized = pane.title.startsWith("clanker:")
-        ? pane.title.replace("clanker:", "")
-        : pane.title;
-      const match = /^planner(?:-?(.+))?$/.exec(normalized);
-      if (!match) {
+      const parsed = parsePlannerTitle({ title: pane.title });
+      if (!parsed) {
         return null;
       }
       return {
         pane,
-        isDefault: !match[1],
-        id: match[1] ?? "",
+        isDefault: parsed.isDefault,
+        id: parsed.id,
       };
     })
     .filter((entry): entry is { pane: TmuxPane; isDefault: boolean; id: string } => Boolean(entry));

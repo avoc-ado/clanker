@@ -1,11 +1,11 @@
 import type { TaskRecord } from "../state/tasks.js";
 import {
-  buildJudgeRelaunchPrompt,
   buildRelaunchPromptForJudge,
   buildRelaunchPromptForPlanner,
   buildRelaunchPromptForSlave,
   selectAssignedTask,
 } from "../prompting.js";
+import { buildJudgeRelaunchPrompt } from "../prompting/role-prompts.js";
 
 const makeTask = (overrides: Partial<TaskRecord>): TaskRecord => {
   return {

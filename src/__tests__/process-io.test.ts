@@ -1,6 +1,10 @@
 import { spawn } from "node:child_process";
 import { PassThrough, Writable } from "node:stream";
-import { attachFilteredPipe, wireStdin } from "../codex/process-io.js";
+import {
+  attachFilteredPipe,
+  shouldSuppressYarnInstallLine,
+  wireStdin,
+} from "../codex/process-io.js";
 
 describe("attachFilteredPipe", () => {
   test("filters yarn install output and forwards others", async () => {
@@ -34,6 +38,28 @@ describe("attachFilteredPipe", () => {
     expect(logs.join("")).toContain("YN0000");
   });
 
+  test("flushes buffered yarn install line on end without forwarding", async () => {
+    const source = new PassThrough();
+    const outputs: string[] = [];
+    const target = new Writable({
+      write(chunk, _enc, cb) {
+        outputs.push(chunk.toString());
+        cb();
+      },
+    });
+    const logStream = new Writable({
+      write(_chunk, _enc, cb) {
+        cb();
+      },
+    });
+    attachFilteredPipe({ source, target, logStream });
+
+    source.end("yarn install");
+    await new Promise((resolve) => source.on("end", resolve));
+
+    expect(outputs.length).toBe(0);
+  });
+
   test("flushes when no source provided", () => {
     const outputs: string[] = [];
     const target = new Writable({
@@ -50,6 +76,16 @@ describe("attachFilteredPipe", () => {
     const pipe = attachFilteredPipe({ source: null, target, logStream });
     pipe.flush();
     expect(outputs.length).toBe(0);
+  });
+});
+
+describe("shouldSuppressYarnInstallLine", () => {
+  test("returns false for blank lines", () => {
+    expect(shouldSuppressYarnInstallLine({ line: "   " })).toBe(false);
+  });
+
+  test("returns true for yarn install output", () => {
+    expect(shouldSuppressYarnInstallLine({ line: "yarn install --frozen-lockfile" })).toBe(true);
   });
 });
 
@@ -74,5 +110,31 @@ describe("wireStdin", () => {
     expect(output).toBe("ping");
 
     child.kill("SIGTERM");
+  });
+
+  test("returns early when child stdin missing", async () => {
+    const child = spawn(process.execPath, ["-e", "setTimeout(()=>{}, 50)"], {
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+
+    wireStdin({ child });
+
+    child.kill("SIGTERM");
+    await new Promise((resolve) => child.once("exit", resolve));
+  });
+
+  test("wires to process.stdin by default and cleans up on exit", async () => {
+    const child = spawn(process.execPath, ["-e", "setTimeout(()=>{}, 50)"], {
+      stdio: ["pipe", "ignore", "ignore"],
+    });
+    const before = process.stdin.listenerCount("data");
+
+    wireStdin({ child });
+    child.kill("SIGTERM");
+    await new Promise((resolve) => child.once("exit", resolve));
+    process.stdin.pause();
+
+    const after = process.stdin.listenerCount("data");
+    expect(after).toBe(before);
   });
 });

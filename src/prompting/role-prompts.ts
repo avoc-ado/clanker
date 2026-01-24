@@ -47,3 +47,31 @@ export const buildBasePrompt = ({ role }: { role: ClankerRole }): string => {
     }
   }
 };
+
+export const buildPlanFileDispatch = ({ promptPath }: { promptPath: string }): string =>
+  `Open ${promptPath} and follow it exactly. Create task packets in .clanker/tasks now.`;
+
+export const buildTaskFileDispatch = ({ taskId }: { taskId: string }): string =>
+  `Open .clanker/tasks/${taskId}.json and execute it. Follow the instructions exactly.`;
+
+export const buildJudgeRelaunchPrompt = ({
+  tasks,
+}: {
+  tasks: { id: string; title?: string; status: string }[];
+}): string | null => {
+  const pending = tasks.filter((task) => task.status === "needs_judge");
+  if (pending.length === 0) {
+    return null;
+  }
+  const list = pending
+    .map((task) => (task.title ? `- ${task.id}: ${task.title}` : `- ${task.id}`))
+    .join("\n");
+  return [
+    "You are the judge.",
+    "Review tasks marked needs_judge in .clanker/tasks.",
+    list ? `Current queue:\n${list}` : null,
+    "For each task: open .clanker/tasks/<id>.json, validate changes, then set status to done/rework/blocked/failed via `clanker task status <id> <status>`.",
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
+};

@@ -2,6 +2,11 @@ import { isAbsolute, join } from "node:path";
 import type { ClankerConfig } from "./config.js";
 import type { TaskRecord } from "./state/tasks.js";
 import { getRuntimeOverrides } from "./runtime/overrides.js";
+import {
+  buildJudgeRelaunchPrompt,
+  buildPlanFileDispatch,
+  buildTaskFileDispatch,
+} from "./prompting/role-prompts.js";
 
 export interface PromptSettings {
   mode: "inline" | "file";
@@ -48,12 +53,6 @@ export const getPromptSettings = ({
   };
 };
 
-export const buildPlanFileDispatch = ({ promptPath }: { promptPath: string }): string =>
-  `Open ${promptPath} and follow it exactly. Create task packets in .clanker/tasks now.`;
-
-export const buildTaskFileDispatch = ({ taskId }: { taskId: string }): string =>
-  `Open .clanker/tasks/${taskId}.json and execute it. Follow the instructions exactly.`;
-
 const SLAVE_ACTIVE_STATUSES = new Set(["running", "rework"]);
 
 export interface RelaunchPrompt {
@@ -85,24 +84,6 @@ export const selectAssignedTask = ({
       return left.id.localeCompare(right.id);
     })[0] ?? null
   );
-};
-
-export const buildJudgeRelaunchPrompt = ({ tasks }: { tasks: TaskRecord[] }): string | null => {
-  const pending = tasks.filter((task) => task.status === "needs_judge");
-  if (pending.length === 0) {
-    return null;
-  }
-  const list = pending
-    .map((task) => (task.title ? `- ${task.id}: ${task.title}` : `- ${task.id}`))
-    .join("\n");
-  return [
-    "You are the judge.",
-    "Review tasks marked needs_judge in .clanker/tasks.",
-    list ? `Current queue:\n${list}` : null,
-    "For each task: open .clanker/tasks/<id>.json, validate changes, then set status to done/rework/blocked/failed via `clanker task status <id> <status>`.",
-  ]
-    .filter((line): line is string => Boolean(line))
-    .join("\n");
 };
 
 export const buildRelaunchPromptForPlanner = ({

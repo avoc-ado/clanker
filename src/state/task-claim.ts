@@ -1,7 +1,6 @@
 import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-
-const TASK_LOCK_TTL_MS = 60_000;
+import { TASK_LOCK_TTL_MS } from "../constants.js";
 
 interface TaskLockPayload {
   key: string;

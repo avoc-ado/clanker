@@ -1,9 +1,6 @@
 import type { Heartbeat } from "../state/heartbeat.js";
-import {
-  normalizeRelaunchTarget,
-  parseRelaunchArgs,
-  selectRelaunchTargets,
-} from "../commands/relaunch.js";
+import { normalizeRelaunchTarget, parseRelaunchArgs } from "../commands/relaunch.js";
+import { buildRelaunchEvent, selectRelaunchTargets } from "../relaunch/core.js";
 
 describe("normalizeRelaunchTarget", () => {
   test("accepts canonical cN ids", () => {
@@ -80,5 +77,21 @@ describe("selectRelaunchTargets", () => {
     });
     expect(result.eligible.map((hb) => hb.slaveId)).toEqual(["c1"]);
     expect(result.skipped.map((entry) => entry.slaveId).sort()).toEqual(["c2", "c3"]);
+  });
+});
+
+describe("buildRelaunchEvent", () => {
+  test("builds relaunch event payload", () => {
+    const event = buildRelaunchEvent({
+      mode: "resume",
+      heartbeat: {
+        slaveId: "c1",
+        ts: new Date("2026-01-24T00:00:00.000Z").toISOString(),
+        pid: 123,
+      },
+    });
+    expect(event.type).toBe("CODEX_RELAUNCH_REQUEST");
+    expect(event.slaveId).toBe("c1");
+    expect(event.data?.pid).toBe(123);
   });
 });

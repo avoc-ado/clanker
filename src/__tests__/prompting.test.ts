@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import type { ClankerConfig } from "../config.js";
-import { buildPlanFileDispatch, buildTaskFileDispatch, getPromptSettings } from "../prompting.js";
+import { getPromptSettings } from "../prompting.js";
+import { buildPlanFileDispatch, buildTaskFileDispatch } from "../prompting/role-prompts.js";
 import { setRuntimeOverrides } from "../runtime/overrides.js";
 
 const makeConfig = ({ promptFile }: { promptFile?: string }): ClankerConfig => ({
