@@ -4,6 +4,25 @@ import { join } from "node:path";
 import { getRuntimeOverrides } from "../runtime/overrides.js";
 import { attachFilteredPipe, wireStdin } from "../codex/process-io.js";
 
+const attachRawPipe = ({
+  source,
+  target,
+  logStream,
+}: {
+  source: NodeJS.ReadableStream | null | undefined;
+  target: NodeJS.WriteStream;
+  logStream: NodeJS.WritableStream;
+}): { flush: () => void } => {
+  if (!source) {
+    return { flush: () => {} };
+  }
+  source.on("data", (chunk) => {
+    target.write(chunk);
+    logStream.write(chunk);
+  });
+  return { flush: () => {} };
+};
+
 const splitCommand = ({ command }: { command: string }): string[] => {
   const parts: string[] = [];
   let current = "";
@@ -107,15 +126,18 @@ export const spawnCodex = async ({
   const cli = await resolveCliCommand({ override: command });
   const usePty = Boolean(overrides.codexTty);
   const finalCli = usePty ? wrapWithPty(cli) : cli;
-
-  const child = spawn(finalCli.cmd, finalCli.args, { stdio: ["pipe", "pipe", "pipe"] });
+  const stdio: ["pipe" | "inherit", "pipe", "pipe"] = usePty
+    ? ["inherit", "pipe", "pipe"]
+    : ["pipe", "pipe", "pipe"];
+  const child = spawn(finalCli.cmd, finalCli.args, { stdio });
   wireStdin({ child });
-  const stdoutPipe = attachFilteredPipe({
+  const attachPipe = usePty ? attachRawPipe : attachFilteredPipe;
+  const stdoutPipe = attachPipe({
     source: child.stdout,
     target: process.stdout,
     logStream,
   });
-  const stderrPipe = attachFilteredPipe({
+  const stderrPipe = attachPipe({
     source: child.stderr,
     target: process.stderr,
     logStream,
