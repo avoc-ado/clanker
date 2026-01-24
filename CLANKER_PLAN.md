@@ -245,7 +245,6 @@ flowchart TD
 - Slave: task spec + context pack + repo paths + guardrails
 - Judge: task spec + slave summary + verify checklist + repo state
 - Rework: judge verdict + required fixes + failing tests
-- Handoff fix: missing fields list + regenerated packet
 - Regression: repro steps + failing test/log + expected fix
 - Health-check: plan goals + current main behavior + acceptance checklist
 - Permission escalation: command request + rationale + risk
@@ -289,14 +288,6 @@ OUTPUT: verdict done/rework + verify steps + regressions. Conflicts/test failure
 ROLE: slave. Rework same task. Address judge notes precisely.
 INPUT: {judgeVerdict} {failingTests} {requiredFixes}
 OUTPUT: updated summary + re-run tests.
-```
-
-#### Handoff Fix
-
-```
-ROLE: planner. Regenerate missing handoff fields.
-MISSING: {missingFields}
-OUTPUT: complete task packet; reassign.
 ```
 
 #### Regression

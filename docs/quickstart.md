@@ -62,6 +62,11 @@ read_when: first-use, onboarding
 1. Stop each pane (Ctrl-C) or `tmux kill-session`
 2. State stays in `.clanker/` for later `clanker` run
 
+## Observability
+
+- Primary runtime trace lives in `.clanker/events.log`; keep it for diagnosing agent pathologies.
+- Handoffs and summaries in `.clanker/history/`.
+
 ## Task Flow
 
 1. Write/update `docs/plan-*.md`

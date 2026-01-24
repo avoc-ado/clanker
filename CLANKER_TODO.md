@@ -26,7 +26,6 @@
 - Real IT: full flow runs dashboard + planner + slaves + judge and checks artifact output
 - Add IT: rework routing + failed status transitions
 - Add IT: multi-slave scheduler assignment + stale heartbeat handling (no tmux)
-- Eliminate handoff_fix status (judge -> rework or fail)
 - Add IT: tmux attach (pane discovery + send-keys)
 - Add IT: lock/ownership conflict detection (ownerDirs + ownerFiles)
 - Define lock expiry policy + tests (stale heartbeat unlocks)

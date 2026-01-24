@@ -43,6 +43,8 @@ export const buildPlannerPrompt = ({
     "Use the plan docs included below and create task packets in .clanker/tasks/.",
     "Task packets are JSON files. Keep tasks small and non-overlapping.",
     "If a task looks too large or risks running out of tokens, split it into smaller tasks.",
+    "Fill in blanks: research code/docs/web; write findings to docs/research/ before tasks.",
+    "Favor hard route, no shortcuts; modicum progress is valuable.",
     "Emit exactly one task packet per prompt; clanker will re-prompt for more.",
     "Do not require clanker-specific commands inside the task prompt.",
     "Handoff rules: tasks must be self-contained; include tests to run and done criteria in the prompt.",
