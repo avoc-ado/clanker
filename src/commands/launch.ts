@@ -112,14 +112,14 @@ const listPaneIds = async ({ sessionName }: { sessionName: string }): Promise<st
 
 const listWindowPaneId = async ({
   sessionName,
-  windowIndex,
+  windowName,
 }: {
   sessionName: string;
-  windowIndex: number;
+  windowName: string;
 }): Promise<string | null> => {
   try {
     const output = await runTmux({
-      args: ["list-panes", "-t", `${sessionName}:${windowIndex}`, "-F", "#{pane_id}"],
+      args: ["list-panes", "-t", `${sessionName}:${windowName}`, "-F", "#{pane_id}"],
     });
     const paneId = output.split("\n")[0]?.trim();
     return paneId && paneId.length > 0 ? paneId : null;
@@ -165,6 +165,32 @@ const createLayout = async ({
   return listPaneIds({ sessionName });
 };
 
+const ensureWindowedLayout = async ({
+  sessionName,
+  cwd,
+  specs,
+  hideStatus,
+}: {
+  sessionName: string;
+  cwd: string;
+  specs: PaneSpec[];
+  hideStatus?: boolean;
+}): Promise<string[]> => {
+  const paneIds: string[] = [];
+  for (let i = 0; i < specs.length; i += 1) {
+    const title = specs[i]?.title ?? `clanker-${i + 1}`;
+    let paneId = await listWindowPaneId({ sessionName, windowName: title });
+    if (!paneId) {
+      await runTmux({ args: ["new-window", "-t", sessionName, "-n", title, "-c", cwd] });
+      paneId = await listWindowPaneId({ sessionName, windowName: title });
+    }
+    if (paneId) {
+      paneIds.push(paneId);
+    }
+  }
+  return paneIds;
+};
+
 const createWindowedLayout = async ({
   sessionName,
   cwd,
@@ -181,20 +207,7 @@ const createWindowedLayout = async ({
     args: ["new-session", "-d", "-s", sessionName, "-n", firstName, "-c", cwd],
   });
   await applySessionOptions({ sessionName, hideStatus });
-  const paneIds: string[] = [];
-  const firstPaneId = await listWindowPaneId({ sessionName, windowIndex: 0 });
-  if (firstPaneId) {
-    paneIds.push(firstPaneId);
-  }
-  for (let i = 1; i < specs.length; i += 1) {
-    const title = specs[i]?.title ?? `clanker-${i + 1}`;
-    await runTmux({ args: ["new-window", "-t", sessionName, "-n", title, "-c", cwd] });
-    const paneId = await listWindowPaneId({ sessionName, windowIndex: i });
-    if (paneId) {
-      paneIds.push(paneId);
-    }
-  }
-  return paneIds;
+  return ensureWindowedLayout({ sessionName, cwd, specs, hideStatus });
 };
 
 const attachSession = async ({ sessionName }: { sessionName: string }): Promise<void> => {
@@ -242,18 +255,18 @@ const escapeShellArg = ({ value }: { value: string }): string => {
 
 export const buildTmuxAttachCommands = ({
   sessionName,
-  paneCount,
+  windowNames,
   tmuxSocket,
 }: {
   sessionName: string;
-  paneCount: number;
+  windowNames: string[];
   tmuxSocket?: string;
 }): string[] => {
   const baseArgs = tmuxSocket
     ? ["tmux", "-S", tmuxSocket, "attach-session"]
     : ["tmux", "attach-session"];
-  return Array.from({ length: paneCount }, (_, index) => {
-    const target = `${sessionName}:${index}`;
+  return windowNames.map((name) => {
+    const target = `${sessionName}:${name}`;
     return [...baseArgs, "-t", target].map((part) => escapeShellArg({ value: part })).join(" ");
   });
 };
@@ -346,12 +359,19 @@ export const runLaunch = async ({
     await configurePanes({ sessionName, paneIds, specs, cliPath, nodeArgs });
   } else if (isItermMode) {
     await applySessionOptions({ sessionName, hideStatus: true });
+    const paneIds = await ensureWindowedLayout({
+      sessionName,
+      cwd: repoRoot,
+      specs,
+      hideStatus: true,
+    });
+    await configurePanes({ sessionName, paneIds, specs, cliPath, nodeArgs });
   }
 
   if (isItermMode) {
     const commands = buildTmuxAttachCommands({
       sessionName,
-      paneCount: specs.length,
+      windowNames: specs.map((spec) => spec.title),
       tmuxSocket: process.env.CLANKER_TMUX_SOCKET,
     });
     await launchIterm({ cwd: repoRoot, commands });
