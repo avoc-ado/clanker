@@ -55,6 +55,17 @@ export type ConfigKey = (typeof CONFIG_KEYS)[number];
 
 type ParsedConfig = Partial<Record<ConfigKey, unknown>> & { tmuxSession?: unknown };
 
+export const CONFIG_COMMENTS: Record<ConfigKey, string> = {
+  planners: `# default: ${DEFAULT_CONFIG.planners}. Number of Planner terminals.`,
+  judges: `# default: ${DEFAULT_CONFIG.judges}. Number of Judge terminals.`,
+  slaves: `# default: ${DEFAULT_CONFIG.slaves}. Number of Slave terminals.`,
+  backlog: `# default: ${DEFAULT_CONFIG.backlog}. Queued task backlog target.`,
+  startImmediately: `# default: ${DEFAULT_CONFIG.startImmediately}. Start in /resume state.`,
+  tmuxFilter: "# default: clanker-<repo>. Tmux session filter override.",
+  codexCommand: `# default: ${DEFAULT_CONFIG.codexCommand}. Command used to launch Codex CLI.`,
+  promptFile: '# default: "". (testing/automation) Prompt file path for plan dispatch.',
+};
+
 const escapeYamlString = ({ value }: { value: string }): string =>
   value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 
@@ -232,28 +243,28 @@ const formatConfigString = ({ value }: { value: ConfigValue<string> }): string =
 
 export const formatConfigTemplate = ({ config }: { config: ClankerConfigTemplate }): string => {
   return [
-    `# default: ${DEFAULT_CONFIG.planners}. Number of Planner terminals.`,
+    CONFIG_COMMENTS.planners,
     `planners: ${formatConfigValue({ value: config.planners })}`,
     "",
-    `# default: ${DEFAULT_CONFIG.judges}. Number of Judge terminals.`,
+    CONFIG_COMMENTS.judges,
     `judges: ${formatConfigValue({ value: config.judges })}`,
     "",
-    `# default: ${DEFAULT_CONFIG.slaves}. Number of Slave terminals.`,
+    CONFIG_COMMENTS.slaves,
     `slaves: ${formatConfigValue({ value: config.slaves })}`,
     "",
-    `# default: ${DEFAULT_CONFIG.backlog}. Queued task backlog target.`,
+    CONFIG_COMMENTS.backlog,
     `backlog: ${formatConfigValue({ value: config.backlog })}`,
     "",
-    `# default: ${DEFAULT_CONFIG.startImmediately}. Start in /resume state.`,
+    CONFIG_COMMENTS.startImmediately,
     `startImmediately: ${formatConfigValue({ value: config.startImmediately })}`,
     "",
-    "# default: clanker-<repo>. Tmux session filter override.",
+    CONFIG_COMMENTS.tmuxFilter,
     `tmuxFilter: ${formatConfigString({ value: config.tmuxFilter })}`,
     "",
-    `# default: ${DEFAULT_CONFIG.codexCommand}. Command used to launch Codex CLI.`,
+    CONFIG_COMMENTS.codexCommand,
     `codexCommand: ${formatConfigString({ value: config.codexCommand })}`,
     "",
-    '# default: "". (testing/automation) Prompt file path for plan dispatch.',
+    CONFIG_COMMENTS.promptFile,
     `promptFile: ${formatConfigString({ value: config.promptFile })}`,
     "",
   ].join("\n");

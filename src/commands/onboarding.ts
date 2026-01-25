@@ -5,6 +5,7 @@ import {
   CONFIG_KEYS,
   DEFAULT_CONFIG,
   DEFAULT_SENTINEL,
+  CONFIG_COMMENTS,
   buildTemplateConfig,
   formatConfigTemplate,
   parseConfigFile,
@@ -126,6 +127,7 @@ export const runOnboardingIfNeeded = async ({
   const updated: Record<string, unknown> = { ...parsed };
   try {
     for (const key of missingKeys) {
+      console.log(CONFIG_COMMENTS[key]);
       if (key === "planners") {
         updated.planners = await askNumber({
           rl,
