@@ -10,7 +10,7 @@ read_when: first-use, onboarding
 ## Start
 
 - macOS default uses iTerm2 (install iTerm2 or pass `--tmux`).
-- iTerm2 mode does not create a tmux session; use `--tmux` for tmux control.
+- iTerm2 mode runs a background tmux session for routing; use `--tmux` to attach directly.
 - `clanker` (onboarding + spawn iTerm2 window; exits)
 - `clanker --tmux` (onboarding + spawn tmux session; exits)
 - `clanker --tmux --attach` (spawn + attach)
@@ -40,7 +40,7 @@ read_when: first-use, onboarding
 1. `clanker` (onboarding; creates `clanker.yaml` + `.clanker/` if missing)
 2. Accept defaults or edit missing `clanker.yaml` fields (prompted one-by-one)
 3. `clanker` spawns a 3x2 iTerm2 grid: dashboard + planner + judge + 3 slaves
-4. If using tmux: attach with `tmux attach -t clanker-<repo>`
+4. tmux session is still available: `tmux attach -t clanker-<repo>`
 
 ### Plan + Execute
 
