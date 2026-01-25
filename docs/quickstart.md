@@ -76,7 +76,7 @@ read_when: first-use, onboarding
 ## Task Flow
 
 1. Write/update `docs/plan-*.md`
-2. `/resume` injects plan context (or rely on `startImmediately: true`)
+2. `/resume` injects plan context (or set `startImmediately: true` if you want auto-resume; default false)
 3. Tasks land in `.clanker/tasks/*.json`
 4. Slaves execute → `needs_judge`
 5. Judge verifies → `done` or `rework`

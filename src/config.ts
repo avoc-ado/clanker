@@ -34,7 +34,7 @@ export const DEFAULT_CONFIG = {
   judges: 1,
   slaves: 3,
   backlog: 3,
-  startImmediately: true,
+  startImmediately: false,
   tmuxFilter: undefined,
   codexCommand: "codex --no-alt-screen --sandbox workspace-write",
   promptFile: undefined,

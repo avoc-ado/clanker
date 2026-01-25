@@ -17,7 +17,7 @@ describe("loadConfig", () => {
     expect(config.judges).toBe(1);
     expect(config.slaves).toBe(3);
     expect(config.backlog).toBe(3);
-    expect(config.startImmediately).toBe(true);
+    expect(config.startImmediately).toBe(false);
     expect(config.tmuxFilter).toBe(`clanker-${basename(root)}`);
     expect(config.codexCommand).toBe("codex --no-alt-screen --sandbox workspace-write");
     expect(config.promptFile).toBeUndefined();
@@ -78,7 +78,7 @@ describe("loadConfig", () => {
     expect(config.judges).toBe(1);
     expect(config.slaves).toBe(2);
     expect(config.backlog).toBe(3);
-    expect(config.startImmediately).toBe(true);
+    expect(config.startImmediately).toBe(false);
     expect(config.tmuxFilter).toBe(`clanker-${basename(root)}`);
     expect(config.codexCommand).toBe("codex --no-alt-screen --sandbox workspace-write");
     expect(config.promptFile).toBeUndefined();
@@ -95,7 +95,7 @@ describe("loadConfig", () => {
     expect(raw).toContain("judges: default");
     expect(raw).toContain("slaves: 4");
     expect(raw).toContain("backlog: 5");
-    expect(raw).toContain("startImmediately: false");
+    expect(raw).toContain("startImmediately: default");
     expect(raw).toContain('tmuxFilter: "dev"');
     expect(raw).toContain('codexCommand: "codex"');
     expect(raw).toContain('promptFile: "prompt.txt"');
@@ -154,7 +154,7 @@ describe("loadConfig", () => {
     expect(config.judges).toBe(1);
     expect(config.slaves).toBe(3);
     expect(config.backlog).toBe(3);
-    expect(config.startImmediately).toBe(true);
+    expect(config.startImmediately).toBe(false);
     expect(config.tmuxFilter).toBe(`clanker-${basename(root)}`);
     expect(config.codexCommand).toBe("codex --no-alt-screen --sandbox workspace-write");
     expect(config.promptFile).toBeUndefined();
