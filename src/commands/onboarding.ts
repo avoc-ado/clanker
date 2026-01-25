@@ -62,14 +62,19 @@ const askBoolean = async ({
   rl,
   label,
   fallback,
+  includeDefault = true,
 }: {
   rl: readline.Interface;
   label: string;
   fallback: boolean;
+  includeDefault?: boolean;
 }): Promise<boolean | string> => {
   const hint = fallback ? "Y/n" : "y/N";
   while (true) {
-    const answer = await ask({ rl, prompt: `${label} (${hint}, default ${fallback}): ` });
+    const prompt = includeDefault
+      ? `${label} (${hint}, default ${fallback}): `
+      : `${label} (${hint}): `;
+    const answer = await ask({ rl, prompt });
     if (!answer.trim() || isDefaultAnswer({ answer })) {
       return DEFAULT_SENTINEL;
     }
@@ -159,6 +164,7 @@ export const runOnboardingIfNeeded = async ({
           rl,
           label: "startImmediately",
           fallback: DEFAULT_CONFIG.startImmediately,
+          includeDefault: false,
         });
         continue;
       }
