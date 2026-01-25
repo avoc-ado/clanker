@@ -40,6 +40,45 @@ const hasSession = async ({ sessionName }: { sessionName: string }): Promise<boo
   }
 };
 
+const escapeHookCommand = ({ value }: { value: string }): string => {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+};
+
+const configureDetachHooks = async ({ sessionName }: { sessionName: string }): Promise<void> => {
+  const sessionTarget = `${sessionName}:`;
+  const sessionCheck = [
+    'if -F "#{==:#{session_name},' + sessionName + '}"',
+    "{",
+    `run-shell "tmux list-clients -t ${sessionTarget} 2>/dev/null | wc -l | grep -q '^0$' && tmux kill-session -t ${sessionTarget}"`,
+    "}",
+  ].join(" ");
+  const windowCheck = [
+    'if -F "#{==:#{session_name},' + sessionName + '}"',
+    "{",
+    `run-shell "tmux list-clients -t ${sessionTarget} -F '#{client_window}' 2>/dev/null | grep -q '^#{window_id}$' || tmux kill-window -t #{window_id}"`,
+    "}",
+  ].join(" ");
+  await runTmux({
+    args: [
+      "set-hook",
+      "-t",
+      sessionName,
+      "client-detached",
+      escapeHookCommand({ value: sessionCheck }),
+    ],
+  });
+  await runTmux({
+    args: [
+      "set-hook",
+      "-t",
+      sessionName,
+      "client-detached",
+      escapeHookCommand({ value: windowCheck }),
+      "-a",
+    ],
+  });
+};
+
 const resolveCliPath = async ({ repoRoot }: { repoRoot: string }): Promise<string> => {
   const distPath = join(repoRoot, "dist", "cli.js");
   try {
@@ -357,6 +396,7 @@ export const runLaunch = async ({
           paneCount: specs.length,
         });
     await configurePanes({ sessionName, paneIds, specs, cliPath, nodeArgs });
+    await configureDetachHooks({ sessionName });
   } else if (isItermMode) {
     await applySessionOptions({ sessionName, hideStatus: true });
     const paneIds = await ensureWindowedLayout({
@@ -366,6 +406,7 @@ export const runLaunch = async ({
       hideStatus: true,
     });
     await configurePanes({ sessionName, paneIds, specs, cliPath, nodeArgs });
+    await configureDetachHooks({ sessionName });
   }
 
   if (isItermMode) {
