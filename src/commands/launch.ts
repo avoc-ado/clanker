@@ -273,17 +273,15 @@ const buildPaneSpecs = ({
 }): PaneSpec[] => {
   const specs: PaneSpec[] = [{ title: "dashboard", args: ["dashboard"], usesCodex: false }];
   for (let i = 1; i <= planners; i += 1) {
-    const suffix = i === 1 ? "" : `${i}`;
     const args = i === 1 ? ["planner"] : ["planner", `${i}`];
-    specs.push({ title: `planner${suffix}`, args, usesCodex: true });
+    specs.push({ title: `planner-${i}`, args, usesCodex: true });
   }
   for (let i = 1; i <= judges; i += 1) {
-    const suffix = i === 1 ? "" : `${i}`;
     const args = i === 1 ? ["judge"] : ["judge", `${i}`];
-    specs.push({ title: `judge${suffix}`, args, usesCodex: true });
+    specs.push({ title: `judge-${i}`, args, usesCodex: true });
   }
   for (let i = 1; i <= slaves; i += 1) {
-    specs.push({ title: `c${i}`, args: ["slave", `${i}`], usesCodex: true });
+    specs.push({ title: `slave-${i}`, args: ["slave", `${i}`], usesCodex: true });
   }
   return specs;
 };

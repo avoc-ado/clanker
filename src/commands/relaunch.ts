@@ -25,11 +25,17 @@ export const normalizeRelaunchTarget = ({ target }: { target: string }): string 
   if (!trimmed) {
     throw new Error("Missing relaunch target");
   }
-  if (/^c\d+$/.test(trimmed)) {
+  if (/^slave-\d+$/.test(trimmed)) {
     return trimmed;
   }
   if (/^\d+$/.test(trimmed)) {
-    return `c${trimmed}`;
+    return `slave-${trimmed}`;
+  }
+  if (trimmed === "planner") {
+    return "planner-1";
+  }
+  if (trimmed === "judge") {
+    return "judge-1";
   }
   return trimmed;
 };

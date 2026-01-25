@@ -10,8 +10,8 @@ describe("selectPlannerPane", () => {
   test("prefers default planner pane", () => {
     const panes = [
       makePane({ id: "%1", title: "clanker:planner-2" }),
-      makePane({ id: "%2", title: "clanker:planner" }),
-      makePane({ id: "%3", title: "clanker:planner-1" }),
+      makePane({ id: "%2", title: "clanker:planner-1" }),
+      makePane({ id: "%3", title: "clanker:planner-3" }),
     ];
     expect(selectPlannerPane({ panes })?.paneId).toBe("%2");
   });
@@ -33,7 +33,7 @@ describe("selectPlannerPane", () => {
   });
 
   test("returns null when no planner pane exists", () => {
-    const panes = [makePane({ id: "%1", title: "c1" })];
+    const panes = [makePane({ id: "%1", title: "slave-1" })];
     expect(selectPlannerPane({ panes })).toBeNull();
   });
 });

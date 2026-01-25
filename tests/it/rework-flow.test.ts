@@ -33,7 +33,7 @@ describe("integration: rework routing", () => {
       throw new Error("missing task t2");
     }
     task.status = "running";
-    task.assignedSlaveId = "c1";
+    task.assignedSlaveId = "slave-1";
     task.promptedAt = new Date().toISOString();
     await saveTask({ tasksDir, task });
 
@@ -44,7 +44,7 @@ describe("integration: rework routing", () => {
       throw new Error("missing task t2 after rework");
     }
     expect(updated.status).toBe("rework");
-    expect(updated.assignedSlaveId).toBe("c1");
+    expect(updated.assignedSlaveId).toBe("slave-1");
     expect(updated.promptedAt).toBeUndefined();
   });
 
@@ -71,7 +71,7 @@ describe("integration: rework routing", () => {
       throw new Error("missing task t3");
     }
     task.status = "running";
-    task.assignedSlaveId = "c2";
+    task.assignedSlaveId = "slave-2";
     task.promptedAt = new Date().toISOString();
     await saveTask({ tasksDir, task });
 

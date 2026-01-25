@@ -6,11 +6,15 @@ import { readHeartbeats } from "../state/read-heartbeats.js";
 describe("readHeartbeats", () => {
   test("reads heartbeat files", async () => {
     const root = await mkdtemp(join(tmpdir(), "clanker-hb-read-"));
-    await writeFile(join(root, "c1.json"), JSON.stringify({ slaveId: "c1", ts: "now" }), "utf-8");
+    await writeFile(
+      join(root, "slave-1.json"),
+      JSON.stringify({ slaveId: "slave-1", ts: "now" }),
+      "utf-8",
+    );
 
     const heartbeats = await readHeartbeats({ heartbeatDir: root });
     expect(heartbeats.length).toBe(1);
-    expect(heartbeats[0]?.slaveId).toBe("c1");
+    expect(heartbeats[0]?.slaveId).toBe("slave-1");
   });
 
   test("ignores invalid heartbeat files", async () => {

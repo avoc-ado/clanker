@@ -26,23 +26,23 @@ const makeTask = (overrides: Partial<TaskRecord>): TaskRecord => {
 describe("selectAssignedTask", () => {
   test("prefers running over rework", () => {
     const tasks = [
-      makeTask({ id: "b", status: "rework", assignedSlaveId: "c1" }),
-      makeTask({ id: "a", status: "running", assignedSlaveId: "c1" }),
+      makeTask({ id: "b", status: "rework", assignedSlaveId: "slave-1" }),
+      makeTask({ id: "a", status: "running", assignedSlaveId: "slave-1" }),
     ];
-    expect(selectAssignedTask({ tasks, slaveId: "c1" })?.id).toBe("a");
+    expect(selectAssignedTask({ tasks, slaveId: "slave-1" })?.id).toBe("a");
   });
 
   test("returns null when no active tasks", () => {
-    const tasks = [makeTask({ id: "a", status: "queued", assignedSlaveId: "c1" })];
-    expect(selectAssignedTask({ tasks, slaveId: "c1" })).toBeNull();
+    const tasks = [makeTask({ id: "a", status: "queued", assignedSlaveId: "slave-1" })];
+    expect(selectAssignedTask({ tasks, slaveId: "slave-1" })).toBeNull();
   });
 
   test("breaks ties by id when statuses match", () => {
     const tasks = [
-      makeTask({ id: "b", status: "running", assignedSlaveId: "c1" }),
-      makeTask({ id: "a", status: "running", assignedSlaveId: "c1" }),
+      makeTask({ id: "b", status: "running", assignedSlaveId: "slave-1" }),
+      makeTask({ id: "a", status: "running", assignedSlaveId: "slave-1" }),
     ];
-    expect(selectAssignedTask({ tasks, slaveId: "c1" })?.id).toBe("a");
+    expect(selectAssignedTask({ tasks, slaveId: "slave-1" })?.id).toBe("a");
   });
 });
 
@@ -66,7 +66,12 @@ describe("buildJudgeRelaunchPrompt", () => {
 
 describe("buildRelaunchPromptForSlave", () => {
   test("uses file dispatch when promptSettings mode is file", () => {
-    const task = makeTask({ id: "t9", status: "running", assignedSlaveId: "c1", prompt: "do it" });
+    const task = makeTask({
+      id: "t9",
+      status: "running",
+      assignedSlaveId: "slave-1",
+      prompt: "do it",
+    });
     const prompt = buildRelaunchPromptForSlave({
       promptSettings: {
         mode: "file",
@@ -79,7 +84,12 @@ describe("buildRelaunchPromptForSlave", () => {
   });
 
   test("uses inline prompt when available", () => {
-    const task = makeTask({ id: "t3", status: "running", assignedSlaveId: "c1", prompt: "hello" });
+    const task = makeTask({
+      id: "t3",
+      status: "running",
+      assignedSlaveId: "slave-1",
+      prompt: "hello",
+    });
     const prompt = buildRelaunchPromptForSlave({
       promptSettings: {
         mode: "inline",

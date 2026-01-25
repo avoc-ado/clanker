@@ -76,7 +76,7 @@ describe("dashboard commands", () => {
     handler("/pause judge");
     handler("/pause slave");
     handler("/focus");
-    handler("/relaunch --fresh c1");
+    handler("/relaunch --fresh slave-1");
     handler("/task t1 nope");
     handler("/task t1 done");
     handler("/task");
@@ -95,7 +95,7 @@ describe("dashboard commands", () => {
     expect(pausedCalls).toContainEqual({ paused: true, role: ClankerRole.Judge });
     expect(pausedCalls).toContainEqual({ paused: true, role: ClankerRole.Slave });
     expect(focusCalls.length).toBeGreaterThan(0);
-    expect(relaunchCalls).toContainEqual({ args: ["--fresh", "c1"] });
+    expect(relaunchCalls).toContainEqual({ args: ["--fresh", "slave-1"] });
     expect(commandHistory.length).toBeGreaterThan(0);
     expect(lines.some((line) => line.includes("invalid status"))).toBe(true);
     expect(lines.some((line) => line.includes("matches for /pa"))).toBe(true);

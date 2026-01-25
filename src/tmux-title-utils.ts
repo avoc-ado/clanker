@@ -10,11 +10,12 @@ const parseRoleTitle = ({
   role: "planner" | "judge";
 }): { id: string; isDefault: boolean } | null => {
   const normalized = normalizePaneTitle({ title });
-  const match = new RegExp(`^${role}(?:-?(.+))?$`).exec(normalized);
+  const match = new RegExp(`^${role}(?:-(.+))?$`).exec(normalized);
   if (!match) {
     return null;
   }
-  return { id: match[1] ?? "", isDefault: !match[1] };
+  const id = match[1] ?? "1";
+  return { id, isDefault: id === "1" };
 };
 
 export const parsePlannerTitle = ({
@@ -35,5 +36,8 @@ export const parseJudgeTitle = ({
 
 export const extractSlaveId = ({ title }: { title: string }): string | null => {
   const normalized = normalizePaneTitle({ title });
-  return /^c\d+$/.test(normalized) ? normalized : null;
+  if (/^slave-\d+$/.test(normalized)) {
+    return normalized;
+  }
+  return null;
 };

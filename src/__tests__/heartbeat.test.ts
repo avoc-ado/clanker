@@ -6,9 +6,9 @@ import { writeHeartbeat } from "../state/heartbeat.js";
 describe("writeHeartbeat", () => {
   test("writes heartbeat file", async () => {
     const root = await mkdtemp(join(tmpdir(), "clanker-hb-"));
-    await writeHeartbeat({ heartbeatDir: root, slaveId: "c1" });
-    const raw = await readFile(join(root, "c1.json"), "utf-8");
+    await writeHeartbeat({ heartbeatDir: root, slaveId: "slave-1" });
+    const raw = await readFile(join(root, "slave-1.json"), "utf-8");
     const parsed = JSON.parse(raw) as { slaveId: string };
-    expect(parsed.slaveId).toBe("c1");
+    expect(parsed.slaveId).toBe("slave-1");
   });
 });

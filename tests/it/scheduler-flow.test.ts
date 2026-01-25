@@ -24,7 +24,7 @@ describe("integration: scheduler + heartbeat", () => {
         id: "t1",
         status: "queued",
         prompt: "do t1",
-        resumeSlaveId: "c2",
+        resumeSlaveId: "slave-2",
       },
     });
     await saveTask({
@@ -39,14 +39,14 @@ describe("integration: scheduler + heartbeat", () => {
     const loaded = await listTasks({ tasksDir: paths.tasksDir });
     const updated = await assignQueuedTasks({
       tasks: loaded,
-      availableSlaves: ["c1", "c2"],
+      availableSlaves: ["slave-1", "slave-2"],
       paths,
     });
 
     const assignedIds = updated.map((task) => task.assignedSlaveId).filter(Boolean);
-    expect(assignedIds).toEqual(expect.arrayContaining(["c1", "c2"]));
+    expect(assignedIds).toEqual(expect.arrayContaining(["slave-1", "slave-2"]));
     const preferred = updated.find((task) => task.id === "t1");
-    expect(preferred?.assignedSlaveId).toBe("c2");
+    expect(preferred?.assignedSlaveId).toBe("slave-2");
   });
 
   test("reads heartbeats and flags stale entries", async () => {
@@ -56,22 +56,22 @@ describe("integration: scheduler + heartbeat", () => {
 
     const nowMs = Date.now();
     const fresh = {
-      slaveId: "c1",
+      slaveId: "slave-1",
       ts: new Date(nowMs - 5_000).toISOString(),
     };
     const stale = {
-      slaveId: "c2",
+      slaveId: "slave-2",
       ts: new Date(nowMs - 40_000).toISOString(),
     };
 
-    await writeFile(join(paths.heartbeatDir, "c1.json"), JSON.stringify(fresh), "utf-8");
-    await writeFile(join(paths.heartbeatDir, "c2.json"), JSON.stringify(stale), "utf-8");
+    await writeFile(join(paths.heartbeatDir, "slave-1.json"), JSON.stringify(fresh), "utf-8");
+    await writeFile(join(paths.heartbeatDir, "slave-2.json"), JSON.stringify(stale), "utf-8");
 
     const heartbeats = await readHeartbeats({ heartbeatDir: paths.heartbeatDir });
     const staleHeartbeats = heartbeats.filter((hb) =>
       isHeartbeatStale({ heartbeat: hb, nowMs, thresholdMs: 30_000 }),
     );
 
-    expect(staleHeartbeats.map((hb) => hb.slaveId)).toEqual(["c2"]);
+    expect(staleHeartbeats.map((hb) => hb.slaveId)).toEqual(["slave-2"]);
   });
 });

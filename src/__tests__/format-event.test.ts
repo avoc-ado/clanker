@@ -9,7 +9,7 @@ describe("formatEventLine", () => {
         ts,
         type: "TASK_DONE",
         msg: "done",
-        slaveId: "c1",
+        slaveId: "slave-1",
         taskId: "t1",
         data: { tok: 1200, cost: 0.41 },
       },

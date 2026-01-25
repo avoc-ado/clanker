@@ -41,7 +41,7 @@ describe("stream format", () => {
         type: "TASK_PROMPTED",
         msg: "sent task prompt",
         taskId: "t1",
-        slaveId: "c2",
+        slaveId: "slave-2",
       },
     });
     expect(result).not.toBeNull();
@@ -49,7 +49,7 @@ describe("stream format", () => {
       return;
     }
     expect(result.line).toContain("t1");
-    expect(result.line).toContain("@c2");
+    expect(result.line).toContain("@slave-2");
     expect(result.line).toContain("sent task prompt");
   });
 

@@ -96,12 +96,12 @@ describe("tasks", () => {
       id: "t9",
       status: "queued",
       prompt: "do",
-      resumeSlaveId: "c2",
+      resumeSlaveId: "slave-2",
     };
     await saveTask({ tasksDir, task });
 
     const loaded = await loadTask({ tasksDir, id: "t9" });
-    expect(loaded?.resumeSlaveId).toBe("c2");
+    expect(loaded?.resumeSlaveId).toBe("slave-2");
   });
 
   test("persists ownerFiles", async () => {

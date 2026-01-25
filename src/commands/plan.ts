@@ -155,7 +155,7 @@ export const dispatchPlannerPrompt = async ({
       ts: new Date().toISOString(),
       type: "PLAN_SENT",
       msg: "sent plan prompt to planner",
-      slaveId: "planner",
+      slaveId: "planner-1",
     },
   });
   return { promptPath: promptSettings.planPromptPath, dispatched: Boolean(targetPaneId) };

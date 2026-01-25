@@ -34,7 +34,7 @@ describe("transitionTaskStatus", () => {
       mkdir(paths.stateDir, { recursive: true }),
     );
 
-    const task = { id: "t1", status: "queued", prompt: "do", assignedSlaveId: "c1" } as const;
+    const task = { id: "t1", status: "queued", prompt: "do", assignedSlaveId: "slave-1" } as const;
     await saveTask({ tasksDir: paths.tasksDir, task: task });
 
     await transitionTaskStatus({ task, status: "done", paths });
@@ -56,7 +56,7 @@ describe("transitionTaskStatus", () => {
       id: "t2",
       status: "needs_judge",
       prompt: "do",
-      assignedSlaveId: "c2",
+      assignedSlaveId: "slave-2",
       promptedAt: new Date().toISOString(),
     } as const;
     await saveTask({ tasksDir: paths.tasksDir, task: task });
@@ -67,7 +67,7 @@ describe("transitionTaskStatus", () => {
       loadTask({ tasksDir: paths.tasksDir, id: "t2" }),
     );
     expect(updated?.status).toBe("rework");
-    expect(updated?.assignedSlaveId).toBe("c2");
+    expect(updated?.assignedSlaveId).toBe("slave-2");
     expect(updated?.promptedAt).toBeUndefined();
   });
 
@@ -84,9 +84,9 @@ describe("transitionTaskStatus", () => {
       id: "t3",
       status: "needs_judge",
       prompt: "do",
-      assignedSlaveId: "c3",
+      assignedSlaveId: "slave-3",
       promptedAt: new Date().toISOString(),
-      resumeSlaveId: "c3",
+      resumeSlaveId: "slave-3",
     } as const;
     await saveTask({ tasksDir: paths.tasksDir, task: task });
 
@@ -116,7 +116,7 @@ describe("transitionTaskStatus", () => {
       id: "t4",
       status: "running",
       prompt: "do",
-      assignedSlaveId: "c4",
+      assignedSlaveId: "slave-4",
     } as const;
     await saveTask({ tasksDir: paths.tasksDir, task: task });
 
@@ -126,7 +126,7 @@ describe("transitionTaskStatus", () => {
       loadTask({ tasksDir: paths.tasksDir, id: "t4" }),
     );
     expect(updated?.assignedSlaveId).toBeUndefined();
-    expect(updated?.resumeSlaveId).toBe("c4");
+    expect(updated?.resumeSlaveId).toBe("slave-4");
 
     const eventRaw = await readFile(paths.eventsLog, "utf-8");
     expect(eventRaw).toContain("TASK_BLOCKED");

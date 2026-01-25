@@ -47,7 +47,7 @@ Each line is JSON:
   "type": "TASK_DONE",
   "msg": "status → done",
   "taskId": "t1",
-  "slaveId": "c1",
+  "slaveId": "slave-1",
   "data": { "tok": 1234, "cost": 0.12 }
 }
 ```

@@ -4,12 +4,12 @@ describe("buildTmuxAttachCommands", () => {
   test("builds attach commands per window", () => {
     const commands = buildTmuxAttachCommands({
       sessionName: "clanker-test",
-      windowNames: ["dashboard", "planner", "c1"],
+      windowNames: ["dashboard", "planner-1", "slave-1"],
     });
     expect(commands).toEqual([
       "'tmux' 'attach-session' '-t' 'clanker-test:dashboard'",
-      "'tmux' 'attach-session' '-t' 'clanker-test:planner'",
-      "'tmux' 'attach-session' '-t' 'clanker-test:c1'",
+      "'tmux' 'attach-session' '-t' 'clanker-test:planner-1'",
+      "'tmux' 'attach-session' '-t' 'clanker-test:slave-1'",
     ]);
   });
 

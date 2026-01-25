@@ -22,7 +22,7 @@ describe("integration: lock conflicts", () => {
         id: "busy",
         status: "running",
         prompt: "busy",
-        assignedSlaveId: "c1",
+        assignedSlaveId: "slave-1",
         ownerDirs: ["src"],
       },
     });
@@ -39,7 +39,7 @@ describe("integration: lock conflicts", () => {
     const loaded = await listTasks({ tasksDir: paths.tasksDir });
     const updated = await assignQueuedTasks({
       tasks: loaded,
-      availableSlaves: ["c2"],
+      availableSlaves: ["slave-2"],
       paths,
     });
 
@@ -57,7 +57,7 @@ describe("integration: lock conflicts", () => {
         id: "busy",
         status: "running",
         prompt: "busy",
-        assignedSlaveId: "c1",
+        assignedSlaveId: "slave-1",
         ownerFiles: ["src/app.ts"],
       },
     });
@@ -74,7 +74,7 @@ describe("integration: lock conflicts", () => {
     const loaded = await listTasks({ tasksDir: paths.tasksDir });
     const updated = await assignQueuedTasks({
       tasks: loaded,
-      availableSlaves: ["c2"],
+      availableSlaves: ["slave-2"],
       paths,
     });
 
@@ -92,7 +92,7 @@ describe("integration: lock conflicts", () => {
         id: "busy",
         status: "running",
         prompt: "busy",
-        assignedSlaveId: "c1",
+        assignedSlaveId: "slave-1",
         ownerDirs: ["src"],
       },
     });
@@ -109,12 +109,12 @@ describe("integration: lock conflicts", () => {
     const loaded = await listTasks({ tasksDir: paths.tasksDir });
     const updated = await assignQueuedTasks({
       tasks: loaded,
-      availableSlaves: ["c2"],
+      availableSlaves: ["slave-2"],
       paths,
-      staleSlaves: new Set(["c1"]),
+      staleSlaves: new Set(["slave-1"]),
     });
 
     expect(updated.length).toBe(1);
-    expect(updated[0]?.assignedSlaveId).toBe("c2");
+    expect(updated[0]?.assignedSlaveId).toBe("slave-2");
   });
 });

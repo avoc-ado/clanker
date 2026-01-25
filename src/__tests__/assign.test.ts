@@ -44,12 +44,12 @@ describe("assignQueuedTasks", () => {
     const loaded = await listTasks({ tasksDir: paths.tasksDir });
     const updated = await assignQueuedTasks({
       tasks: loaded,
-      availableSlaves: ["c1"],
+      availableSlaves: ["slave-1"],
       paths,
     });
 
     expect(updated.length).toBe(1);
-    expect(updated[0]?.assignedSlaveId).toBe("c1");
+    expect(updated[0]?.assignedSlaveId).toBe("slave-1");
   });
 
   test("no assignment when no slaves available", async () => {
@@ -77,7 +77,12 @@ describe("assignQueuedTasks", () => {
       mkdir(paths.tasksDir, { recursive: true }),
     );
 
-    const busy: TaskRecord = { id: "t4", status: "running", prompt: "busy", assignedSlaveId: "c1" };
+    const busy: TaskRecord = {
+      id: "t4",
+      status: "running",
+      prompt: "busy",
+      assignedSlaveId: "slave-1",
+    };
     const queued: TaskRecord = { id: "t5", status: "queued", prompt: "do t5" };
     await saveTask({ tasksDir: paths.tasksDir, task: busy });
     await saveTask({ tasksDir: paths.tasksDir, task: queued });
@@ -85,7 +90,7 @@ describe("assignQueuedTasks", () => {
     const loaded = await listTasks({ tasksDir: paths.tasksDir });
     const updated = await assignQueuedTasks({
       tasks: loaded,
-      availableSlaves: ["c1"],
+      availableSlaves: ["slave-1"],
       paths,
     });
 
@@ -102,18 +107,18 @@ describe("assignQueuedTasks", () => {
       id: "t6",
       status: "queued",
       prompt: "do t6",
-      resumeSlaveId: "c2",
+      resumeSlaveId: "slave-2",
     };
     await saveTask({ tasksDir: paths.tasksDir, task });
 
     const loaded = await listTasks({ tasksDir: paths.tasksDir });
     const updated = await assignQueuedTasks({
       tasks: loaded,
-      availableSlaves: ["c1", "c2"],
+      availableSlaves: ["slave-1", "slave-2"],
       paths,
     });
 
-    expect(updated[0]?.assignedSlaveId).toBe("c2");
+    expect(updated[0]?.assignedSlaveId).toBe("slave-2");
   });
 
   test("ignores stale locks when assigning queued tasks", async () => {
@@ -126,7 +131,7 @@ describe("assignQueuedTasks", () => {
       id: "t7",
       status: "running",
       prompt: "busy",
-      assignedSlaveId: "c1",
+      assignedSlaveId: "slave-1",
       ownerDirs: ["src"],
     };
     const queued: TaskRecord = {
@@ -141,12 +146,12 @@ describe("assignQueuedTasks", () => {
     const loaded = await listTasks({ tasksDir: paths.tasksDir });
     const updated = await assignQueuedTasks({
       tasks: loaded,
-      availableSlaves: ["c2"],
+      availableSlaves: ["slave-2"],
       paths,
-      staleSlaves: new Set(["c1"]),
+      staleSlaves: new Set(["slave-1"]),
     });
 
     expect(updated.length).toBe(1);
-    expect(updated[0]?.assignedSlaveId).toBe("c2");
+    expect(updated[0]?.assignedSlaveId).toBe("slave-2");
   });
 });

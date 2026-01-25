@@ -114,9 +114,9 @@ describe("integration: real flow", () => {
                 "#{pane_id}\t#{pane_title}\t#{window_name}",
               ],
             }),
-            captureWindow({ window: "planner" }),
-            captureWindow({ window: "c1" }),
-            captureWindow({ window: "judge" }),
+            captureWindow({ window: "planner-1" }),
+            captureWindow({ window: "slave-1" }),
+            captureWindow({ window: "judge-1" }),
           ]);
           const tail = events.split("\n").slice(-10).join("\n").trim();
           const payload = [
@@ -234,9 +234,9 @@ describe("integration: real flow", () => {
       };
       const approveAllCodex = async (): Promise<void> => {
         await Promise.all([
-          approveCodex({ window: "planner" }),
-          approveCodex({ window: "c1" }),
-          approveCodex({ window: "judge" }),
+          approveCodex({ window: "planner-1" }),
+          approveCodex({ window: "slave-1" }),
+          approveCodex({ window: "judge-1" }),
         ]);
       };
       const capturePaneByTitle = async ({
@@ -283,22 +283,22 @@ describe("integration: real flow", () => {
           args: ["select-pane", "-t", `${session}:dashboard`, "-T", "clanker:dashboard"],
         });
         await runTmux({
-          args: ["new-window", "-t", session, "-n", "planner", "-c", root],
+          args: ["new-window", "-t", session, "-n", "planner-1", "-c", root],
         });
         await runTmux({
-          args: ["select-pane", "-t", `${session}:planner`, "-T", "clanker:planner"],
+          args: ["select-pane", "-t", `${session}:planner-1`, "-T", "clanker:planner-1"],
         });
         await runTmux({
-          args: ["new-window", "-t", session, "-n", "c1", "-c", root],
+          args: ["new-window", "-t", session, "-n", "slave-1", "-c", root],
         });
         await runTmux({
-          args: ["select-pane", "-t", `${session}:c1`, "-T", "clanker:c1"],
+          args: ["select-pane", "-t", `${session}:slave-1`, "-T", "clanker:slave-1"],
         });
         await runTmux({
-          args: ["new-window", "-t", session, "-n", "judge", "-c", root],
+          args: ["new-window", "-t", session, "-n", "judge-1", "-c", root],
         });
         await runTmux({
-          args: ["select-pane", "-t", `${session}:judge`, "-T", "clanker:judge"],
+          args: ["select-pane", "-t", `${session}:judge-1`, "-T", "clanker:judge-1"],
         });
 
         await waitFor({
@@ -313,7 +313,7 @@ describe("integration: real flow", () => {
               .split("\n")
               .map((line) => line.trim())
               .filter((line) => line.length > 0);
-            return ["dashboard", "planner", "c1", "judge"].every((name) =>
+            return ["dashboard", "planner-1", "slave-1", "judge-1"].every((name) =>
               windowNames.includes(name),
             );
           },
@@ -329,7 +329,7 @@ describe("integration: real flow", () => {
             "respawn-pane",
             "-k",
             "-t",
-            `${session}:planner`,
+            `${session}:planner-1`,
             ...nodeBase,
             "--codex-tty",
             "planner",
@@ -340,7 +340,7 @@ describe("integration: real flow", () => {
             "respawn-pane",
             "-k",
             "-t",
-            `${session}:c1`,
+            `${session}:slave-1`,
             ...nodeBase,
             "--codex-tty",
             "slave",
@@ -352,7 +352,7 @@ describe("integration: real flow", () => {
             "respawn-pane",
             "-k",
             "-t",
-            `${session}:judge`,
+            `${session}:judge-1`,
             ...nodeBase,
             "--codex-tty",
             "judge",
@@ -368,9 +368,9 @@ describe("integration: real flow", () => {
           check: async () => {
             await approveAllCodex();
             const approvals = await Promise.all([
-              hasApprovalPrompt({ window: "planner" }),
-              hasApprovalPrompt({ window: "c1" }),
-              hasApprovalPrompt({ window: "judge" }),
+              hasApprovalPrompt({ window: "planner-1" }),
+              hasApprovalPrompt({ window: "slave-1" }),
+              hasApprovalPrompt({ window: "judge-1" }),
             ]);
             return approvals.every((pending) => !pending);
           },
@@ -383,7 +383,7 @@ describe("integration: real flow", () => {
           check: async () => {
             await approveAllCodex();
             const raw = await readEvents();
-            return raw.includes('"CHAT_LOG"') && raw.includes('"planner"');
+            return raw.includes('"CHAT_LOG"') && raw.includes('"planner-1"');
           },
         });
 
@@ -404,9 +404,9 @@ describe("integration: real flow", () => {
           });
         } catch (error) {
           const [plannerOutput, slaveOutput, judgeOutput, events] = await Promise.all([
-            capturePaneByTitle({ title: "clanker:planner", fallbackTitle: "planner" }),
-            capturePaneByTitle({ title: "clanker:c1", fallbackTitle: "c1" }),
-            capturePaneByTitle({ title: "clanker:judge", fallbackTitle: "judge" }),
+            capturePaneByTitle({ title: "clanker:planner-1", fallbackTitle: "planner-1" }),
+            capturePaneByTitle({ title: "clanker:slave-1", fallbackTitle: "slave-1" }),
+            capturePaneByTitle({ title: "clanker:judge-1", fallbackTitle: "judge-1" }),
             readEvents(),
           ]);
           const windows = await runTmux({
@@ -430,9 +430,9 @@ describe("integration: real flow", () => {
         }
 
         await Promise.all([
-          waitForCodexReady({ window: "planner" }),
-          waitForCodexReady({ window: "c1" }),
-          waitForCodexReady({ window: "judge" }),
+          waitForCodexReady({ window: "planner-1" }),
+          waitForCodexReady({ window: "slave-1" }),
+          waitForCodexReady({ window: "judge-1" }),
         ]);
 
         await emitDebug({ label: "plan-auto" });
@@ -450,8 +450,8 @@ describe("integration: real flow", () => {
           });
         } catch (error) {
           const plannerOutput = await capturePaneByTitle({
-            title: "clanker:planner",
-            fallbackTitle: "planner",
+            title: "clanker:planner-1",
+            fallbackTitle: "planner-1",
           });
           const windows = await runTmux({
             args: ["list-windows", "-t", session, "-F", "#{window_name}"],

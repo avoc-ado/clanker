@@ -2,12 +2,13 @@ import { loadConfig } from "../config.js";
 import { getClankerPaths } from "../paths.js";
 import { ensureStateDirs } from "../state/ensure-state.js";
 import { runCodexSupervisor } from "./codex-supervisor.js";
+import { formatSlaveId } from "../agent-ids.js";
 
 const parseSlaveId = ({ idRaw }: { idRaw: string | undefined }): string => {
   if (!idRaw) {
     throw new Error("Missing slave id (expected: clanker slave <n>)");
   }
-  return `c${idRaw}`;
+  return formatSlaveId({ idRaw });
 };
 
 export const runSlave = async ({ idRaw }: { idRaw: string | undefined }): Promise<void> => {

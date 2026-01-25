@@ -22,15 +22,15 @@ describe("makeDashboardTick", () => {
     const baseTask: TaskRecord = {
       id: "t1",
       status: "queued",
-      assignedSlaveId: "c1",
+      assignedSlaveId: "slave-1",
       prompt: "do thing",
     };
     const tasks: TaskRecord[] = [
       baseTask,
-      { id: "t2", status: "running", assignedSlaveId: "c1" },
-      { id: "t3", status: "needs_judge", assignedSlaveId: "c1" },
-      { id: "t4", status: "rework", assignedSlaveId: "c1" },
-      { id: "t5", status: "blocked", assignedSlaveId: "c1" },
+      { id: "t2", status: "running", assignedSlaveId: "slave-1" },
+      { id: "t3", status: "needs_judge", assignedSlaveId: "slave-1" },
+      { id: "t4", status: "rework", assignedSlaveId: "slave-1" },
+      { id: "t5", status: "blocked", assignedSlaveId: "slave-1" },
     ];
     const listTasks = async () => tasks;
     const loadTask = async () => ({ ...baseTask });
@@ -40,18 +40,18 @@ describe("makeDashboardTick", () => {
     };
     let heartbeatPhase: "stale" | "fresh" = "stale";
     const staleHeartbeat: Heartbeat = {
-      slaveId: "c1",
+      slaveId: "slave-1",
       ts: new Date("2026-01-24T00:00:00.000Z").toISOString(),
       pid: 42,
     };
     const freshHeartbeat: Heartbeat = {
-      slaveId: "c1",
+      slaveId: "slave-1",
       ts: new Date().toISOString(),
       pid: 42,
     };
     const readHeartbeats = async () =>
       heartbeatPhase === "stale" ? [staleHeartbeat] : [freshHeartbeat];
-    const assignQueuedTasks = async () => [{ ...baseTask, assignedSlaveId: "c1" }];
+    const assignQueuedTasks = async () => [{ ...baseTask, assignedSlaveId: "slave-1" }];
     const acquireTaskLock = async () => ({ release: async () => undefined });
     const computeSlaveCap = () => 1;
     const appendMetricSeries = ({
@@ -85,9 +85,9 @@ describe("makeDashboardTick", () => {
     });
     const getCurrentPaneId = async () => "pane-slave";
     const listPanes = async () => [
-      { paneId: "pane-planner", title: "clanker:planner" },
-      { paneId: "pane-judge", title: "clanker:judge" },
-      { paneId: "pane-slave", title: "clanker:c1" },
+      { paneId: "pane-planner", title: "clanker:planner-1" },
+      { paneId: "pane-judge", title: "clanker:judge-1" },
+      { paneId: "pane-slave", title: "clanker:slave-1" },
     ];
     const selectPaneCalls: string[] = [];
     const selectPane = async ({ paneId }: { paneId: string }) => {
