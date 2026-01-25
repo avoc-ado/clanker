@@ -50,6 +50,18 @@
 
 - Switch to yargs for args parsing everywhere (CLI + dashboard commands).
 - Usage limit handling: detect Codex "You've hit your usage limit" message in production, pause + poll `/status` until reset, then resume (IT real should still fail fast).
+- When clanker starts, it can fail if no origin/main is configured. Print a prettier helper message after the git error. Current error message is as follows:'
+  command failed: worktree ref origin/main not found (run "git fetch origin"). Details: Command failed: git rev-parse --verify origin/main
+  fatal: Needed a single revision
+
+Error: worktree ref origin/main not found (run "git fetch origin"). Details: Command failed: git rev-parse --verify origin/main
+fatal: Needed a single revision
+
+    at ensureRoleWorktrees (file:///./clanker/dist/worktrees.js:62:15)
+    at async runLaunch (file:///./clanker/dist/commands/launch.js:299:27)
+    at async main (file:///./clanker/dist/cli.js:145:13)
+
+'
 
 ## Blind-Spot Audit (List)
 
