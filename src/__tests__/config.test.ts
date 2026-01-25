@@ -1,7 +1,13 @@
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { buildTemplateConfig, ensureConfigFile, loadConfig, parseConfigFile } from "../config.js";
+import {
+  buildTemplateConfig,
+  ensureConfigFile,
+  ensureGitignoreEntry,
+  loadConfig,
+  parseConfigFile,
+} from "../config.js";
 
 describe("loadConfig", () => {
   test("returns defaults when no file", async () => {
@@ -28,6 +34,39 @@ describe("loadConfig", () => {
     expect(raw).toContain("startImmediately: default");
     expect(raw).toContain("codexCommand: default");
     expect(raw).toContain("promptFile");
+  });
+
+  test("adds .clanker to gitignore on first write", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-config-"));
+    await ensureConfigFile({ repoRoot: root });
+    const gitignorePath = join(root, ".gitignore");
+    const raw = await readFile(gitignorePath, "utf-8");
+    const entries = raw.split(/\r?\n/).filter((line) => line.trim() === ".clanker");
+    expect(entries).toHaveLength(1);
+    await ensureConfigFile({ repoRoot: root });
+    const rawAgain = await readFile(gitignorePath, "utf-8");
+    const entriesAgain = rawAgain.split(/\r?\n/).filter((line) => line.trim() === ".clanker");
+    expect(entriesAgain).toHaveLength(1);
+  });
+
+  test("ensureGitignoreEntry appends when missing", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-config-"));
+    const gitignorePath = join(root, ".gitignore");
+    await writeFile(gitignorePath, "node_modules\n", "utf-8");
+    await ensureGitignoreEntry({ repoRoot: root, entry: ".clanker" });
+    const raw = await readFile(gitignorePath, "utf-8");
+    expect(raw).toContain("node_modules");
+    expect(raw).toContain(".clanker");
+  });
+
+  test("ensureGitignoreEntry is idempotent", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-config-"));
+    const gitignorePath = join(root, ".gitignore");
+    await writeFile(gitignorePath, "node_modules\n.clanker\n", "utf-8");
+    await ensureGitignoreEntry({ repoRoot: root, entry: ".clanker" });
+    const raw = await readFile(gitignorePath, "utf-8");
+    const entries = raw.split(/\r?\n/).filter((line) => line.trim() === ".clanker");
+    expect(entries).toHaveLength(1);
   });
 
   test("fills missing keys with defaults", async () => {

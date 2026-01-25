@@ -7,6 +7,7 @@ import {
   DEFAULT_SENTINEL,
   CONFIG_COMMENTS,
   buildTemplateConfig,
+  ensureGitignoreEntry,
   formatConfigTemplate,
   parseConfigFile,
   type ConfigKey,
@@ -111,6 +112,7 @@ export const runOnboardingIfNeeded = async ({
   } catch {
     raw = "";
   }
+  const hadConfigFile = raw.trim().length > 0;
   const parsed = parseConfigFile({ raw }) ?? {};
   const missingKeys = CONFIG_KEYS.filter((key) => !hasConfigKey({ parsed, key }));
 
@@ -185,5 +187,8 @@ export const runOnboardingIfNeeded = async ({
     config: buildTemplateConfig({ parsed: updated, repoRoot }),
   });
   await writeFile(configPath, template, "utf-8");
+  if (!hadConfigFile) {
+    await ensureGitignoreEntry({ repoRoot, entry: ".clanker" });
+  }
   return { didPrompt: true };
 };

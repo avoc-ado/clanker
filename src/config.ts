@@ -296,6 +296,33 @@ export const parseConfigFile = ({ raw }: { raw: string }): ParsedConfig | null =
   }
 };
 
+export const ensureGitignoreEntry = async ({
+  repoRoot,
+  entry,
+}: {
+  repoRoot: string;
+  entry: string;
+}): Promise<void> => {
+  const gitignorePath = join(repoRoot, ".gitignore");
+  try {
+    const raw = await readFile(gitignorePath, "utf-8");
+    const lines = raw.split(/\r?\n/);
+    const hasEntry = lines.some((line) => line.trim() === entry);
+    if (hasEntry) {
+      return;
+    }
+    const suffix = raw.endsWith("\n") || raw.length === 0 ? "" : "\n";
+    await writeFile(gitignorePath, `${raw}${suffix}${entry}\n`, "utf-8");
+  } catch (error) {
+    const err = error as NodeJS.ErrnoException;
+    if (err?.code === "ENOENT") {
+      await writeFile(gitignorePath, `${entry}\n`, "utf-8");
+      return;
+    }
+    throw error;
+  }
+};
+
 export const ensureConfigFile = async ({ repoRoot }: { repoRoot: string }): Promise<void> => {
   const configPath = join(repoRoot, "clanker.yaml");
   try {
@@ -314,6 +341,7 @@ export const ensureConfigFile = async ({ repoRoot }: { repoRoot: string }): Prom
         config: buildTemplateConfig({ parsed: null, repoRoot }),
       });
       await writeFile(configPath, template, "utf-8");
+      await ensureGitignoreEntry({ repoRoot, entry: ".clanker" });
     }
   }
 };
