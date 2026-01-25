@@ -22,18 +22,18 @@ export const getRelaunchPrompt = async ({
   const config = await loadConfig({ repoRoot: paths.repoRoot });
   const promptSettings = getPromptSettings({ repoRoot: paths.repoRoot, config });
   if (role === "planner") {
-    return buildRelaunchPromptForPlanner({ promptSettings });
+    return buildRelaunchPromptForPlanner({ promptSettings, tasksDir: paths.tasksDir });
   }
 
   const tasks = await listTasks({ tasksDir: paths.tasksDir });
 
   if (role === "judge") {
-    return buildRelaunchPromptForJudge({ tasks });
+    return buildRelaunchPromptForJudge({ tasks, tasksDir: paths.tasksDir });
   }
 
   const task = selectAssignedTask({ tasks, slaveId: id });
   if (!task) {
     return null;
   }
-  return buildRelaunchPromptForSlave({ promptSettings, task });
+  return buildRelaunchPromptForSlave({ promptSettings, task, tasksDir: paths.tasksDir });
 };

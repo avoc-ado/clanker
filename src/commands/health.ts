@@ -1,15 +1,18 @@
 import { getClankerPaths } from "../paths.js";
+import { getRepoRoot } from "../repo-root.js";
 import { ensureStateDirs } from "../state/ensure-state.js";
 import { listTasks } from "../state/tasks.js";
 import { validateTaskRecord } from "../state/task-validate.js";
 import { runGit } from "../git.js";
-import { getWorktreePath } from "../worktrees.js";
+import { listWorktreeSpecs } from "../worktrees.js";
 import { access } from "node:fs/promises";
+import { loadConfig } from "../config.js";
 
 export const runHealth = async (): Promise<void> => {
-  const repoRoot = process.cwd();
+  const repoRoot = getRepoRoot();
   const paths = getClankerPaths({ repoRoot });
   await ensureStateDirs({ paths });
+  const config = await loadConfig({ repoRoot });
 
   const tasks = await listTasks({ tasksDir: paths.tasksDir });
   const healthWarnings: string[] = [];
@@ -28,18 +31,22 @@ export const runHealth = async (): Promise<void> => {
     healthWarnings.push("git rev-parse failed");
   }
 
-  const plannerPath = getWorktreePath({ repoRoot, name: "c-planner" });
-  const judgePath = getWorktreePath({ repoRoot, name: "c-judge" });
-  const worktreeChecks = await Promise.all([
-    access(plannerPath).then(
-      () => null,
-      () => "missing worktree c-planner",
-    ),
-    access(judgePath).then(
-      () => null,
-      () => "missing worktree c-judge",
-    ),
-  ]);
+  const worktreeSpecs = listWorktreeSpecs({
+    repoRoot,
+    planners: config.planners,
+    judges: config.judges,
+    slaves: config.slaves,
+  });
+  const worktreeChecks = await Promise.all(
+    worktreeSpecs.map(async (spec) => {
+      try {
+        await access(spec.path);
+        return null;
+      } catch {
+        return `missing worktree ${spec.name}`;
+      }
+    }),
+  );
   for (const warning of worktreeChecks.filter(Boolean)) {
     if (warning) {
       healthWarnings.push(warning);

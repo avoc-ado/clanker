@@ -5,6 +5,7 @@ import { readHeartbeats } from "../state/read-heartbeats.js";
 import { HEARTBEAT_STALE_MS, RELAUNCH_SIGNALS, type RelaunchMode } from "../constants.js";
 import yargs from "yargs";
 import { buildRelaunchEvent, selectRelaunchTargets } from "../relaunch/core.js";
+import { getRepoRoot } from "../repo-root.js";
 
 const resolveRelaunchMode = ({ args }: { args: string[] }): RelaunchMode => {
   let mode: RelaunchMode = "resume";
@@ -76,7 +77,7 @@ export const runRelaunch = async ({
   log?: (message: string) => void;
 }): Promise<void> => {
   const writeLine = log ?? console.log;
-  const repoRoot = process.cwd();
+  const repoRoot = getRepoRoot();
   const paths = getClankerPaths({ repoRoot });
   await ensureStateDirs({ paths });
   const { mode, target } = parseRelaunchArgs({ args });

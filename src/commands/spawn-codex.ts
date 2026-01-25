@@ -107,11 +107,13 @@ export const spawnCodex = async ({
   role,
   id,
   command,
+  cwd,
 }: {
   logsDir: string;
   role: string;
   id: string;
   command?: string;
+  cwd?: string;
 }): Promise<{ child: ReturnType<typeof spawn>; logPath: string }> => {
   const logPath = makeLogPath({ logsDir, role, id });
   const logStream = createWriteStream(logPath, { flags: "a" });
@@ -129,7 +131,7 @@ export const spawnCodex = async ({
   const stdio: ["pipe" | "inherit", "pipe", "pipe"] = usePty
     ? ["inherit", "pipe", "pipe"]
     : ["pipe", "pipe", "pipe"];
-  const child = spawn(finalCli.cmd, finalCli.args, { stdio });
+  const child = spawn(finalCli.cmd, finalCli.args, { stdio, cwd });
   wireStdin({ child });
   const attachPipe = usePty ? attachRawPipe : attachFilteredPipe;
   const stdoutPipe = attachPipe({

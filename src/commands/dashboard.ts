@@ -13,6 +13,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import * as readline from "node:readline";
 import { buildBasePrompt, ClankerRole } from "../prompting/role-prompts.js";
+import { getRepoRoot } from "../repo-root.js";
 import {
   buildDashboardCommands,
   makeDashboardCommandHandler,
@@ -52,7 +53,7 @@ const makeCommandPrompt = (): string => {
 };
 
 export const runDashboard = async ({}: {}): Promise<void> => {
-  const repoRoot = process.cwd();
+  const repoRoot = getRepoRoot();
   const paths = getClankerPaths({ repoRoot });
   await ensureStateDirs({ paths });
   const config = await loadConfig({ repoRoot });
@@ -296,7 +297,11 @@ export const runDashboard = async ({}: {}): Promise<void> => {
       basePromptSent,
       inspectPane,
       sendKeys,
-      buildBasePrompt,
+      buildBasePrompt: ({ role: promptRole }) =>
+        buildBasePrompt({
+          role: promptRole,
+          paths: { tasksDir: paths.tasksDir, historyDir: paths.historyDir },
+        }),
     });
     if (alreadySent || !basePromptSent.has(paneId)) {
       return;

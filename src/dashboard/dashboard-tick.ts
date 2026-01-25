@@ -253,7 +253,7 @@ export const makeDashboardTick = ({
         }
         const prompt =
           promptSettings.mode === "file"
-            ? buildTaskFileDispatch({ taskId: latest.id })
+            ? buildTaskFileDispatch({ taskId: latest.id, tasksDir: paths.tasksDir })
             : latest.prompt;
         await sendKeys({ paneId, text: prompt });
         latest.promptedAt = new Date().toISOString();

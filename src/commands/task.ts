@@ -10,6 +10,7 @@ import { mkdir, readdir, rename, stat } from "node:fs/promises";
 import { join } from "node:path";
 import yargs from "yargs";
 import type { Argv, ArgumentsCamelCase } from "yargs";
+import { getRepoRoot } from "../repo-root.js";
 
 const requireValue = ({ value, label }: { value: string | undefined; label: string }): string => {
   if (!value || value.length === 0) {
@@ -55,7 +56,7 @@ const getUsageFromArgs = ({
 };
 
 export const runTask = async ({ args }: { args: string[] }): Promise<void> => {
-  const repoRoot = process.cwd();
+  const repoRoot = getRepoRoot();
   const paths = getClankerPaths({ repoRoot });
   await ensureStateDirs({ paths });
   const parser = yargs(args)

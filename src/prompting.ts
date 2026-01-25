@@ -88,21 +88,28 @@ export const selectAssignedTask = ({
 
 export const buildRelaunchPromptForPlanner = ({
   promptSettings,
+  tasksDir,
 }: {
   promptSettings: PromptSettings;
+  tasksDir: string;
 }): RelaunchPrompt => {
   return {
     kind: "plan",
-    text: buildPlanFileDispatch({ promptPath: promptSettings.planPromptPath }),
+    text: buildPlanFileDispatch({
+      promptPath: promptSettings.planPromptAbsolutePath,
+      tasksDir,
+    }),
   };
 };
 
 export const buildRelaunchPromptForJudge = ({
   tasks,
+  tasksDir,
 }: {
   tasks: TaskRecord[];
+  tasksDir: string;
 }): RelaunchPrompt | null => {
-  const prompt = buildJudgeRelaunchPrompt({ tasks });
+  const prompt = buildJudgeRelaunchPrompt({ tasks, tasksDir });
   if (!prompt) {
     return null;
   }
@@ -112,13 +119,15 @@ export const buildRelaunchPromptForJudge = ({
 export const buildRelaunchPromptForSlave = ({
   promptSettings,
   task,
+  tasksDir,
 }: {
   promptSettings: PromptSettings;
   task: TaskRecord;
+  tasksDir: string;
 }): RelaunchPrompt => {
   const text =
     promptSettings.mode === "file" || !task.prompt
-      ? buildTaskFileDispatch({ taskId: task.id })
+      ? buildTaskFileDispatch({ taskId: task.id, tasksDir })
       : task.prompt;
   return { kind: "task", text, taskId: task.id };
 };

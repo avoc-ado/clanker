@@ -49,7 +49,7 @@ describe("selectAssignedTask", () => {
 describe("buildJudgeRelaunchPrompt", () => {
   test("returns null when no needs_judge tasks", () => {
     const tasks = [makeTask({ id: "a", status: "running" })];
-    expect(buildJudgeRelaunchPrompt({ tasks })).toBeNull();
+    expect(buildJudgeRelaunchPrompt({ tasks, tasksDir: "/tmp/.clanker/tasks" })).toBeNull();
   });
 
   test("lists needs_judge tasks", () => {
@@ -57,7 +57,7 @@ describe("buildJudgeRelaunchPrompt", () => {
       makeTask({ id: "a", status: "needs_judge", title: "Check auth" }),
       makeTask({ id: "b", status: "needs_judge" }),
     ];
-    const prompt = buildJudgeRelaunchPrompt({ tasks });
+    const prompt = buildJudgeRelaunchPrompt({ tasks, tasksDir: "/tmp/.clanker/tasks" });
     expect(prompt).toContain("needs_judge");
     expect(prompt).toContain("- a: Check auth");
     expect(prompt).toContain("- b");
@@ -79,8 +79,9 @@ describe("buildRelaunchPromptForSlave", () => {
         planPromptAbsolutePath: "/tmp/plan-prompt.txt",
       },
       task,
+      tasksDir: "/tmp/.clanker/tasks",
     });
-    expect(prompt.text).toContain(".clanker/tasks/t9.json");
+    expect(prompt.text).toContain("/tmp/.clanker/tasks/t9.json");
   });
 
   test("uses inline prompt when available", () => {
@@ -97,6 +98,7 @@ describe("buildRelaunchPromptForSlave", () => {
         planPromptAbsolutePath: "/tmp/plan-prompt.txt",
       },
       task,
+      tasksDir: "/tmp/.clanker/tasks",
     });
     expect(prompt.text).toBe("hello");
   });
@@ -110,8 +112,9 @@ describe("buildRelaunchPromptForPlanner", () => {
         planPromptPath: ".clanker/plan-prompt.txt",
         planPromptAbsolutePath: "/tmp/plan-prompt.txt",
       },
+      tasksDir: "/tmp/.clanker/tasks",
     });
-    expect(prompt.text).toContain(".clanker/plan-prompt.txt");
+    expect(prompt.text).toContain("/tmp/plan-prompt.txt");
   });
 });
 
@@ -119,6 +122,7 @@ describe("buildRelaunchPromptForJudge", () => {
   test("returns null when no judge tasks", () => {
     const prompt = buildRelaunchPromptForJudge({
       tasks: [makeTask({ id: "a", status: "running" })],
+      tasksDir: "/tmp/.clanker/tasks",
     });
     expect(prompt).toBeNull();
   });

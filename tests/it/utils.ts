@@ -106,12 +106,14 @@ export const makeTmpRepo = async ({
     const fixturePath = join(repoRoot, planFixture);
     const raw = await readFile(fixturePath, "utf-8");
     await writeFile(planPath, raw, "utf-8");
+    await initGitRepo({ root });
     return root;
   }
   if (!planLines) {
     throw new Error("planLines required when no planFixture provided");
   }
   await writeFile(planPath, planLines.join("\n"), "utf-8");
+  await initGitRepo({ root });
   return root;
 };
 
@@ -165,7 +167,34 @@ export const resolveCodexCommand = async ({
 
 export const initGitRepo = async ({ root }: { root: string }): Promise<void> => {
   try {
-    await execFileAsync("git", ["init"], { cwd: root });
+    try {
+      await execFileAsync("git", ["init", "-b", "main"], { cwd: root });
+    } catch {
+      await execFileAsync("git", ["init"], { cwd: root });
+      try {
+        await execFileAsync("git", ["checkout", "-b", "main"], { cwd: root });
+      } catch {
+        // ignore if main branch already exists
+      }
+    }
+    const hasHead = await execFileAsync("git", ["rev-parse", "--verify", "HEAD"], { cwd: root })
+      .then(() => true)
+      .catch(() => false);
+    if (!hasHead) {
+      const gitEnv: NodeJS.ProcessEnv = {
+        ...process.env,
+        GIT_AUTHOR_NAME: "clanker",
+        GIT_AUTHOR_EMAIL: "clanker@example.com",
+        GIT_COMMITTER_NAME: "clanker",
+        GIT_COMMITTER_EMAIL: "clanker@example.com",
+      };
+      await execFileAsync("git", ["add", "."], { cwd: root });
+      await execFileAsync("git", ["commit", "--allow-empty", "-m", "init"], {
+        cwd: root,
+        env: gitEnv,
+      });
+    }
+    await execFileAsync("git", ["update-ref", "refs/remotes/origin/main", "HEAD"], { cwd: root });
   } catch (error) {
     throw new Error(`missing git for real integration tests: ${String(error)}`);
   }

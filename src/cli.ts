@@ -17,6 +17,7 @@ import { ensureStateDirs } from "./state/ensure-state.js";
 import { appendEvent } from "./state/events.js";
 import { setRuntimeOverrides } from "./runtime/overrides.js";
 import { getCliHelp } from "./cli-help.js";
+import { getRepoRoot } from "./repo-root.js";
 import yargs from "yargs";
 
 interface CommandSpec {
@@ -78,7 +79,7 @@ const reportFatal = async ({ label, error }: { label: string; error: unknown }):
     console.error(stack);
   }
   try {
-    const repoRoot = process.cwd();
+    const repoRoot = getRepoRoot();
     const paths = getClankerPaths({ repoRoot });
     await ensureStateDirs({ paths });
     await appendEvent({

@@ -23,6 +23,8 @@ npx clanker-cli@latest
 npx clanker-cli@latest --tmux
 ```
 
+Agents run inside worktrees at `./.clanker/worktree/<role>-<num>` (created from `origin/main`).
+
 ## Config
 
 Create `clanker.yaml` at repo root (use `default` to track latest defaults):

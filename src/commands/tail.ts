@@ -5,6 +5,7 @@ import { getClankerPaths } from "../paths.js";
 import { ensureStateDirs } from "../state/ensure-state.js";
 import type { ClankerEvent } from "../state/events.js";
 import yargs from "yargs";
+import { getRepoRoot } from "../repo-root.js";
 
 const stripTags = ({ line }: { line: string }): string => {
   return line.replace(/\{[^}]+\}/g, "");
@@ -30,7 +31,7 @@ const emitEvents = ({ raw }: { raw: string }): void => {
 };
 
 export const runTail = async ({ args }: { args: string[] }): Promise<void> => {
-  const repoRoot = process.cwd();
+  const repoRoot = getRepoRoot();
   const paths = getClankerPaths({ repoRoot });
   await ensureStateDirs({ paths });
   try {

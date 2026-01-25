@@ -1,19 +1,27 @@
+import { join } from "node:path";
+
 export enum ClankerRole {
   Planner = "planner",
   Judge = "judge",
   Slave = "slave",
 }
 
-export const buildBasePrompt = ({ role }: { role: ClankerRole }): string => {
+export const buildBasePrompt = ({
+  role,
+  paths,
+}: {
+  role: ClankerRole;
+  paths: { tasksDir: string; historyDir: string };
+}): string => {
   switch (role) {
     case ClankerRole.Planner:
       return [
         "You are the clanker planner.",
         "Plan only; do not edit code or run tests.",
         "Create exactly one task packet per prompt.",
-        'Write task JSON files to .clanker/tasks/ with status "queued".',
+        `Write task JSON files to ${paths.tasksDir} with status "queued".`,
         "Keep tasks small, independent, and testable.",
-        "Inspect .clanker/tasks and .clanker/history to avoid duplicates.",
+        `Inspect ${paths.tasksDir} and ${paths.historyDir} to avoid duplicates.`,
         "Fill in blanks: research code/docs/web; write findings to docs/research/.",
         "Include standard deps/config/testing flows for a well-tested product.",
         "Favor hard route, no shortcuts; modicum progress is valuable.",
@@ -22,7 +30,7 @@ export const buildBasePrompt = ({ role }: { role: ClankerRole }): string => {
     case ClankerRole.Slave:
       return [
         "You are a clanker slave.",
-        "Execute the task in .clanker/tasks/<id>.json.",
+        `Execute the task in ${paths.tasksDir}/<id>.json.`,
         "Do not ask the user; make best-effort assumptions and note risks.",
         "Honor ownerDirs/ownerFiles in the task packet; avoid unrelated files.",
         "Run all listed tests; add missing tests when behavior changes.",
@@ -48,16 +56,29 @@ export const buildBasePrompt = ({ role }: { role: ClankerRole }): string => {
   }
 };
 
-export const buildPlanFileDispatch = ({ promptPath }: { promptPath: string }): string =>
-  `Open ${promptPath} and follow it exactly. Create task packets in .clanker/tasks now.`;
+export const buildPlanFileDispatch = ({
+  promptPath,
+  tasksDir,
+}: {
+  promptPath: string;
+  tasksDir: string;
+}): string => `Open ${promptPath} and follow it exactly. Create task packets in ${tasksDir} now.`;
 
-export const buildTaskFileDispatch = ({ taskId }: { taskId: string }): string =>
-  `Open .clanker/tasks/${taskId}.json and execute it. Follow the instructions exactly.`;
+export const buildTaskFileDispatch = ({
+  taskId,
+  tasksDir,
+}: {
+  taskId: string;
+  tasksDir: string;
+}): string =>
+  `Open ${join(tasksDir, `${taskId}.json`)} and execute it. Follow the instructions exactly.`;
 
 export const buildJudgeRelaunchPrompt = ({
   tasks,
+  tasksDir,
 }: {
   tasks: { id: string; title?: string; status: string }[];
+  tasksDir: string;
 }): string | null => {
   const pending = tasks.filter((task) => task.status === "needs_judge");
   if (pending.length === 0) {
@@ -68,9 +89,9 @@ export const buildJudgeRelaunchPrompt = ({
     .join("\n");
   return [
     "You are the judge.",
-    "Review tasks marked needs_judge in .clanker/tasks.",
+    `Review tasks marked needs_judge in ${tasksDir}.`,
     list ? `Current queue:\n${list}` : null,
-    "For each task: open .clanker/tasks/<id>.json, validate changes, then set status to done/rework/blocked/failed via `clanker task status <id> <status>`.",
+    `For each task: open ${tasksDir}/<id>.json, validate changes, then set status to done/rework/blocked/failed via \`clanker task status <id> <status>\`.`,
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");

@@ -49,7 +49,11 @@ describe("prompting", () => {
   });
 
   test("builds file dispatch prompts", () => {
-    expect(buildPlanFileDispatch({ promptPath: "prompt.txt" })).toContain("prompt.txt");
-    expect(buildTaskFileDispatch({ taskId: "t1" })).toContain(".clanker/tasks/t1.json");
+    expect(
+      buildPlanFileDispatch({ promptPath: "prompt.txt", tasksDir: "/tmp/.clanker/tasks" }),
+    ).toContain("prompt.txt");
+    expect(buildTaskFileDispatch({ taskId: "t1", tasksDir: "/tmp/.clanker/tasks" })).toContain(
+      "/tmp/.clanker/tasks/t1.json",
+    );
   });
 });

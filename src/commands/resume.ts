@@ -3,9 +3,10 @@ import { ensureStateDirs } from "../state/ensure-state.js";
 import { loadState, saveState } from "../state/state.js";
 import { appendEvent } from "../state/events.js";
 import { runDashboard } from "./dashboard.js";
+import { getRepoRoot } from "../repo-root.js";
 
 export const runResume = async (): Promise<void> => {
-  const repoRoot = process.cwd();
+  const repoRoot = getRepoRoot();
   const paths = getClankerPaths({ repoRoot });
   await ensureStateDirs({ paths });
   const state = await loadState({ statePath: paths.statePath });

@@ -12,6 +12,7 @@ export const runCodexSupervisor = async ({
   role,
   id,
   command,
+  cwd,
   readyEvent,
   statusLine,
 }: {
@@ -19,6 +20,7 @@ export const runCodexSupervisor = async ({
   role: "planner" | "judge" | "slave";
   id: string;
   command?: string;
+  cwd?: string;
   readyEvent: { type: string; msg: string };
   statusLine?: string;
 }): Promise<void> => {
@@ -65,6 +67,7 @@ export const runCodexSupervisor = async ({
       role,
       id,
       command: override ?? command,
+      cwd,
     });
     activeChild = child;
     activeLogPath = logPath;

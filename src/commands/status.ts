@@ -3,9 +3,10 @@ import { getClankerPaths } from "../paths.js";
 import { loadState } from "../state/state.js";
 import { loadMetrics } from "../state/metrics.js";
 import { sparkline } from "../format/sparkline.js";
+import { getRepoRoot } from "../repo-root.js";
 
 export const runStatus = async ({}: {}): Promise<void> => {
-  const repoRoot = process.cwd();
+  const repoRoot = getRepoRoot();
   const paths = getClankerPaths({ repoRoot });
   const config = await loadConfig({ repoRoot });
   const state = await loadState({ statePath: paths.statePath });

@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { loadConfig } from "../config.js";
+import { getRepoRoot } from "../repo-root.js";
 import { getClankerPaths } from "../paths.js";
 import { ensureStateDirs } from "../state/ensure-state.js";
 import { loadState, saveState } from "../state/state.js";
@@ -9,11 +10,13 @@ import { appendEvent } from "../state/events.js";
 import { runTmux } from "../tmux.js";
 import { runOnboardingIfNeeded } from "./onboarding.js";
 import { launchIterm } from "../iterm.js";
+import { ensureRoleWorktrees } from "../worktrees.js";
 
 interface PaneSpec {
   title: string;
   args: string[];
   usesCodex: boolean;
+  cwd: string;
 }
 
 const applySessionOptions = async ({
@@ -266,22 +269,35 @@ const buildPaneSpecs = ({
   planners,
   judges,
   slaves,
+  repoRoot,
+  worktrees,
 }: {
   planners: number;
   judges: number;
   slaves: number;
+  repoRoot: string;
+  worktrees: {
+    planner: string[];
+    judge: string[];
+    slave: string[];
+  };
 }): PaneSpec[] => {
-  const specs: PaneSpec[] = [{ title: "dashboard", args: ["dashboard"], usesCodex: false }];
+  const specs: PaneSpec[] = [
+    { title: "dashboard", args: ["dashboard"], usesCodex: false, cwd: repoRoot },
+  ];
   for (let i = 1; i <= planners; i += 1) {
     const args = i === 1 ? ["planner"] : ["planner", `${i}`];
-    specs.push({ title: `planner-${i}`, args, usesCodex: true });
+    const cwd = worktrees.planner[i - 1] ?? repoRoot;
+    specs.push({ title: `planner-${i}`, args, usesCodex: true, cwd });
   }
   for (let i = 1; i <= judges; i += 1) {
     const args = i === 1 ? ["judge"] : ["judge", `${i}`];
-    specs.push({ title: `judge-${i}`, args, usesCodex: true });
+    const cwd = worktrees.judge[i - 1] ?? repoRoot;
+    specs.push({ title: `judge-${i}`, args, usesCodex: true, cwd });
   }
   for (let i = 1; i <= slaves; i += 1) {
-    specs.push({ title: `slave-${i}`, args: ["slave", `${i}`], usesCodex: true });
+    const cwd = worktrees.slave[i - 1] ?? repoRoot;
+    specs.push({ title: `c${i}`, args: ["slave", `${i}`], usesCodex: true, cwd });
   }
   return specs;
 };
@@ -314,12 +330,14 @@ const configurePanes = async ({
   specs,
   cliPath,
   nodeArgs,
+  repoRoot,
 }: {
   sessionName: string;
   paneIds: string[];
   specs: PaneSpec[];
   cliPath: string;
   nodeArgs: string[];
+  repoRoot: string;
 }): Promise<void> => {
   const tmuxSocket = process.env.CLANKER_TMUX_SOCKET;
   if (tmuxSocket && tmuxSocket.length > 0) {
@@ -327,6 +345,9 @@ const configurePanes = async ({
       args: ["set-environment", "-t", sessionName, "CLANKER_TMUX_SOCKET", tmuxSocket],
     });
   }
+  await runTmux({
+    args: ["set-environment", "-t", sessionName, "CLANKER_REPO_ROOT", repoRoot],
+  });
 
   for (let i = 0; i < paneIds.length && i < specs.length; i += 1) {
     const paneId = paneIds[i] ?? "";
@@ -336,7 +357,18 @@ const configurePanes = async ({
     }
     const args = spec.usesCodex ? ["--codex-tty", ...spec.args] : spec.args;
     await runTmux({
-      args: ["respawn-pane", "-k", "-t", paneId, process.execPath, ...nodeArgs, cliPath, ...args],
+      args: [
+        "respawn-pane",
+        "-k",
+        "-c",
+        spec.cwd,
+        "-t",
+        paneId,
+        process.execPath,
+        ...nodeArgs,
+        cliPath,
+        ...args,
+      ],
     });
     await runTmux({
       args: ["select-pane", "-t", paneId, "-T", `clanker:${spec.title}`],
@@ -351,7 +383,7 @@ export const runLaunch = async ({
   attach?: boolean;
   forceTmux?: boolean;
 } = {}): Promise<void> => {
-  const repoRoot = process.cwd();
+  const repoRoot = getRepoRoot();
   await runOnboardingIfNeeded({ repoRoot });
   const config = await loadConfig({ repoRoot });
   const paths = getClankerPaths({ repoRoot });
@@ -371,16 +403,33 @@ export const runLaunch = async ({
   });
 
   const sessionName = config.tmuxFilter ?? `clanker-${repoRoot.split("/").pop() ?? "repo"}`;
+  const worktreeSpecs = await ensureRoleWorktrees({
+    repoRoot,
+    planners: config.planners,
+    judges: config.judges,
+    slaves: config.slaves,
+    ref: "origin/main",
+  });
+  const worktreePaths = worktreeSpecs.reduce(
+    (acc, spec) => {
+      acc[spec.role].push(spec.path);
+      return acc;
+    },
+    { planner: [] as string[], judge: [] as string[], slave: [] as string[] },
+  );
   const specs = buildPaneSpecs({
     planners: config.planners,
     judges: config.judges,
     slaves: config.slaves,
+    repoRoot,
+    worktrees: worktreePaths,
   });
   const cliPath = await resolveCliPath({ repoRoot });
   const nodeArgs = await resolvePnpArgs({ cliPath });
 
   const isItermMode = !forceTmux && process.platform === "darwin";
-  if (!(await hasSession({ sessionName }))) {
+  const sessionExists = await hasSession({ sessionName });
+  if (!sessionExists) {
     const paneIds = isItermMode
       ? await createWindowedLayout({
           sessionName,
@@ -393,7 +442,7 @@ export const runLaunch = async ({
           cwd: repoRoot,
           paneCount: specs.length,
         });
-    await configurePanes({ sessionName, paneIds, specs, cliPath, nodeArgs });
+    await configurePanes({ sessionName, paneIds, specs, cliPath, nodeArgs, repoRoot });
     await configureDetachHooks({ sessionName });
   } else if (isItermMode) {
     await applySessionOptions({ sessionName, hideStatus: true });
@@ -403,7 +452,7 @@ export const runLaunch = async ({
       specs,
       hideStatus: true,
     });
-    await configurePanes({ sessionName, paneIds, specs, cliPath, nodeArgs });
+    await configurePanes({ sessionName, paneIds, specs, cliPath, nodeArgs, repoRoot });
     await configureDetachHooks({ sessionName });
   }
 

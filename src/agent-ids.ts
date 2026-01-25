@@ -1,24 +1,23 @@
-const formatRoleId = ({
-  idRaw,
-  role,
-}: {
-  idRaw?: string;
-  role: "planner" | "judge" | "slave";
-}): string => {
+export const formatPlannerId = ({ idRaw }: { idRaw?: string }): string => {
   const trimmed = idRaw?.trim();
   if (!trimmed) {
-    return `${role}-1`;
+    return "planner-1";
   }
-  const prefix = `${role}-`;
-  const normalized = trimmed.startsWith(prefix) ? trimmed.slice(prefix.length) : trimmed;
-  return `${role}-${normalized}`;
+  return `planner-${trimmed}`;
 };
 
-export const formatPlannerId = ({ idRaw }: { idRaw?: string }): string =>
-  formatRoleId({ idRaw, role: "planner" });
+export const formatJudgeId = ({ idRaw }: { idRaw?: string }): string => {
+  const trimmed = idRaw?.trim();
+  if (!trimmed) {
+    return "judge-1";
+  }
+  return `judge-${trimmed}`;
+};
 
-export const formatJudgeId = ({ idRaw }: { idRaw?: string }): string =>
-  formatRoleId({ idRaw, role: "judge" });
-
-export const formatSlaveId = ({ idRaw }: { idRaw?: string }): string =>
-  formatRoleId({ idRaw, role: "slave" });
+export const formatSlaveId = ({ idRaw }: { idRaw?: string }): string => {
+  const trimmed = idRaw?.trim();
+  if (!trimmed) {
+    return "slave-1";
+  }
+  return `slave-${trimmed}`;
+};

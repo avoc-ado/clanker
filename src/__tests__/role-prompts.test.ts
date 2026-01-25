@@ -8,34 +8,50 @@ import {
 
 describe("role prompts", () => {
   test("planner base prompt includes planner guidance", () => {
-    const prompt = buildBasePrompt({ role: ClankerRole.Planner });
+    const prompt = buildBasePrompt({
+      role: ClankerRole.Planner,
+      paths: { tasksDir: "/tmp/.clanker/tasks", historyDir: "/tmp/.clanker/history" },
+    });
     expect(prompt).toContain("clanker planner");
     expect(prompt).toContain("one task packet");
   });
 
   test("slave base prompt includes status + handoff", () => {
-    const prompt = buildBasePrompt({ role: ClankerRole.Slave });
+    const prompt = buildBasePrompt({
+      role: ClankerRole.Slave,
+      paths: { tasksDir: "/tmp/.clanker/tasks", historyDir: "/tmp/.clanker/history" },
+    });
     expect(prompt).toContain("clanker slave");
     expect(prompt).toContain("clanker task status");
     expect(prompt).toContain("handoff");
   });
 
   test("judge base prompt includes review + decision", () => {
-    const prompt = buildBasePrompt({ role: ClankerRole.Judge });
+    const prompt = buildBasePrompt({
+      role: ClankerRole.Judge,
+      paths: { tasksDir: "/tmp/.clanker/tasks", historyDir: "/tmp/.clanker/history" },
+    });
     expect(prompt).toContain("clanker judge");
     expect(prompt).toContain("done|rework|blocked");
   });
 
   test("buildPlanFileDispatch includes prompt path", () => {
-    expect(buildPlanFileDispatch({ promptPath: "plan.txt" })).toContain("plan.txt");
+    expect(
+      buildPlanFileDispatch({ promptPath: "plan.txt", tasksDir: "/tmp/.clanker/tasks" }),
+    ).toContain("plan.txt");
   });
 
   test("buildTaskFileDispatch includes task path", () => {
-    expect(buildTaskFileDispatch({ taskId: "t9" })).toContain(".clanker/tasks/t9.json");
+    expect(buildTaskFileDispatch({ taskId: "t9", tasksDir: "/tmp/.clanker/tasks" })).toContain(
+      "/tmp/.clanker/tasks/t9.json",
+    );
   });
 
   test("buildJudgeRelaunchPrompt returns null when no needs_judge", () => {
-    const prompt = buildJudgeRelaunchPrompt({ tasks: [{ id: "t1", status: "running" }] });
+    const prompt = buildJudgeRelaunchPrompt({
+      tasks: [{ id: "t1", status: "running" }],
+      tasksDir: "/tmp/.clanker/tasks",
+    });
     expect(prompt).toBeNull();
   });
 });

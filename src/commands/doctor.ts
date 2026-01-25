@@ -2,6 +2,7 @@ import { access } from "node:fs/promises";
 import { getClankerPaths } from "../paths.js";
 import { ensureStateDirs } from "../state/ensure-state.js";
 import yargs from "yargs";
+import { getRepoRoot } from "../repo-root.js";
 
 const checkPath = async ({ label, path }: { label: string; path: string }): Promise<string> => {
   try {
@@ -13,7 +14,7 @@ const checkPath = async ({ label, path }: { label: string; path: string }): Prom
 };
 
 export const runDoctor = async ({ args }: { args: string[] }): Promise<void> => {
-  const repoRoot = process.cwd();
+  const repoRoot = getRepoRoot();
   const paths = getClankerPaths({ repoRoot });
   const parsed = yargs(args)
     .option("fix", { type: "boolean", default: false })

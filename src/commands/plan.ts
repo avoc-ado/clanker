@@ -11,6 +11,7 @@ import { loadConfig } from "../config.js";
 import { getPromptSettings } from "../prompting.js";
 import { buildBasePrompt, buildPlanFileDispatch, ClankerRole } from "../prompting/role-prompts.js";
 import { parsePlannerTitle } from "../tmux-title-utils.js";
+import { getRepoRoot } from "../repo-root.js";
 
 const formatContextEntries = ({
   entries,
@@ -32,16 +33,23 @@ const formatContextEntries = ({
 export const buildPlannerPrompt = ({
   planDocs,
   recentSummaries,
+  tasksDir,
+  historyDir,
 }: {
   planDocs: string[];
   recentSummaries: string;
+  tasksDir: string;
+  historyDir: string;
 }): string => {
   const docList = planDocs.map((doc) => `- ${doc}`).join("\n");
-  const basePrompt = buildBasePrompt({ role: ClankerRole.Planner });
+  const basePrompt = buildBasePrompt({
+    role: ClankerRole.Planner,
+    paths: { tasksDir, historyDir },
+  });
   return [
     basePrompt,
     "",
-    "Use the plan docs included below and create task packets in .clanker/tasks/.",
+    `Use the plan docs included below and create task packets in ${tasksDir}.`,
     "Task packets are JSON files. Keep tasks small and non-overlapping.",
     "If a task looks too large or risks running out of tokens, split it into smaller tasks.",
     "Fill in blanks: research code/docs/web; write findings to docs/research/ before tasks.",
@@ -110,7 +118,7 @@ export const dispatchPlannerPrompt = async ({
   repoRoot?: string;
   plannerPaneId?: string | null;
 }): Promise<PlannerDispatchResult | null> => {
-  const resolvedRoot = repoRoot ?? process.cwd();
+  const resolvedRoot = repoRoot ?? getRepoRoot();
   const paths = getClankerPaths({ repoRoot: resolvedRoot });
   await ensureStateDirs({ paths });
   const config = await loadConfig({ repoRoot: resolvedRoot });
@@ -129,14 +137,22 @@ export const dispatchPlannerPrompt = async ({
     historyDir: paths.historyDir,
   });
   const recentSummaries = formatContextEntries({ entries: contextPack.entries });
-  const prompt = buildPlannerPrompt({ planDocs, recentSummaries });
+  const prompt = buildPlannerPrompt({
+    planDocs,
+    recentSummaries,
+    tasksDir: paths.tasksDir,
+    historyDir: paths.historyDir,
+  });
   const promptSettings = getPromptSettings({ repoRoot: resolvedRoot, config });
   await mkdir(dirname(promptSettings.planPromptAbsolutePath), { recursive: true });
   await writeFile(promptSettings.planPromptAbsolutePath, prompt, "utf-8");
 
   const dispatchPrompt =
     promptSettings.mode === "file"
-      ? buildPlanFileDispatch({ promptPath: promptSettings.planPromptPath })
+      ? buildPlanFileDispatch({
+          promptPath: promptSettings.planPromptAbsolutePath,
+          tasksDir: paths.tasksDir,
+        })
       : prompt;
 
   let targetPaneId = plannerPaneId ?? null;

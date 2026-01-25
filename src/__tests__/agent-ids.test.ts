@@ -9,11 +9,8 @@ describe("agent ids", () => {
 
   test("formats planner and judge ids with suffix", () => {
     expect(formatPlannerId({ idRaw: "2" })).toBe("planner-2");
-    expect(formatPlannerId({ idRaw: "planner-9" })).toBe("planner-9");
     expect(formatJudgeId({ idRaw: "alpha" })).toBe("judge-alpha");
-    expect(formatJudgeId({ idRaw: "judge-2" })).toBe("judge-2");
     expect(formatSlaveId({ idRaw: "4" })).toBe("slave-4");
-    expect(formatSlaveId({ idRaw: "slave-3" })).toBe("slave-3");
   });
 
   test("trims whitespace from ids", () => {
