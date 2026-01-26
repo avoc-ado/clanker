@@ -11,6 +11,7 @@ read_when: first-use, onboarding
 
 - macOS default uses iTerm2 (install iTerm2 or pass `--tmux`).
 - iTerm2 mode runs background tmux sessions (one per pane); use `--tmux` to attach directly.
+- tmux sessions created by clanker set `mouse` on for scrollback.
 - Agents run inside worktrees at `./.clanker/worktree/<role>-<num>` (created from `origin/main`).
 - `clanker` (onboarding + spawn iTerm2 window; exits)
 - `clanker --tmux` (onboarding + spawn tmux session; exits)

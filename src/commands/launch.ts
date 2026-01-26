@@ -29,6 +29,7 @@ const applySessionOptions = async ({
   await runTmux({ args: ["set-window-option", "-t", sessionName, "allow-rename", "off"] });
   await runTmux({ args: ["set-window-option", "-t", sessionName, "automatic-rename", "off"] });
   await runTmux({ args: ["set-option", "-t", sessionName, "set-titles", "off"] });
+  await runTmux({ args: ["set-option", "-t", sessionName, "mouse", "on"] });
   if (hideStatus) {
     await runTmux({ args: ["set-option", "-t", sessionName, "status", "off"] });
   }
