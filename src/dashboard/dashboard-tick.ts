@@ -165,7 +165,7 @@ export const makeDashboardTick = ({
     }
     state.lastTickAt = tickStartedAt;
     const liveState = await loadState({ statePath: paths.statePath });
-    const panes = await listPanes({ sessionName: config.tmuxFilter });
+    const panes = await listPanes({ sessionPrefix: config.tmuxFilter });
     const tasks = await listTasks({ tasksDir: paths.tasksDir });
     for (const task of tasks) {
       if (!knownTaskIds.has(task.id)) {

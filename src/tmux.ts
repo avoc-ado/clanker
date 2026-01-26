@@ -15,9 +15,13 @@ export const runTmux = async ({ args }: { args: string[] }): Promise<string> => 
   return stdout.trim();
 };
 
-export const listPanes = async ({ sessionName }: { sessionName?: string } = {}): Promise<
-  TmuxPane[]
-> => {
+export const listPanes = async ({
+  sessionName,
+  sessionPrefix,
+}: {
+  sessionName?: string;
+  sessionPrefix?: string;
+} = {}): Promise<TmuxPane[]> => {
   try {
     const targetArgs = ["list-panes", "-a"];
     const output = await runTmux({
@@ -32,7 +36,11 @@ export const listPanes = async ({ sessionName }: { sessionName?: string } = {}):
       .filter((line) => line.length > 0)
       .map((line) => {
         const [sessionRaw, paneId, paneTitleRaw, windowNameRaw] = line.split("\t");
-        if (sessionName && sessionRaw !== sessionName) {
+        const matchesSession = sessionName ? sessionRaw === sessionName : true;
+        const matchesPrefix = sessionPrefix
+          ? sessionRaw === sessionPrefix || sessionRaw.startsWith(`${sessionPrefix}-`)
+          : true;
+        if (!matchesSession || !matchesPrefix) {
           return null;
         }
         const paneTitle = paneTitleRaw?.trim() ?? "";
