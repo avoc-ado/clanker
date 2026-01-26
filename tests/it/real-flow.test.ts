@@ -1,5 +1,5 @@
-import { appendFile, readFile, readdir, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { appendFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { jest } from "@jest/globals";
 import {
   ensureTmuxInstalled,
@@ -24,7 +24,6 @@ const parseTimeout = ({ fallbackMs }: { fallbackMs: number }): number => {
   const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackMs;
 };
-const isDebug = process.env.CLANKER_IT_DEBUG === "1";
 
 describe("integration: real flow", () => {
   jest.retryTimes(2, { logErrorsBeforeRetry: true });
@@ -48,7 +47,7 @@ describe("integration: real flow", () => {
       });
       await setupRealMode({ root });
       const artifactPath = join(root, "artifacts", "it-cli.js");
-      const debugLogPath = join(root, ".clanker", "it-debug.log");
+      const debugLogPath = join(repoRoot, ".clanker", "it-real-debug.log");
 
       await runCli({ cwd: root, args: ["doctor", "--fix"] });
       await writeFile(
@@ -68,9 +67,8 @@ describe("integration: real flow", () => {
         promptFile: ".clanker/plan-prompt.txt",
       });
       const nodeBase = [process.execPath, "--require", pnpRequire, "--loader", pnpLoader, cliPath];
-      if (isDebug) {
-        console.log(`it-real debug log: ${debugLogPath}`);
-      }
+      await mkdir(dirname(debugLogPath), { recursive: true });
+      await writeFile(debugLogPath, `== it-real start ${new Date().toISOString()} ==\n`, "utf-8");
       const readEvents = async (): Promise<string> => {
         try {
           return await readFile(join(root, ".clanker", "events.log"), "utf-8");
@@ -99,9 +97,6 @@ describe("integration: real flow", () => {
         });
       };
       const emitDebug = async ({ label }: { label: string }): Promise<void> => {
-        if (!isDebug) {
-          return;
-        }
         try {
           const [events, panes, plannerPane, slavePane, judgePane] = await Promise.all([
             readEvents(),
@@ -131,10 +126,9 @@ describe("integration: real flow", () => {
             "--- judge pane ---",
             judgePane.trim(),
           ].join("\n");
-          console.log(payload);
           await appendFile(debugLogPath, `${payload}\n`, "utf-8");
         } catch (error) {
-          console.log(`it-real debug failed: ${String(error)}`);
+          await appendFile(debugLogPath, `it-real debug failed: ${String(error)}\n`, "utf-8");
         }
       };
       const getPaneIdByTitle = async ({ title }: { title: string }): Promise<string | null> => {
@@ -257,12 +251,10 @@ describe("integration: real flow", () => {
 
       let debugInterval: NodeJS.Timeout | null = null;
       try {
-        if (isDebug) {
-          debugInterval = setInterval(() => {
-            void emitDebug({ label: "tick" });
-          }, 15_000);
-          debugInterval.unref?.();
-        }
+        debugInterval = setInterval(() => {
+          void emitDebug({ label: "tick" });
+        }, 15_000);
+        debugInterval.unref?.();
         await runTmux({
           args: ["new-session", "-d", "-s", session, "-n", "dashboard", "-c", root],
         });

@@ -48,7 +48,6 @@ promptFile: default
 yarn test:it
 yarn test:it:stub
 yarn test:it:real
-yarn test:it:real:debug
 ```
 
 Real mode needs codex CLI on PATH (override via `CLANKER_IT_REAL_COMMAND`).

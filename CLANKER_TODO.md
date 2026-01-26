@@ -39,7 +39,6 @@
 - Stabilize real-flow IT: codex UI ready wait + tmux send-keys literal + window-name fallback
 - Replace env overrides with CLI args/config where appropriate (`--codex-command`, `--codex-tty`, `--disable-codex`)
 - Deduplicate prompt helpers (e.g. `getPromptMode`) into shared util
-- Add `test:it:real:debug` with `--detectOpenHandles`
 - Keep tmux session alive before respawn in real IT flow
 
 ## Stack Rank

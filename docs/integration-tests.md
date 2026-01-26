@@ -12,8 +12,7 @@ read_when: testing, ops
 
 - `yarn test:it`
 - `yarn test:it:stub`
-- `yarn test:it:real`
-- `yarn test:it:real:debug` (adds `--detectOpenHandles` + verbose tmux logging)
+- `yarn test:it:real` (writes verbose tmux log to `.clanker/it-real-debug.log`, includes `--detectOpenHandles`)
 - `yarn verify` (includes integration tests)
 
 ## Notes
