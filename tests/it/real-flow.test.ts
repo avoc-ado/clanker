@@ -53,7 +53,8 @@ describe("integration: real flow", () => {
         "artifacts",
         "it-cli.js",
       );
-      const debugLogPath = join(repoRoot, ".clanker", "it-real-debug.log");
+      const debugLogPath = join(root, ".clanker", "it-debug.log");
+      const logToStdout = process.env.CLANKER_IT_DEBUG === "1";
 
       await runCli({ cwd: root, args: ["doctor", "--fix"] });
       await writeFile(
@@ -76,6 +77,12 @@ describe("integration: real flow", () => {
       const nodeBase = [process.execPath, "--require", pnpRequire, "--loader", pnpLoader, cliPath];
       await mkdir(dirname(debugLogPath), { recursive: true });
       await writeFile(debugLogPath, `== it-real start ${new Date().toISOString()} ==\n`, "utf-8");
+      const appendDebug = async ({ payload }: { payload: string }): Promise<void> => {
+        await appendFile(debugLogPath, `${payload}\n`, "utf-8");
+        if (logToStdout) {
+          console.log(payload);
+        }
+      };
       const readEvents = async (): Promise<string> => {
         try {
           return await readFile(join(root, ".clanker", "events.log"), "utf-8");
@@ -103,40 +110,182 @@ describe("integration: real flow", () => {
           },
         });
       };
-      const emitDebug = async ({ label }: { label: string }): Promise<void> => {
+      const tailText = ({
+        text,
+        maxLines,
+        maxChars,
+      }: {
+        text: string;
+        maxLines: number;
+        maxChars: number;
+      }): string => {
+        const trimmed = text.slice(-maxChars);
+        const lines = trimmed.split("\n");
+        return lines.slice(-maxLines).join("\n");
+      };
+      const safe = async <T>({
+        label,
+        run,
+      }: {
+        label: string;
+        run: () => Promise<T>;
+      }): Promise<{ label: string; value?: T; error?: string }> => {
         try {
-          const [events, panes, plannerPane, slavePane, judgePane] = await Promise.all([
-            readEvents(),
-            runTmux({
-              args: [
-                "list-panes",
-                "-t",
-                session,
-                "-F",
-                "#{pane_id}\t#{pane_title}\t#{window_name}",
-              ],
-            }),
-            captureWindow({ window: "planner-1" }),
-            captureWindow({ window: "slave-1" }),
-            captureWindow({ window: "judge-1" }),
-          ]);
-          const tail = events.split("\n").slice(-10).join("\n").trim();
-          const payload = [
-            `== it-real ${label} ==`,
-            tail.length > 0 ? tail : "(events empty)",
-            "--- tmux panes ---",
-            panes.trim(),
-            "--- planner pane ---",
-            plannerPane.trim(),
-            "--- slave pane ---",
-            slavePane.trim(),
-            "--- judge pane ---",
-            judgePane.trim(),
-          ].join("\n");
-          await appendFile(debugLogPath, `${payload}\n`, "utf-8");
+          const value = await run();
+          return { label, value };
         } catch (error) {
-          await appendFile(debugLogPath, `it-real debug failed: ${String(error)}\n`, "utf-8");
+          return { label, error: String(error) };
         }
+      };
+      const emitDebug = async ({ label }: { label: string }): Promise<void> => {
+        const snapshotTs = new Date().toISOString();
+        const [
+          eventsResult,
+          stateResult,
+          tasksResult,
+          historyResult,
+          logsResult,
+          artifactsResult,
+          promptResult,
+          panesResult,
+          windowsResult,
+          sessionsResult,
+        ] = await Promise.all([
+          safe({ label: "events", run: readEvents }),
+          safe({
+            label: "state",
+            run: async () => readFile(join(root, ".clanker", "state.json"), "utf-8"),
+          }),
+          safe({
+            label: "tasks",
+            run: async () => readdir(join(root, ".clanker", "tasks")),
+          }),
+          safe({
+            label: "history",
+            run: async () => readdir(join(root, ".clanker", "history")),
+          }),
+          safe({
+            label: "logs",
+            run: async () => readdir(join(root, ".clanker", "logs")),
+          }),
+          safe({
+            label: "artifacts",
+            run: async () => readdir(join(root, "artifacts")),
+          }),
+          safe({
+            label: "plan-prompt",
+            run: async () => readFile(join(root, ".clanker", "plan-prompt.txt"), "utf-8"),
+          }),
+          safe({
+            label: "panes",
+            run: async () =>
+              runTmux({
+                args: [
+                  "list-panes",
+                  "-t",
+                  session,
+                  "-F",
+                  "#{pane_id}\t#{pane_title}\t#{window_name}",
+                ],
+              }),
+          }),
+          safe({
+            label: "windows",
+            run: async () =>
+              runTmux({
+                args: [
+                  "list-windows",
+                  "-t",
+                  session,
+                  "-F",
+                  "#{window_name}\t#{window_id}\t#{window_active}",
+                ],
+              }),
+          }),
+          safe({
+            label: "sessions",
+            run: async () =>
+              runTmux({ args: ["list-sessions", "-F", "#{session_name}\t#{session_windows}"] }),
+          }),
+        ]);
+
+        const windowNames =
+          windowsResult.value
+            ?.split("\n")
+            .map((line) => line.trim().split("\t")[0] ?? "")
+            .filter((name) => name.length > 0) ?? [];
+
+        const windowCaptures = await Promise.all(
+          windowNames.map((window) =>
+            safe({
+              label: `capture:${window}`,
+              run: async () => captureWindow({ window }),
+            }),
+          ),
+        );
+
+        const logTails = await Promise.all(
+          (logsResult.value ?? []).map((name) =>
+            safe({
+              label: `log:${name}`,
+              run: async () => readFile(join(root, ".clanker", "logs", name), "utf-8"),
+            }),
+          ),
+        );
+
+        const payload = [
+          `== it-real ${label} @ ${snapshotTs} ==`,
+          "--- session ---",
+          session,
+          "--- codex command ---",
+          codexCommand,
+          "--- tmux sessions ---",
+          sessionsResult.error
+            ? `error: ${sessionsResult.error}`
+            : (sessionsResult.value ?? "").trim(),
+          "--- tmux windows ---",
+          windowsResult.error
+            ? `error: ${windowsResult.error}`
+            : (windowsResult.value ?? "").trim(),
+          "--- tmux panes ---",
+          panesResult.error ? `error: ${panesResult.error}` : (panesResult.value ?? "").trim(),
+          "--- events ---",
+          eventsResult.error
+            ? `error: ${eventsResult.error}`
+            : tailText({ text: eventsResult.value ?? "", maxLines: 50, maxChars: 8000 }).trim() ||
+              "(events empty)",
+          "--- state ---",
+          stateResult.error ? `error: ${stateResult.error}` : (stateResult.value ?? "").trim(),
+          "--- tasks ---",
+          tasksResult.error ? `error: ${tasksResult.error}` : (tasksResult.value ?? []).join("\n"),
+          "--- history ---",
+          historyResult.error
+            ? `error: ${historyResult.error}`
+            : (historyResult.value ?? []).join("\n"),
+          "--- artifacts ---",
+          artifactsResult.error
+            ? `error: ${artifactsResult.error}`
+            : (artifactsResult.value ?? []).join("\n"),
+          "--- plan prompt ---",
+          promptResult.error
+            ? `error: ${promptResult.error}`
+            : tailText({ text: promptResult.value ?? "", maxLines: 80, maxChars: 8000 }).trim(),
+          "--- windows capture ---",
+          ...windowCaptures.flatMap((entry) => [
+            `-- ${entry.label} --`,
+            entry.error
+              ? `error: ${entry.error}`
+              : tailText({ text: entry.value ?? "", maxLines: 80, maxChars: 8000 }).trim(),
+          ]),
+          "--- logs ---",
+          ...logTails.flatMap((entry) => [
+            `-- ${entry.label} --`,
+            entry.error
+              ? `error: ${entry.error}`
+              : tailText({ text: entry.value ?? "", maxLines: 80, maxChars: 8000 }).trim(),
+          ]),
+        ].join("\n");
+        await appendDebug({ payload });
       };
       const getPaneIdByTitle = async ({ title }: { title: string }): Promise<string | null> => {
         const raw = await runTmux({
@@ -363,31 +512,41 @@ describe("integration: real flow", () => {
 
         await emitDebug({ label: "processes-started" });
         await approveAllCodex();
-        await waitFor({
-          label: "codex approvals",
-          timeoutMs: Math.min(30_000, Math.floor(maxMs / 4)),
-          intervalMs: 1_000,
-          check: async () => {
-            await approveAllCodex();
-            const approvals = await Promise.all([
-              hasApprovalPrompt({ window: "planner-1" }),
-              hasApprovalPrompt({ window: "slave-1" }),
-              hasApprovalPrompt({ window: "judge-1" }),
-            ]);
-            return approvals.every((pending) => !pending);
-          },
-        });
+        try {
+          await waitFor({
+            label: "codex approvals",
+            timeoutMs: Math.min(30_000, Math.floor(maxMs / 4)),
+            intervalMs: 1_000,
+            check: async () => {
+              await approveAllCodex();
+              const approvals = await Promise.all([
+                hasApprovalPrompt({ window: "planner-1" }),
+                hasApprovalPrompt({ window: "slave-1" }),
+                hasApprovalPrompt({ window: "judge-1" }),
+              ]);
+              return approvals.every((pending) => !pending);
+            },
+          });
+        } catch (error) {
+          await emitDebug({ label: "approval-timeout" });
+          throw new Error(`${String(error)}\nSee ${debugLogPath} for full diagnostics.`);
+        }
 
-        await waitFor({
-          label: "codex logs",
-          timeoutMs: Math.min(60_000, Math.floor(maxMs / 3)),
-          intervalMs: 1_000,
-          check: async () => {
-            await approveAllCodex();
-            const raw = await readEvents();
-            return raw.includes('"CHAT_LOG"') && raw.includes('"planner-1"');
-          },
-        });
+        try {
+          await waitFor({
+            label: "codex logs",
+            timeoutMs: Math.min(60_000, Math.floor(maxMs / 3)),
+            intervalMs: 1_000,
+            check: async () => {
+              await approveAllCodex();
+              const raw = await readEvents();
+              return raw.includes('"CHAT_LOG"') && raw.includes('"planner-1"');
+            },
+          });
+        } catch (error) {
+          await emitDebug({ label: "codex-logs-timeout" });
+          throw new Error(`${String(error)}\nSee ${debugLogPath} for full diagnostics.`);
+        }
 
         try {
           await waitFor({
@@ -405,37 +564,20 @@ describe("integration: real flow", () => {
             },
           });
         } catch (error) {
-          const [plannerOutput, slaveOutput, judgeOutput, events] = await Promise.all([
-            capturePaneByTitle({ title: "clanker:planner-1", fallbackTitle: "planner-1" }),
-            capturePaneByTitle({ title: "clanker:slave-1", fallbackTitle: "slave-1" }),
-            capturePaneByTitle({ title: "clanker:judge-1", fallbackTitle: "judge-1" }),
-            readEvents(),
-          ]);
-          const windows = await runTmux({
-            args: ["list-windows", "-t", session, "-F", "#{window_name}"],
-          });
-          throw new Error(
-            [
-              String(error),
-              "--- events.log ---",
-              events.trim(),
-              "--- planner pane ---",
-              plannerOutput.trim(),
-              "--- slave pane ---",
-              slaveOutput.trim(),
-              "--- judge pane ---",
-              judgeOutput.trim(),
-              "--- tmux windows ---",
-              windows.trim(),
-            ].join("\n"),
-          );
+          await emitDebug({ label: "ready-timeout" });
+          throw new Error(`${String(error)}\nSee ${debugLogPath} for full diagnostics.`);
         }
 
-        await Promise.all([
-          waitForCodexReady({ window: "planner-1" }),
-          waitForCodexReady({ window: "slave-1" }),
-          waitForCodexReady({ window: "judge-1" }),
-        ]);
+        try {
+          await Promise.all([
+            waitForCodexReady({ window: "planner-1" }),
+            waitForCodexReady({ window: "slave-1" }),
+            waitForCodexReady({ window: "judge-1" }),
+          ]);
+        } catch (error) {
+          await emitDebug({ label: "codex-ready-timeout" });
+          throw new Error(`${String(error)}\nSee ${debugLogPath} for full diagnostics.`);
+        }
 
         await emitDebug({ label: "plan-auto" });
 
@@ -451,54 +593,50 @@ describe("integration: real flow", () => {
             },
           });
         } catch (error) {
-          const plannerOutput = await capturePaneByTitle({
-            title: "clanker:planner-1",
-            fallbackTitle: "planner-1",
-          });
-          const windows = await runTmux({
-            args: ["list-windows", "-t", session, "-F", "#{window_name}"],
-          });
-          throw new Error(
-            [
-              String(error),
-              "--- planner pane ---",
-              plannerOutput.trim(),
-              "--- tmux windows ---",
-              windows.trim(),
-            ].join("\n"),
-          );
+          await emitDebug({ label: "task-timeout" });
+          throw new Error(`${String(error)}\nSee ${debugLogPath} for full diagnostics.`);
         }
 
-        await waitFor({
-          label: "task prompted",
-          timeoutMs: Math.min(180_000, Math.floor(maxMs / 2)),
-          intervalMs: 2_000,
-          check: async () => {
-            await approveAllCodex();
-            const raw = await readEvents();
-            return raw.includes('"TASK_PROMPTED"');
-          },
-        });
+        try {
+          await waitFor({
+            label: "task prompted",
+            timeoutMs: Math.min(180_000, Math.floor(maxMs / 2)),
+            intervalMs: 2_000,
+            check: async () => {
+              await approveAllCodex();
+              const raw = await readEvents();
+              return raw.includes('"TASK_PROMPTED"');
+            },
+          });
+        } catch (error) {
+          await emitDebug({ label: "task-prompt-timeout" });
+          throw new Error(`${String(error)}\nSee ${debugLogPath} for full diagnostics.`);
+        }
 
-        await waitFor({
-          label: "artifact output",
-          timeoutMs: Math.min(240_000, Math.floor(maxMs / 2)),
-          intervalMs: 2_000,
-          check: async () => {
-            await approveAllCodex();
-            try {
-              const raw = await readFile(artifactPath, "utf-8");
-              return raw.includes("IT_OK");
-            } catch {
+        try {
+          await waitFor({
+            label: "artifact output",
+            timeoutMs: Math.min(240_000, Math.floor(maxMs / 2)),
+            intervalMs: 2_000,
+            check: async () => {
+              await approveAllCodex();
               try {
-                const raw = await readFile(worktreeArtifactPath, "utf-8");
+                const raw = await readFile(artifactPath, "utf-8");
                 return raw.includes("IT_OK");
               } catch {
-                return false;
+                try {
+                  const raw = await readFile(worktreeArtifactPath, "utf-8");
+                  return raw.includes("IT_OK");
+                } catch {
+                  return false;
+                }
               }
-            }
-          },
-        });
+            },
+          });
+        } catch (error) {
+          await emitDebug({ label: "artifact-timeout" });
+          throw new Error(`${String(error)}\nSee ${debugLogPath} for full diagnostics.`);
+        }
       } finally {
         if (debugInterval) {
           clearInterval(debugInterval);
