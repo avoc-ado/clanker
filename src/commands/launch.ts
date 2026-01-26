@@ -43,42 +43,16 @@ const hasSession = async ({ sessionName }: { sessionName: string }): Promise<boo
   }
 };
 
-const escapeHookCommand = ({ value }: { value: string }): string => {
-  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-};
-
 const configureDetachHooks = async ({ sessionName }: { sessionName: string }): Promise<void> => {
-  const sessionTarget = `${sessionName}:`;
-  const sessionCheck = [
-    'if -F "#{==:#{session_name},' + sessionName + '}"',
-    "{",
-    `run-shell "tmux list-clients -t ${sessionTarget} 2>/dev/null | wc -l | grep -q '^0$' && tmux kill-session -t ${sessionTarget}"`,
-    "}",
-  ].join(" ");
-  const windowCheck = [
-    'if -F "#{==:#{session_name},' + sessionName + '}"',
-    "{",
-    `run-shell "tmux list-clients -t ${sessionTarget} -F '#{client_window}' 2>/dev/null | grep -q '^#{window_id}$' || tmux kill-window -t #{window_id}"`,
-    "}",
-  ].join(" ");
+  const sessionCheck = `tmux list-clients -t ${sessionName} -F '##{client_attached}' 2>/dev/null | grep -q 1 || tmux kill-session -t ${sessionName}`;
+  const windowCheck = `tmux list-clients -t ${sessionName} -F '##{client_window} ##{client_attached}' 2>/dev/null | grep -q '^#{window_id} 1$' || tmux kill-window -t #{window_id}`;
+  const sessionHook = `run-shell "${sessionCheck}"`;
+  const windowHook = `run-shell "${windowCheck}"`;
   await runTmux({
-    args: [
-      "set-hook",
-      "-t",
-      sessionName,
-      "client-detached",
-      escapeHookCommand({ value: sessionCheck }),
-    ],
+    args: ["set-hook", "-t", sessionName, "client-detached", sessionHook],
   });
   await runTmux({
-    args: [
-      "set-hook",
-      "-t",
-      sessionName,
-      "client-detached",
-      escapeHookCommand({ value: windowCheck }),
-      "-a",
-    ],
+    args: ["set-hook", "-a", "-t", sessionName, "client-detached", windowHook],
   });
 };
 
@@ -218,7 +192,7 @@ const ensureWindowedLayout = async ({
   specs: PaneSpec[];
   hideStatus?: boolean;
 }): Promise<string[]> => {
-  const paneIds: string[] = [];
+  const targets: string[] = [];
   for (let i = 0; i < specs.length; i += 1) {
     const title = specs[i]?.title ?? `clanker-${i + 1}`;
     let paneId = await listWindowPaneId({ sessionName, windowName: title });
@@ -226,11 +200,12 @@ const ensureWindowedLayout = async ({
       await runTmux({ args: ["new-window", "-t", sessionName, "-n", title, "-c", cwd] });
       paneId = await listWindowPaneId({ sessionName, windowName: title });
     }
-    if (paneId) {
-      paneIds.push(paneId);
+    if (!paneId) {
+      throw new Error(`failed to create tmux window ${title}`);
     }
+    targets.push(`${sessionName}:${title}`);
   }
-  return paneIds;
+  return targets;
 };
 
 const createWindowedLayout = async ({
@@ -297,7 +272,7 @@ const buildPaneSpecs = ({
   }
   for (let i = 1; i <= slaves; i += 1) {
     const cwd = worktrees.slave[i - 1] ?? repoRoot;
-    specs.push({ title: `c${i}`, args: ["slave", `${i}`], usesCodex: true, cwd });
+    specs.push({ title: `slave-${i}`, args: ["slave", `${i}`], usesCodex: true, cwd });
   }
   return specs;
 };
@@ -315,25 +290,26 @@ export const buildTmuxAttachCommands = ({
   windowNames: string[];
   tmuxSocket?: string;
 }): string[] => {
-  const baseArgs = tmuxSocket
-    ? ["tmux", "-S", tmuxSocket, "attach-session"]
-    : ["tmux", "attach-session"];
   return windowNames.map((name) => {
     const target = `${sessionName}:${name}`;
-    return [...baseArgs, "-t", target].map((part) => escapeShellArg({ value: part })).join(" ");
+    const socketArgs = tmuxSocket ? `-S ${escapeShellArg({ value: tmuxSocket })} ` : "";
+    const tmuxBin = "tmux";
+    const attach = `attach-session -t ${escapeShellArg({ value: sessionName })}`;
+    const select = `select-window -t ${escapeShellArg({ value: target })}`;
+    return `${tmuxBin} ${socketArgs}${attach} \\; ${select}`.trim();
   });
 };
 
 const configurePanes = async ({
   sessionName,
-  paneIds,
+  paneTargets,
   specs,
   cliPath,
   nodeArgs,
   repoRoot,
 }: {
   sessionName: string;
-  paneIds: string[];
+  paneTargets: string[];
   specs: PaneSpec[];
   cliPath: string;
   nodeArgs: string[];
@@ -349,10 +325,10 @@ const configurePanes = async ({
     args: ["set-environment", "-t", sessionName, "CLANKER_REPO_ROOT", repoRoot],
   });
 
-  for (let i = 0; i < paneIds.length && i < specs.length; i += 1) {
-    const paneId = paneIds[i] ?? "";
+  for (let i = 0; i < paneTargets.length && i < specs.length; i += 1) {
+    const paneTarget = paneTargets[i] ?? "";
     const spec = specs[i];
-    if (!paneId || !spec) {
+    if (!paneTarget || !spec) {
       continue;
     }
     const args = spec.usesCodex ? ["--codex-tty", ...spec.args] : spec.args;
@@ -363,7 +339,7 @@ const configurePanes = async ({
         "-c",
         spec.cwd,
         "-t",
-        paneId,
+        paneTarget,
         process.execPath,
         ...nodeArgs,
         cliPath,
@@ -371,7 +347,7 @@ const configurePanes = async ({
       ],
     });
     await runTmux({
-      args: ["select-pane", "-t", paneId, "-T", `clanker:${spec.title}`],
+      args: ["select-pane", "-t", paneTarget, "-T", `clanker:${spec.title}`],
     });
   }
 };
@@ -430,7 +406,7 @@ export const runLaunch = async ({
   const isItermMode = !forceTmux && process.platform === "darwin";
   const sessionExists = await hasSession({ sessionName });
   if (!sessionExists) {
-    const paneIds = isItermMode
+    const paneTargets = isItermMode
       ? await createWindowedLayout({
           sessionName,
           cwd: repoRoot,
@@ -442,17 +418,17 @@ export const runLaunch = async ({
           cwd: repoRoot,
           paneCount: specs.length,
         });
-    await configurePanes({ sessionName, paneIds, specs, cliPath, nodeArgs, repoRoot });
+    await configurePanes({ sessionName, paneTargets, specs, cliPath, nodeArgs, repoRoot });
     await configureDetachHooks({ sessionName });
   } else if (isItermMode) {
     await applySessionOptions({ sessionName, hideStatus: true });
-    const paneIds = await ensureWindowedLayout({
+    const paneTargets = await ensureWindowedLayout({
       sessionName,
       cwd: repoRoot,
       specs,
       hideStatus: true,
     });
-    await configurePanes({ sessionName, paneIds, specs, cliPath, nodeArgs, repoRoot });
+    await configurePanes({ sessionName, paneTargets, specs, cliPath, nodeArgs, repoRoot });
     await configureDetachHooks({ sessionName });
   }
 

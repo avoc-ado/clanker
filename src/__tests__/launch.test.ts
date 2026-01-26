@@ -7,9 +7,9 @@ describe("buildTmuxAttachCommands", () => {
       windowNames: ["dashboard", "planner-1", "slave-1"],
     });
     expect(commands).toEqual([
-      "'tmux' 'attach-session' '-t' 'clanker-test:dashboard'",
-      "'tmux' 'attach-session' '-t' 'clanker-test:planner-1'",
-      "'tmux' 'attach-session' '-t' 'clanker-test:slave-1'",
+      "tmux attach-session -t 'clanker-test' \\; select-window -t 'clanker-test:dashboard'",
+      "tmux attach-session -t 'clanker-test' \\; select-window -t 'clanker-test:planner-1'",
+      "tmux attach-session -t 'clanker-test' \\; select-window -t 'clanker-test:slave-1'",
     ]);
   });
 
@@ -20,7 +20,7 @@ describe("buildTmuxAttachCommands", () => {
       tmuxSocket: "/tmp/tmux.sock",
     });
     expect(commands).toEqual([
-      "'tmux' '-S' '/tmp/tmux.sock' 'attach-session' '-t' 'clanker-socket:dashboard'",
+      "tmux -S '/tmp/tmux.sock' attach-session -t 'clanker-socket' \\; select-window -t 'clanker-socket:dashboard'",
     ]);
   });
 });
