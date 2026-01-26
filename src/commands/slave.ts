@@ -9,7 +9,7 @@ const parseSlaveId = ({ idRaw }: { idRaw: string | undefined }): string => {
   if (!idRaw) {
     throw new Error("Missing slave id (expected: clanker slave <n>)");
   }
-  return `c${idRaw}`;
+  return `slave-${idRaw}`;
 };
 
 export const runSlave = async ({ idRaw }: { idRaw: string | undefined }): Promise<void> => {
