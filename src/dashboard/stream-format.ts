@@ -36,6 +36,11 @@ const STREAM_TAGS = {
   PAUSED: { tag: "PAUS", color: "yellow" },
   RESUMED: { tag: "RSUM", color: "green" },
   BASE_PROMPT: { tag: "BASE", color: "gray" },
+  PROMPT_PENDING: { tag: "ASK", color: "yellow" },
+  PROMPT_APPROVED: { tag: "APRV", color: "green" },
+  PROMPT_DENIED: { tag: "DENY", color: "red" },
+  PROMPT_SKIPPED: { tag: "SKIP", color: "gray" },
+  PROMPT_AUTO_APPROVE: { tag: "AUTO", color: "cyan" },
 } satisfies Record<string, StreamTag>;
 
 export interface StreamLine {

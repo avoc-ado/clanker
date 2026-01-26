@@ -23,12 +23,22 @@ export const buildDashboardCommands = ({
   setPaused,
   toggleFocus,
   runRelaunch,
+  getAutoApprove,
+  setAutoApprove,
 }: {
   paths: ClankerPaths;
   writeLine: (line: string) => void;
   setPaused: ({ paused, role }: { paused: boolean; role: ClankerRole | "all" }) => Promise<void>;
   toggleFocus: () => Promise<void>;
   runRelaunch: ({ args }: { args: string[] }) => Promise<void>;
+  getAutoApprove: () => Promise<{ planner: boolean; judge: boolean; slave: boolean }>;
+  setAutoApprove: ({
+    role,
+    enabled,
+  }: {
+    role: "planner" | "judge" | "slave";
+    enabled: boolean;
+  }) => Promise<void>;
 }): SlashCommandHandler[] => {
   const parseRoleArg = ({ args, commandName }: { args: string; commandName: string }) => {
     const token = args.trim().split(/\s+/)[0];
@@ -45,6 +55,22 @@ export const buildDashboardCommands = ({
       return ClankerRole.Slave;
     }
     writeLine(`usage: /${commandName} [planner|judge|slave]`);
+    return null;
+  };
+  const parseAutoApproveRole = ({
+    token,
+  }: {
+    token: string;
+  }): "planner" | "judge" | "slave" | null => {
+    if (token === "planner") {
+      return "planner";
+    }
+    if (token === "judge") {
+      return "judge";
+    }
+    if (token === "slave") {
+      return "slave";
+    }
     return null;
   };
 
@@ -84,6 +110,41 @@ export const buildDashboardCommands = ({
         }
         await setPaused({ paused: true, role });
         return "paused work";
+      },
+    },
+    {
+      name: "auto-approve",
+      description: "toggle prompt auto-approval per role",
+      usage: "/auto-approve [status|planner|judge|slave] [on|off]",
+      run: async ({ args }) => {
+        const tokens = args
+          .trim()
+          .split(/\s+/)
+          .filter((token) => token.length > 0);
+        if (tokens.length === 0 || tokens[0] === "status") {
+          const status = await getAutoApprove();
+          writeLine(
+            `auto-approve planner=${status.planner ? "on" : "off"} judge=${status.judge ? "on" : "off"} slave=${status.slave ? "on" : "off"}`,
+          );
+          return "auto-approve status";
+        }
+        if (tokens.length < 2) {
+          writeLine("usage: /auto-approve [status|planner|judge|slave] [on|off]");
+          return null;
+        }
+        const roleToken = tokens[0] ?? "";
+        const role = parseAutoApproveRole({ token: roleToken });
+        if (!role) {
+          writeLine("usage: /auto-approve [status|planner|judge|slave] [on|off]");
+          return null;
+        }
+        const toggle = tokens[1]?.toLowerCase();
+        if (toggle !== "on" && toggle !== "off") {
+          writeLine("usage: /auto-approve [status|planner|judge|slave] [on|off]");
+          return null;
+        }
+        await setAutoApprove({ role, enabled: toggle === "on" });
+        return `auto-approve ${role} ${toggle}`;
       },
     },
     {

@@ -4,6 +4,7 @@ import type { PromptSettings } from "../prompting.js";
 import { appendEvent } from "../state/events.js";
 import { readRecentEvents } from "../state/read-events.js";
 import { listTasks, loadTask, saveTask } from "../state/tasks.js";
+import type { TaskRecord } from "../state/tasks.js";
 import { readHeartbeats } from "../state/read-heartbeats.js";
 import { isHeartbeatStale } from "../state/heartbeat.js";
 import { assignQueuedTasks } from "../state/assign.js";
@@ -12,8 +13,9 @@ import { computeSlaveCap } from "../scheduler.js";
 import { appendMetricSeries, loadMetrics, saveMetrics } from "../state/metrics.js";
 import { listDirtyFiles } from "../git.js";
 import { countLockConflicts } from "../state/locks.js";
-import { loadState } from "../state/state.js";
-import { dispatchPlannerPrompt } from "../commands/plan.js";
+import { loadState, saveState } from "../state/state.js";
+import type { PromptApprovalRequest, PromptApprovalState } from "../state/state.js";
+import { dispatchPlannerPrompt, preparePlannerPrompt } from "../commands/plan.js";
 import { HEARTBEAT_STALE_MS } from "../constants.js";
 import {
   buildBasePrompt,
@@ -51,6 +53,7 @@ export interface DashboardTickState {
   staleSlaves: Set<string>;
   lastStatusLine: string;
   idleStartedAt: number;
+  lastApprovalId: string | null;
 }
 
 interface DashboardTickDeps {
@@ -69,7 +72,9 @@ interface DashboardTickDeps {
   listDirtyFiles: typeof listDirtyFiles;
   countLockConflicts: typeof countLockConflicts;
   loadState: typeof loadState;
+  saveState: typeof saveState;
   dispatchPlannerPrompt: typeof dispatchPlannerPrompt;
+  preparePlannerPrompt: typeof preparePlannerPrompt;
   getCurrentPaneId: typeof getCurrentPaneId;
   listPanes: typeof listPanes;
   selectPane: typeof selectPane;
@@ -93,7 +98,9 @@ const defaultDeps: DashboardTickDeps = {
   listDirtyFiles,
   countLockConflicts,
   loadState,
+  saveState,
   dispatchPlannerPrompt,
+  preparePlannerPrompt,
   getCurrentPaneId,
   listPanes,
   selectPane,
@@ -144,7 +151,9 @@ export const makeDashboardTick = ({
     listDirtyFiles,
     countLockConflicts,
     loadState,
+    saveState,
     dispatchPlannerPrompt,
+    preparePlannerPrompt,
     getCurrentPaneId,
     listPanes,
     selectPane,
@@ -168,7 +177,45 @@ export const makeDashboardTick = ({
       });
     }
     state.lastTickAt = tickStartedAt;
-    const liveState = await loadState({ statePath: paths.statePath });
+    let liveState = await loadState({ statePath: paths.statePath });
+    let approvalState: PromptApprovalState = liveState.promptApprovals;
+    const persistApprovals = async ({
+      nextApprovals,
+    }: {
+      nextApprovals: PromptApprovalState;
+    }): Promise<void> => {
+      approvalState = nextApprovals;
+      liveState = { ...liveState, promptApprovals: nextApprovals };
+      await saveState({ statePath: paths.statePath, state: liveState });
+    };
+    const hasApprovalKey = ({ key }: { key: string }): boolean =>
+      approvalState.queue.some((entry) => entry.key === key) || approvalState.approved?.key === key;
+    const enqueueApproval = async ({
+      request,
+    }: {
+      request: PromptApprovalRequest;
+    }): Promise<boolean> => {
+      if (hasApprovalKey({ key: request.key })) {
+        return false;
+      }
+      const nextApprovals = {
+        ...approvalState,
+        queue: [...approvalState.queue, request],
+      };
+      await persistApprovals({ nextApprovals });
+      await appendEvent({
+        eventsLog: paths.eventsLog,
+        event: {
+          ts: new Date().toISOString(),
+          type: "PROMPT_PENDING",
+          msg: `approval needed for ${request.role}`,
+          taskId: request.taskId,
+          slaveId: request.assignedSlaveId,
+          data: { kind: request.kind },
+        },
+      });
+      return true;
+    };
     const panes = await listPanes({ sessionPrefix: config.tmuxFilter });
     const tasks = await listTasks({ tasksDir: paths.tasksDir });
     for (const task of tasks) {
@@ -241,6 +288,99 @@ export const makeDashboardTick = ({
           body,
         ],
       });
+    const buildSlavePrompt = ({
+      task,
+    }: {
+      task: TaskRecord;
+    }): { displayPrompt: string; dispatchPrompt: string } => {
+      const taskPrompt = task.prompt ?? "";
+      const fileDispatch = buildTaskFileDispatch({ taskId: task.id, tasksDir: paths.tasksDir });
+      const displayPrompt = buildCompositePrompt({ role: ClankerRole.Slave, body: taskPrompt });
+      const dispatchBody = promptSettings.mode === "file" ? fileDispatch : taskPrompt;
+      const dispatchPrompt = buildCompositePrompt({ role: ClankerRole.Slave, body: dispatchBody });
+      return { displayPrompt, dispatchPrompt };
+    };
+    const buildJudgePrompt = ({
+      task,
+    }: {
+      task: TaskRecord;
+    }): { displayPrompt: string; dispatchPrompt: string } => {
+      const promptBody = buildJudgeTaskDispatch({
+        taskId: task.id,
+        tasksDir: paths.tasksDir,
+        historyDir: paths.historyDir,
+        title: task.title,
+      });
+      const prompt = buildCompositePrompt({ role: ClankerRole.Judge, body: promptBody });
+      return { displayPrompt: prompt, dispatchPrompt: prompt };
+    };
+    const sendApprovedPrompt = async ({
+      approved,
+    }: {
+      approved: PromptApprovalRequest;
+    }): Promise<"sent" | "skip" | "retry"> => {
+      if (approved.kind === "planner") {
+        if (!plannerPaneId) {
+          return "retry";
+        }
+        await sendKeys({ paneId: plannerPaneId, text: approved.dispatch });
+        await appendEvent({
+          eventsLog: paths.eventsLog,
+          event: {
+            ts: new Date().toISOString(),
+            type: "PLAN_SENT",
+            msg: "sent plan prompt to planner",
+            slaveId: "planner-1",
+          },
+        });
+        plannerDispatchState.pending = true;
+        plannerDispatchState.sentAt = Date.now();
+        plannerDispatchState.taskCountAt = tasks.length;
+        return "sent";
+      }
+      if (approved.kind === "judge-task") {
+        const judgePaneId = judgePanes[0]?.paneId ?? null;
+        if (!judgePaneId) {
+          return "retry";
+        }
+        const paneState = await inspectPane({ paneId: judgePaneId });
+        if (paneState.isWorking || paneState.hasEscalation || !paneState.hasPrompt) {
+          return "retry";
+        }
+        await sendKeys({ paneId: judgePaneId, text: approved.dispatch });
+        return "sent";
+      }
+      const taskId = approved.taskId;
+      if (!taskId) {
+        return "skip";
+      }
+      const latest = await loadTask({ tasksDir: paths.tasksDir, id: taskId });
+      if (!latest || !latest.prompt || latest.promptedAt) {
+        return "skip";
+      }
+      const slaveId = latest.assignedSlaveId ?? approved.assignedSlaveId;
+      if (!slaveId) {
+        return "retry";
+      }
+      const paneId = slavePaneMap.get(slaveId);
+      if (!paneId) {
+        return "retry";
+      }
+      await sendKeys({ paneId, text: approved.dispatch });
+      latest.promptedAt = new Date().toISOString();
+      await saveTask({ tasksDir: paths.tasksDir, task: latest });
+      await appendEvent({
+        eventsLog: paths.eventsLog,
+        event: {
+          ts: new Date().toISOString(),
+          type: "TASK_PROMPTED",
+          msg: "sent task prompt",
+          slaveId,
+          taskId: latest.id,
+        },
+      });
+      return "sent";
+    };
 
     const promptTask = async ({
       taskId,
@@ -269,12 +409,26 @@ export const makeDashboardTick = ({
         if (!paneId) {
           return;
         }
-        const promptBody =
-          promptSettings.mode === "file"
-            ? buildTaskFileDispatch({ taskId: latest.id, tasksDir: paths.tasksDir })
-            : latest.prompt;
-        const prompt = buildCompositePrompt({ role: ClankerRole.Slave, body: promptBody });
-        await sendKeys({ paneId, text: prompt });
+        const { displayPrompt, dispatchPrompt } = buildSlavePrompt({ task: latest });
+        if (!approvalState.autoApprove.slave) {
+          const approvalKey = `task:${latest.id}:slave`;
+          await enqueueApproval({
+            request: {
+              id: approvalKey,
+              key: approvalKey,
+              role: "slave",
+              kind: "slave-task",
+              prompt: displayPrompt,
+              dispatch: dispatchPrompt,
+              createdAt: new Date().toISOString(),
+              taskId: latest.id,
+              taskTitle: latest.title,
+              assignedSlaveId: slaveId,
+            },
+          });
+          return;
+        }
+        await sendKeys({ paneId, text: dispatchPrompt });
         latest.promptedAt = new Date().toISOString();
         await saveTask({ tasksDir: paths.tasksDir, task: latest });
         await appendEvent({
@@ -303,9 +457,7 @@ export const makeDashboardTick = ({
       state.lastSlavePaneId = slavePanes[0]?.pane.paneId ?? null;
     }
 
-    const plannerRolePaused = liveState.paused || liveState.pausedRoles.planner;
     const judgeRolePaused = liveState.paused || liveState.pausedRoles.judge;
-    const slaveRolePaused = liveState.paused || liveState.pausedRoles.slave;
 
     const nowMs = Date.now();
 
@@ -358,6 +510,28 @@ export const makeDashboardTick = ({
       nowMs,
     });
 
+    if (approvalState.approved) {
+      const approved = approvalState.approved;
+      const outcome = await sendApprovedPrompt({ approved });
+      if (outcome !== "retry") {
+        const nextApprovals = { ...approvalState, approved: null };
+        await persistApprovals({ nextApprovals });
+        if (outcome === "skip") {
+          await appendEvent({
+            eventsLog: paths.eventsLog,
+            event: {
+              ts: new Date().toISOString(),
+              type: "PROMPT_SKIPPED",
+              msg: `prompt no longer needed for ${approved.role}`,
+              taskId: approved.taskId,
+              slaveId: approved.assignedSlaveId,
+              data: { kind: approved.kind },
+            },
+          });
+        }
+      }
+    }
+
     const heartbeats = await readHeartbeats({ heartbeatDir: paths.heartbeatDir });
     const staleThresholdMs = HEARTBEAT_STALE_MS;
     const staleCount = heartbeats.filter((hb) =>
@@ -403,11 +577,29 @@ export const makeDashboardTick = ({
     }
     const plannerPaused = liveState.paused || liveState.pausedRoles.planner;
     if (!plannerPaused && readyCount < config.backlog && !plannerDispatchState.pending) {
-      const dispatched = await dispatchPlannerPrompt({ repoRoot, plannerPaneId });
-      if (dispatched) {
-        plannerDispatchState.pending = true;
-        plannerDispatchState.sentAt = Date.now();
-        plannerDispatchState.taskCountAt = tasks.length;
+      const approvalKey = "planner:backlog";
+      if (approvalState.autoApprove.planner) {
+        const dispatched = await dispatchPlannerPrompt({ repoRoot, plannerPaneId });
+        if (dispatched) {
+          plannerDispatchState.pending = true;
+          plannerDispatchState.sentAt = Date.now();
+          plannerDispatchState.taskCountAt = tasks.length;
+        }
+      } else if (!hasApprovalKey({ key: approvalKey })) {
+        const prepared = await preparePlannerPrompt({ repoRoot });
+        if (prepared) {
+          await enqueueApproval({
+            request: {
+              id: approvalKey,
+              key: approvalKey,
+              role: "planner",
+              kind: "planner",
+              prompt: prepared.prompt,
+              dispatch: prepared.dispatch,
+              createdAt: new Date().toISOString(),
+            },
+          });
+        }
       }
     }
 
@@ -446,14 +638,25 @@ export const makeDashboardTick = ({
         const paneState = await inspectPane({ paneId: judgePaneId });
         if (paneState.hasPrompt && !paneState.isWorking && !paneState.hasEscalation) {
           const task = needsJudgeTasks[0];
-          const promptBody = buildJudgeTaskDispatch({
-            taskId: task.id,
-            tasksDir: paths.tasksDir,
-            historyDir: paths.historyDir,
-            title: task.title,
-          });
-          const prompt = buildCompositePrompt({ role: ClankerRole.Judge, body: promptBody });
-          await sendKeys({ paneId: judgePaneId, text: prompt });
+          const { displayPrompt, dispatchPrompt } = buildJudgePrompt({ task });
+          if (!approvalState.autoApprove.judge) {
+            const approvalKey = `task:${task.id}:judge`;
+            await enqueueApproval({
+              request: {
+                id: approvalKey,
+                key: approvalKey,
+                role: "judge",
+                kind: "judge-task",
+                prompt: displayPrompt,
+                dispatch: dispatchPrompt,
+                createdAt: new Date().toISOString(),
+                taskId: task.id,
+                taskTitle: task.title,
+              },
+            });
+          } else {
+            await sendKeys({ paneId: judgePaneId, text: dispatchPrompt });
+          }
         }
       }
     }

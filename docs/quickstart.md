@@ -30,6 +30,7 @@ read_when: first-use, onboarding
 - Native scrollback (no alt-screen)
 - Commands: `/pause`, `/pause planner`, `/pause judge`, `/pause slave`
 - Commands: `/resume`, `/resume planner`, `/resume judge`, `/resume slave`
+- Commands: `/auto-approve [status|planner|judge|slave] [on|off]`
 - Commands: `/relaunch [--fresh] [target]`, `/task <id> <status>`, `/focus`
 - History: Up/Down to recall commands; last 50 entries persisted to disk
 - Slash list: `/` to list and filter, `/help` to list

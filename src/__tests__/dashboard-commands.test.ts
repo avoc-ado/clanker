@@ -22,6 +22,12 @@ describe("dashboard commands", () => {
     const runRelaunch = async ({ args }: { args: string[] }) => {
       relaunchCalls.push({ args });
     };
+    const getAutoApprove = async () => ({
+      planner: false,
+      judge: false,
+      slave: false,
+    });
+    const setAutoApprove = async () => undefined;
     const tempDir = await mkdtemp(join(tmpdir(), "clanker-commands-"));
     const commandHistoryPath = join(tempDir, "history.json");
     const tasksDir = join(tempDir, "tasks");
@@ -52,6 +58,8 @@ describe("dashboard commands", () => {
       setPaused,
       toggleFocus,
       runRelaunch,
+      getAutoApprove,
+      setAutoApprove,
     });
 
     const commandHistory: string[] = [];
@@ -129,6 +137,58 @@ describe("dashboard commands", () => {
     handler("/boom");
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(lines.some((line) => line.includes("command failed"))).toBe(true);
+
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+  });
+
+  test("handles auto-approve toggles", async () => {
+    const lines: string[] = [];
+    let autoApprove = { planner: false, judge: true, slave: false };
+    const tempDir = await mkdtemp(join(tmpdir(), "clanker-auto-approve-"));
+    const commands = buildDashboardCommands({
+      paths: {
+        repoRoot: tempDir,
+        stateDir: join(tempDir, "state"),
+        eventsLog: join(tempDir, "events.log"),
+        statePath: join(tempDir, "state.json"),
+        tasksDir: join(tempDir, "tasks"),
+        historyDir: join(tempDir, "history"),
+        heartbeatDir: join(tempDir, "heartbeat"),
+        metricsPath: join(tempDir, "metrics.json"),
+        logsDir: join(tempDir, "logs"),
+        locksDir: join(tempDir, "locks"),
+        archiveDir: join(tempDir, "archive"),
+        archiveTasksDir: join(tempDir, "archive", "tasks"),
+        commandHistoryPath: join(tempDir, "command-history.json"),
+      },
+      writeLine: (line) => lines.push(line),
+      setPaused: async () => undefined,
+      toggleFocus: async () => undefined,
+      runRelaunch: async () => undefined,
+      getAutoApprove: async () => autoApprove,
+      setAutoApprove: async ({ role, enabled }) => {
+        autoApprove = { ...autoApprove, [role]: enabled };
+      },
+    });
+    const handler = makeDashboardCommandHandler({
+      commands,
+      commandHistory: [],
+      commandHistoryPath: join(tempDir, "command-history.json"),
+      maxEntries: 10,
+      writeLine: (line) => lines.push(line),
+      onHistoryUpdated: () => undefined,
+    });
+
+    handler("/auto-approve status");
+    handler("/auto-approve planner on");
+    handler("/auto-approve planner nope");
+    handler("/auto-approve nope on");
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(lines.some((line) => line.includes("auto-approve planner=off"))).toBe(true);
+    expect(autoApprove.planner).toBe(true);
+    expect(lines.some((line) => line.includes("usage: /auto-approve"))).toBe(true);
 
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
   });

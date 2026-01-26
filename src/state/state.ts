@@ -22,7 +22,33 @@ export interface ClankerState {
     judge: boolean;
     slave: boolean;
   };
+  promptApprovals: PromptApprovalState;
   tasks: TaskState[];
+}
+
+export interface PromptAutoApprove {
+  planner: boolean;
+  judge: boolean;
+  slave: boolean;
+}
+
+export interface PromptApprovalRequest {
+  id: string;
+  key: string;
+  role: "planner" | "judge" | "slave";
+  kind: "planner" | "judge-task" | "slave-task";
+  prompt: string;
+  dispatch: string;
+  createdAt: string;
+  taskId?: string;
+  taskTitle?: string;
+  assignedSlaveId?: string;
+}
+
+export interface PromptApprovalState {
+  autoApprove: PromptAutoApprove;
+  queue: PromptApprovalRequest[];
+  approved?: PromptApprovalRequest | null;
 }
 
 export const DEFAULT_STATE: ClankerState = {
@@ -31,6 +57,15 @@ export const DEFAULT_STATE: ClankerState = {
     planner: false,
     judge: false,
     slave: false,
+  },
+  promptApprovals: {
+    autoApprove: {
+      planner: false,
+      judge: false,
+      slave: false,
+    },
+    queue: [],
+    approved: null,
   },
   tasks: [],
 };
@@ -56,6 +91,20 @@ export const loadState = async ({ statePath }: { statePath: string }): Promise<C
       pausedRoles: {
         ...DEFAULT_STATE.pausedRoles,
         ...(parsed.pausedRoles ?? {}),
+      },
+      promptApprovals: {
+        ...DEFAULT_STATE.promptApprovals,
+        ...(parsed.promptApprovals ?? {}),
+        autoApprove: {
+          ...DEFAULT_STATE.promptApprovals.autoApprove,
+          ...(parsed.promptApprovals?.autoApprove ?? {}),
+        },
+        queue: parsed.promptApprovals?.queue ?? DEFAULT_STATE.promptApprovals.queue,
+        approved:
+          parsed.promptApprovals &&
+          Object.prototype.hasOwnProperty.call(parsed.promptApprovals, "approved")
+            ? (parsed.promptApprovals.approved ?? null)
+            : DEFAULT_STATE.promptApprovals.approved,
       },
       tasks: parsed.tasks ?? DEFAULT_STATE.tasks,
     } satisfies ClankerState;

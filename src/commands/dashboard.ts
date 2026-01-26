@@ -2,6 +2,7 @@ import { loadConfig } from "../config.js";
 import { getClankerPaths } from "../paths.js";
 import { ensureStateDirs } from "../state/ensure-state.js";
 import { loadState, saveState } from "../state/state.js";
+import type { PromptApprovalRequest, PromptAutoApprove } from "../state/state.js";
 import { capturePane, getCurrentPaneId, listPanes, selectPane, sendKeys } from "../tmux.js";
 import { appendEvent } from "../state/events.js";
 import { getPromptSettings } from "../prompting.js";
@@ -73,6 +74,7 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     staleSlaves: new Set<string>(),
     lastStatusLine: "",
     idleStartedAt: Date.now(),
+    lastApprovalId: null,
   };
   const promptSettings = getPromptSettings({ repoRoot, config });
   const knownTaskIds = new Set<string>();
@@ -120,10 +122,123 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     rl.resume();
     rl.prompt(true);
   };
+  const writeLines = (lines: string[]): void => {
+    if (lines.length === 0) {
+      return;
+    }
+    rl.pause();
+    clearPromptLine();
+    rl.output.write(`${lines.join("\n")}\n`);
+    rl.resume();
+    rl.prompt(true);
+  };
 
   const formatCommandLine = (line: string): string => `${ANSI.gray}${line}${ANSI.reset}`;
   const writeCommandLine = (line: string): void => {
     writeLine(formatCommandLine(line));
+  };
+  const formatApprovalLines = ({ approval }: { approval: PromptApprovalRequest }): string[] => {
+    const taskLabel = approval.taskId
+      ? `${approval.taskId}${approval.taskTitle ? ` ${approval.taskTitle}` : ""}`
+      : "";
+    const headerParts = [
+      `${ANSI.cyan}Approve prompt:${ANSI.reset}`,
+      approval.role,
+      taskLabel,
+    ].filter((part) => part.length > 0);
+    return [
+      headerParts.join(" "),
+      `${ANSI.gray}--- prompt ---${ANSI.reset}`,
+      ...approval.prompt.split("\n"),
+      `${ANSI.gray}--- end prompt ---${ANSI.reset}`,
+      `${ANSI.cyan}Approve? (y/n)${ANSI.reset}`,
+    ];
+  };
+  const loadApprovalState = async (): Promise<PromptAutoApprove> => {
+    const current = await loadState({ statePath: paths.statePath });
+    return current.promptApprovals.autoApprove;
+  };
+  const setAutoApprove = async ({
+    role,
+    enabled,
+  }: {
+    role: keyof PromptAutoApprove;
+    enabled: boolean;
+  }): Promise<void> => {
+    const current = await loadState({ statePath: paths.statePath });
+    const next = {
+      ...current,
+      promptApprovals: {
+        ...current.promptApprovals,
+        autoApprove: { ...current.promptApprovals.autoApprove, [role]: enabled },
+      },
+    };
+    await saveState({ statePath: paths.statePath, state: next });
+    await appendEvent({
+      eventsLog: paths.eventsLog,
+      event: {
+        ts: new Date().toISOString(),
+        type: "PROMPT_AUTO_APPROVE",
+        msg: `auto-approve ${enabled ? "on" : "off"} for ${role}`,
+      },
+    });
+  };
+  const getNextApproval = async (): Promise<PromptApprovalRequest | null> => {
+    const current = await loadState({ statePath: paths.statePath });
+    if (current.promptApprovals.approved) {
+      return null;
+    }
+    return current.promptApprovals.queue[0] ?? null;
+  };
+  const maybePromptForApproval = async (): Promise<void> => {
+    const approval = await getNextApproval();
+    if (!approval) {
+      dashboardState.lastApprovalId = null;
+      return;
+    }
+    if (dashboardState.lastApprovalId === approval.id) {
+      return;
+    }
+    dashboardState.lastApprovalId = approval.id;
+    writeLines(formatApprovalLines({ approval }));
+  };
+  const resolveApproval = async ({ approved }: { approved: boolean }): Promise<void> => {
+    const current = await loadState({ statePath: paths.statePath });
+    if (current.promptApprovals.approved) {
+      writeLine(formatCommandLine("prompt already approved; waiting on send"));
+      return;
+    }
+    const nextApproval = current.promptApprovals.queue[0];
+    if (!nextApproval) {
+      writeLine(formatCommandLine("no prompt awaiting approval"));
+      return;
+    }
+    const remainingQueue = current.promptApprovals.queue.slice(1);
+    const nextState = {
+      ...current,
+      promptApprovals: {
+        ...current.promptApprovals,
+        queue: remainingQueue,
+        approved: approved ? nextApproval : null,
+      },
+    };
+    await saveState({ statePath: paths.statePath, state: nextState });
+    await appendEvent({
+      eventsLog: paths.eventsLog,
+      event: {
+        ts: new Date().toISOString(),
+        type: approved ? "PROMPT_APPROVED" : "PROMPT_DENIED",
+        msg: approved ? "prompt approved" : "prompt denied",
+        taskId: nextApproval.taskId,
+        slaveId: nextApproval.assignedSlaveId,
+        data: { kind: nextApproval.kind },
+      },
+    });
+    dashboardState.lastApprovalId = null;
+    if (!approved) {
+      await maybePromptForApproval();
+    }
+    void tick();
   };
 
   const writeDividerIfNeeded = ({ date }: { date: Date }): void => {
@@ -253,6 +368,8 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     setPaused,
     toggleFocus,
     runRelaunch: runRelaunchCommand,
+    getAutoApprove: loadApprovalState,
+    setAutoApprove,
   });
 
   const handleCommand = makeDashboardCommandHandler({
@@ -307,7 +424,19 @@ export const runDashboard = async ({}: {}): Promise<void> => {
   });
   await backfillTaskPackets({ tasksDir: paths.tasksDir, knownTaskIds, eventsLog: paths.eventsLog });
 
-  rl.on("line", (value) => {
+  rl.on("line", async (value) => {
+    const trimmed = value.trim();
+    if (trimmed.startsWith("/")) {
+      handleCommand(value);
+      rl.prompt();
+      return;
+    }
+    const normalized = trimmed.toLowerCase();
+    if (["y", "yes", "n", "no"].includes(normalized)) {
+      await resolveApproval({ approved: normalized === "y" || normalized === "yes" });
+      rl.prompt();
+      return;
+    }
     handleCommand(value);
     rl.prompt();
   });
@@ -316,8 +445,10 @@ export const runDashboard = async ({}: {}): Promise<void> => {
   });
 
   await tick();
+  await maybePromptForApproval();
   const interval = setInterval(() => {
     void tick();
+    void maybePromptForApproval();
   }, 1000);
 
   const shutdown = (): void => {

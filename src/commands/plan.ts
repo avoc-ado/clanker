@@ -106,13 +106,17 @@ export interface PlannerDispatchResult {
   dispatched: boolean;
 }
 
-export const dispatchPlannerPrompt = async ({
+export interface PlannerPromptPayload {
+  prompt: string;
+  dispatch: string;
+  promptPath: string;
+}
+
+export const preparePlannerPrompt = async ({
   repoRoot,
-  plannerPaneId,
 }: {
   repoRoot?: string;
-  plannerPaneId?: string | null;
-}): Promise<PlannerDispatchResult | null> => {
+}): Promise<PlannerPromptPayload | null> => {
   const resolvedRoot = repoRoot ?? getRepoRoot();
   const paths = getClankerPaths({ repoRoot: resolvedRoot });
   await ensureStateDirs({ paths });
@@ -150,7 +154,7 @@ export const dispatchPlannerPrompt = async ({
   await mkdir(dirname(promptSettings.planPromptAbsolutePath), { recursive: true });
   await writeFile(promptSettings.planPromptAbsolutePath, prompt, "utf-8");
 
-  const dispatchPrompt =
+  const dispatch =
     promptSettings.mode === "file"
       ? buildPlanFileDispatch({
           promptPath: promptSettings.planPromptAbsolutePath,
@@ -158,18 +162,35 @@ export const dispatchPlannerPrompt = async ({
         })
       : prompt;
 
+  return { prompt, dispatch, promptPath: promptSettings.planPromptPath };
+};
+
+export const dispatchPlannerPrompt = async ({
+  repoRoot,
+  plannerPaneId,
+}: {
+  repoRoot?: string;
+  plannerPaneId?: string | null;
+}): Promise<PlannerDispatchResult | null> => {
+  const resolvedRoot = repoRoot ?? getRepoRoot();
+  const promptPayload = await preparePlannerPrompt({ repoRoot: resolvedRoot });
+  if (!promptPayload) {
+    return null;
+  }
+
   let targetPaneId = plannerPaneId ?? null;
   if (!targetPaneId) {
+    const config = await loadConfig({ repoRoot: resolvedRoot });
     const panes = await listPanes({ sessionPrefix: config.tmuxFilter });
     const plannerPane = selectPlannerPane({ panes });
     targetPaneId = plannerPane?.paneId ?? null;
   }
 
   if (targetPaneId) {
-    await sendKeys({ paneId: targetPaneId, text: dispatchPrompt });
+    await sendKeys({ paneId: targetPaneId, text: promptPayload.dispatch });
   }
   await appendEvent({
-    eventsLog: paths.eventsLog,
+    eventsLog: getClankerPaths({ repoRoot: resolvedRoot }).eventsLog,
     event: {
       ts: new Date().toISOString(),
       type: "PLAN_SENT",
@@ -177,5 +198,5 @@ export const dispatchPlannerPrompt = async ({
       slaveId: "planner-1",
     },
   });
-  return { promptPath: promptSettings.planPromptPath, dispatched: Boolean(targetPaneId) };
+  return { promptPath: promptPayload.promptPath, dispatched: Boolean(targetPaneId) };
 };
