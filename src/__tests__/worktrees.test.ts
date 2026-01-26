@@ -53,6 +53,35 @@ describe("worktrees", () => {
     expect(addCalls.length).toBe(0);
   });
 
+  test("ensureRoleWorktrees tolerates worktree lock races", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-worktrees-"));
+    const worktreePath = getWorktreePath({ repoRoot: root, role: "planner", index: 1 });
+    runGitMock.mockImplementation(async ({ args }) => {
+      if (args[0] === "rev-parse") {
+        return "";
+      }
+      if (args[0] === "worktree") {
+        await mkdir(worktreePath, { recursive: true });
+        await writeFile(join(worktreePath, ".git"), "gitdir: /tmp/fake", "utf-8");
+        throw new Error(
+          "fatal: Unable to create '/tmp/repo/.git/worktrees/planner-1/index.lock': File exists.",
+        );
+      }
+      return "";
+    });
+    await expect(
+      ensureRoleWorktrees({
+        repoRoot: root,
+        planners: 1,
+        judges: 0,
+        slaves: 0,
+        ref: "origin/main",
+      }),
+    ).resolves.toBeDefined();
+    const addCalls = runGitMock.mock.calls.filter(([call]) => call.args[0] === "worktree");
+    expect(addCalls.length).toBe(1);
+  });
+
   test("ensureRoleWorktrees throws when ref missing", async () => {
     runGitMock.mockRejectedValueOnce(new Error("missing ref"));
     const root = await mkdtemp(join(tmpdir(), "clanker-worktrees-"));

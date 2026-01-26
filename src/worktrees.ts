@@ -1,5 +1,6 @@
-import { mkdir, stat } from "node:fs/promises";
+import { mkdir, open, rm, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { runGit } from "./git.js";
 
 export type WorktreeRole = "planner" | "judge" | "slave";
@@ -13,6 +14,43 @@ export interface WorktreeSpec {
 
 export const getWorktreeRoot = ({ repoRoot }: { repoRoot: string }): string =>
   join(repoRoot, ".clanker", "worktree");
+
+const acquireWorktreeLock = async ({
+  repoRoot,
+}: {
+  repoRoot: string;
+}): Promise<() => Promise<void>> => {
+  const lockPath = join(getWorktreeRoot({ repoRoot }), ".lock");
+  const deadline = Date.now() + 15_000;
+  while (true) {
+    try {
+      const handle = await open(lockPath, "wx");
+      await handle.writeFile(`${process.pid}\n${Date.now()}\n`, "utf-8");
+      await handle.close();
+      return async () => {
+        await rm(lockPath, { force: true });
+      };
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      if (err?.code !== "EEXIST") {
+        throw error;
+      }
+    }
+    try {
+      const stats = await stat(lockPath);
+      if (Date.now() - stats.mtimeMs > 60_000) {
+        await rm(lockPath, { force: true });
+        continue;
+      }
+    } catch {
+      // ignore missing lock
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`worktree lock timeout: ${lockPath}`);
+    }
+    await delay(100);
+  }
+};
 
 export const getWorktreeName = ({ role, index }: { role: WorktreeRole; index: number }): string =>
   `${role}-${index}`;
@@ -75,14 +113,20 @@ const ensureWorktreePath = async ({
   path: string;
   ref: string;
 }): Promise<void> => {
-  try {
-    await stat(path);
+  const hasWorktree = async (): Promise<boolean> => {
     try {
       await stat(join(path, ".git"));
-      return;
+      return true;
     } catch {
-      throw new Error(`worktree path exists but is not a git worktree: ${path}`);
+      return false;
     }
+  };
+  try {
+    await stat(path);
+    if (await hasWorktree()) {
+      return;
+    }
+    throw new Error(`worktree path exists but is not a git worktree: ${path}`);
   } catch (error) {
     const err = error as NodeJS.ErrnoException;
     if (err?.code && err.code !== "ENOENT") {
@@ -90,7 +134,38 @@ const ensureWorktreePath = async ({
     }
   }
   await mkdir(dirname(path), { recursive: true });
-  await runGit({ args: ["worktree", "add", "--detach", path, ref], cwd: repoRoot });
+  const maxAttempts = 5;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      await runGit({ args: ["worktree", "add", "--detach", path, ref], cwd: repoRoot });
+      return;
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("already exists")) {
+        if (await hasWorktree()) {
+          return;
+        }
+      }
+      const isLockError =
+        message.includes("index.lock") ||
+        message.includes("Another git process seems to be running") ||
+        message.includes("Could not write new index file") ||
+        message.includes("missing but already registered worktree");
+      if (!isLockError) {
+        throw error;
+      }
+      if (message.includes("missing but already registered worktree") && !(await hasWorktree())) {
+        await runGit({ args: ["worktree", "prune"], cwd: repoRoot });
+      }
+      if (await hasWorktree()) {
+        return;
+      }
+      await delay(150 * (attempt + 1));
+    }
+  }
+  throw lastError;
 };
 
 export const ensureRoleWorktrees = async ({
@@ -124,8 +199,13 @@ export const ensureRoleWorktrees = async ({
     throw new Error(helper);
   }
   await mkdir(getWorktreeRoot({ repoRoot }), { recursive: true });
-  for (const spec of specs) {
-    await ensureWorktreePath({ repoRoot, path: spec.path, ref });
+  const releaseLock = await acquireWorktreeLock({ repoRoot });
+  try {
+    for (const spec of specs) {
+      await ensureWorktreePath({ repoRoot, path: spec.path, ref });
+    }
+  } finally {
+    await releaseLock();
   }
   return specs;
 };
