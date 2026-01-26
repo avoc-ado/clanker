@@ -45,14 +45,9 @@ const hasSession = async ({ sessionName }: { sessionName: string }): Promise<boo
 
 const configureDetachHooks = async ({ sessionName }: { sessionName: string }): Promise<void> => {
   const sessionCheck = `tmux list-clients -t ${sessionName} -F '##{client_attached}' 2>/dev/null | grep -q 1 || tmux kill-session -t ${sessionName}`;
-  const windowCheck = `tmux list-clients -t ${sessionName} -F '##{client_window} ##{client_attached}' 2>/dev/null | grep -q '^#{window_id} 1$' || tmux kill-window -t #{window_id}`;
   const sessionHook = `run-shell "${sessionCheck}"`;
-  const windowHook = `run-shell "${windowCheck}"`;
   await runTmux({
     args: ["set-hook", "-t", sessionName, "client-detached", sessionHook],
-  });
-  await runTmux({
-    args: ["set-hook", "-a", "-t", sessionName, "client-detached", windowHook],
   });
 };
 
