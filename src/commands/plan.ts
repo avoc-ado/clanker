@@ -9,7 +9,12 @@ import { formatTaskSchema } from "../plan/schema.js";
 import { buildContextPack } from "../context/context-pack.js";
 import { loadConfig } from "../config.js";
 import { getPromptSettings } from "../prompting.js";
-import { buildBasePrompt, buildPlanFileDispatch, ClankerRole } from "../prompting/role-prompts.js";
+import {
+  buildBasePrompt,
+  buildPlanFileDispatch,
+  ClankerRole,
+  mergePromptSections,
+} from "../prompting/role-prompts.js";
 import { parsePlannerTitle } from "../tmux-title-utils.js";
 import { getRepoRoot } from "../repo-root.js";
 
@@ -34,27 +39,17 @@ export const buildPlannerPrompt = ({
   planDocs,
   recentSummaries,
   tasksDir,
-  historyDir,
 }: {
   planDocs: string[];
   recentSummaries: string;
   tasksDir: string;
-  historyDir: string;
 }): string => {
   const docList = planDocs.map((doc) => `- ${doc}`).join("\n");
-  const basePrompt = buildBasePrompt({
-    role: ClankerRole.Planner,
-    paths: { tasksDir, historyDir },
-  });
   return [
-    basePrompt,
-    "",
     `Use the plan docs included below and create task packets in ${tasksDir}.`,
-    "Task packets are JSON files. Keep tasks small and non-overlapping.",
+    "Task packets are JSON files.",
     "If a task looks too large or risks running out of tokens, split it into smaller tasks.",
-    "Fill in blanks: research code/docs/web; write findings to docs/research/ before tasks.",
-    "Favor hard route, no shortcuts; modicum progress is valuable.",
-    "Emit exactly one task packet per prompt; clanker will re-prompt for more.",
+    "Clanker will re-prompt for more tasks as needed.",
     "Do not require clanker-specific commands inside the task prompt.",
     "Handoff rules: tasks must be self-contained; include tests to run and done criteria in the prompt.",
     "Acceptance checklist: done criteria met, tests run + pass, risks noted.",
@@ -137,11 +132,19 @@ export const dispatchPlannerPrompt = async ({
     historyDir: paths.historyDir,
   });
   const recentSummaries = formatContextEntries({ entries: contextPack.entries });
-  const prompt = buildPlannerPrompt({
+  const promptBody = buildPlannerPrompt({
     planDocs,
     recentSummaries,
     tasksDir: paths.tasksDir,
-    historyDir: paths.historyDir,
+  });
+  const prompt = mergePromptSections({
+    sections: [
+      buildBasePrompt({
+        role: ClankerRole.Planner,
+        paths: { tasksDir: paths.tasksDir, historyDir: paths.historyDir },
+      }),
+      promptBody,
+    ],
   });
   const promptSettings = getPromptSettings({ repoRoot: resolvedRoot, config });
   await mkdir(dirname(promptSettings.planPromptAbsolutePath), { recursive: true });

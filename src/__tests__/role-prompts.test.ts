@@ -1,9 +1,11 @@
 import {
   buildBasePrompt,
+  buildJudgeTaskDispatch,
   buildJudgeRelaunchPrompt,
   buildPlanFileDispatch,
   buildTaskFileDispatch,
   ClankerRole,
+  mergePromptSections,
 } from "../prompting/role-prompts.js";
 
 describe("role prompts", () => {
@@ -45,6 +47,25 @@ describe("role prompts", () => {
     expect(buildTaskFileDispatch({ taskId: "t9", tasksDir: "/tmp/.clanker/tasks" })).toContain(
       "/tmp/.clanker/tasks/t9.json",
     );
+  });
+
+  test("buildJudgeTaskDispatch includes paths and title", () => {
+    const prompt = buildJudgeTaskDispatch({
+      taskId: "t9",
+      tasksDir: "/tmp/.clanker/tasks",
+      historyDir: "/tmp/.clanker/history",
+      title: "Add test",
+    });
+    expect(prompt).toContain("t9: Add test");
+    expect(prompt).toContain("/tmp/.clanker/tasks/t9.json");
+    expect(prompt).toContain("/tmp/.clanker/history/task-t9-slave.md");
+  });
+
+  test("mergePromptSections dedupes and trims", () => {
+    const prompt = mergePromptSections({
+      sections: ["Line A\n\nLine B", "Line A\nLine C\n\n", ""],
+    });
+    expect(prompt).toBe("Line A\n\nLine B\nLine C");
   });
 
   test("buildJudgeRelaunchPrompt returns null when no needs_judge", () => {

@@ -15,7 +15,13 @@ import { countLockConflicts } from "../state/locks.js";
 import { loadState } from "../state/state.js";
 import { dispatchPlannerPrompt } from "../commands/plan.js";
 import { HEARTBEAT_STALE_MS } from "../constants.js";
-import { buildTaskFileDispatch, ClankerRole } from "../prompting/role-prompts.js";
+import {
+  buildBasePrompt,
+  buildJudgeTaskDispatch,
+  buildTaskFileDispatch,
+  ClankerRole,
+  mergePromptSections,
+} from "../prompting/role-prompts.js";
 import { getCurrentPaneId, listPanes, selectPane, sendKey, sendKeys } from "../tmux.js";
 import {
   processPendingActions,
@@ -105,7 +111,6 @@ export const makeDashboardTick = ({
   plannerDispatchState,
   state,
   inspectPane,
-  sendBasePrompt,
   pauseRetryMs,
   plannerPromptTimeoutMs,
   deps,
@@ -119,7 +124,6 @@ export const makeDashboardTick = ({
   plannerDispatchState: PlannerDispatchState;
   state: DashboardTickState;
   inspectPane: ({ paneId }: { paneId: string }) => Promise<CodexPaneState>;
-  sendBasePrompt: ({ paneId, role }: { paneId: string; role: ClankerRole }) => Promise<void>;
   pauseRetryMs: number;
   plannerPromptTimeoutMs: number;
   deps?: Partial<DashboardTickDeps>;
@@ -190,10 +194,13 @@ export const makeDashboardTick = ({
       );
     const plannerPaneId = plannerPanes[0]?.paneId ?? null;
     const slavePaneCount = slavePanes.length;
+    const needsJudgeTasks = tasks
+      .filter((task) => task.status === "needs_judge")
+      .sort((a, b) => a.id.localeCompare(b.id));
     const readyCount = tasks.filter((task) => task.status === "queued").length;
     const reworkCount = tasks.filter((task) => task.status === "rework").length;
     const blockedCount = tasks.filter((task) => task.status === "blocked").length;
-    const needsJudgeCount = tasks.filter((task) => task.status === "needs_judge").length;
+    const needsJudgeCount = needsJudgeTasks.length;
     const runningCount = tasks.filter((task) => task.status === "running").length;
     const recentForScheduler = await readRecentEvents({ eventsLog: paths.eventsLog, limit: 200 });
     const tokenBurnWindow = recentForScheduler.reduce((sum, event) => {
@@ -224,6 +231,17 @@ export const makeDashboardTick = ({
     const slavePaneMap = new Map<string, string>(
       cappedSlavePanes.map((entry) => [entry.slaveId, entry.pane.paneId]),
     );
+    const buildCompositePrompt = ({ role, body }: { role: ClankerRole; body: string }): string =>
+      mergePromptSections({
+        sections: [
+          buildBasePrompt({
+            role,
+            paths: { tasksDir: paths.tasksDir, historyDir: paths.historyDir },
+          }),
+          body,
+        ],
+      });
+
     const promptTask = async ({
       taskId,
       assignedSlaveId,
@@ -251,10 +269,11 @@ export const makeDashboardTick = ({
         if (!paneId) {
           return;
         }
-        const prompt =
+        const promptBody =
           promptSettings.mode === "file"
             ? buildTaskFileDispatch({ taskId: latest.id, tasksDir: paths.tasksDir })
             : latest.prompt;
+        const prompt = buildCompositePrompt({ role: ClankerRole.Slave, body: promptBody });
         await sendKeys({ paneId, text: prompt });
         latest.promptedAt = new Date().toISOString();
         await saveTask({ tasksDir: paths.tasksDir, task: latest });
@@ -287,22 +306,6 @@ export const makeDashboardTick = ({
     const plannerRolePaused = liveState.paused || liveState.pausedRoles.planner;
     const judgeRolePaused = liveState.paused || liveState.pausedRoles.judge;
     const slaveRolePaused = liveState.paused || liveState.pausedRoles.slave;
-
-    if (!plannerRolePaused) {
-      for (const pane of plannerPanes) {
-        await sendBasePrompt({ paneId: pane.paneId, role: ClankerRole.Planner });
-      }
-    }
-    if (!judgeRolePaused) {
-      for (const pane of judgePanes) {
-        await sendBasePrompt({ paneId: pane.paneId, role: ClankerRole.Judge });
-      }
-    }
-    if (!slaveRolePaused) {
-      for (const entry of slavePanes) {
-        await sendBasePrompt({ paneId: entry.pane.paneId, role: ClankerRole.Slave });
-      }
-    }
 
     const nowMs = Date.now();
 
@@ -434,6 +437,24 @@ export const makeDashboardTick = ({
           },
         });
         await promptTask({ taskId: task.id, assignedSlaveId: task.assignedSlaveId });
+      }
+    }
+
+    if (!judgeRolePaused && needsJudgeTasks.length > 0) {
+      const judgePaneId = judgePanes[0]?.paneId ?? null;
+      if (judgePaneId) {
+        const paneState = await inspectPane({ paneId: judgePaneId });
+        if (paneState.hasPrompt && !paneState.isWorking && !paneState.hasEscalation) {
+          const task = needsJudgeTasks[0];
+          const promptBody = buildJudgeTaskDispatch({
+            taskId: task.id,
+            tasksDir: paths.tasksDir,
+            historyDir: paths.historyDir,
+            title: task.title,
+          });
+          const prompt = buildCompositePrompt({ role: ClankerRole.Judge, body: promptBody });
+          await sendKeys({ paneId: judgePaneId, text: prompt });
+        }
       }
     }
 

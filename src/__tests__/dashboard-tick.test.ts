@@ -149,11 +149,6 @@ describe("makeDashboardTick", () => {
         hasEscalation: false,
       };
     };
-    const sendBasePromptCalls: Array<{ paneId: string; role: ClankerRole }> = [];
-    const sendBasePrompt = async ({ paneId, role }: { paneId: string; role: ClankerRole }) => {
-      sendBasePromptCalls.push({ paneId, role });
-    };
-
     const dashboardState = {
       dashboardPaneId: "pane-dashboard",
       lastSlavePaneId: null,
@@ -201,7 +196,6 @@ describe("makeDashboardTick", () => {
       plannerDispatchState: { pending: false, sentAt: 0, taskCountAt: 0 },
       state: dashboardState,
       inspectPane,
-      sendBasePrompt,
       pauseRetryMs: 1,
       plannerPromptTimeoutMs: 10,
       deps: {
@@ -241,10 +235,12 @@ describe("makeDashboardTick", () => {
     expect(appendEventCalls.length).toBeGreaterThan(0);
     expect(sendKeysCalls.length).toBeGreaterThan(0);
     expect(selectPaneCalls.length).toBeGreaterThan(0);
-    expect(sendBasePromptCalls).toContainEqual({
-      paneId: "pane-planner",
-      role: ClankerRole.Planner,
-    });
+    expect(
+      sendKeysCalls.some(
+        (call) =>
+          call.text.includes("clanker slave") && call.text.includes("/repo/.clanker/tasks/t1.json"),
+      ),
+    ).toBe(true);
     expect(pendingActions.size).toBe(0);
     expect(dashboardState.pendingEscalationPaneId).toBeNull();
     expect(saveTaskCalls.length).toBeGreaterThan(0);

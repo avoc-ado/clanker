@@ -30,7 +30,7 @@ export const buildBasePrompt = ({
     case ClankerRole.Slave:
       return [
         "You are a clanker slave.",
-        `Execute the task in ${paths.tasksDir}/<id>.json.`,
+        "Execute the assigned task packet.",
         "Do not ask the user; make best-effort assumptions and note risks.",
         "Honor ownerDirs/ownerFiles in the task packet; avoid unrelated files.",
         "Run all listed tests; add missing tests when behavior changes.",
@@ -72,6 +72,53 @@ export const buildTaskFileDispatch = ({
   tasksDir: string;
 }): string =>
   `Open ${join(tasksDir, `${taskId}.json`)} and execute it. Follow the instructions exactly.`;
+
+export const buildJudgeTaskDispatch = ({
+  taskId,
+  tasksDir,
+  historyDir,
+  title,
+}: {
+  taskId: string;
+  tasksDir: string;
+  historyDir: string;
+  title?: string;
+}): string => {
+  const label = title ? `${taskId}: ${title}` : taskId;
+  return [
+    `Review task ${label}.`,
+    `Task file: ${join(tasksDir, `${taskId}.json`)}`,
+    `Handoff: ${join(historyDir, `task-${taskId}-slave.md`)}`,
+  ].join("\n");
+};
+
+const normalizePromptLine = ({ line }: { line: string }): string => line.trim();
+
+export const mergePromptSections = ({ sections }: { sections: string[] }): string => {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const section of sections) {
+    for (const rawLine of section.split("\n")) {
+      const line = normalizePromptLine({ line: rawLine });
+      if (line.length === 0) {
+        if (merged.length === 0 || merged[merged.length - 1] === "") {
+          continue;
+        }
+        merged.push("");
+        continue;
+      }
+      if (seen.has(line)) {
+        continue;
+      }
+      seen.add(line);
+      merged.push(line);
+    }
+  }
+  while (merged.length > 0 && merged[merged.length - 1] === "") {
+    merged.pop();
+  }
+  return merged.join("\n");
+};
 
 export const buildJudgeRelaunchPrompt = ({
   tasks,

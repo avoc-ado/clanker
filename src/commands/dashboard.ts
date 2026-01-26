@@ -12,7 +12,7 @@ import { getSlashCompletions } from "./slash-commands.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import * as readline from "node:readline";
-import { buildBasePrompt, ClankerRole } from "../prompting/role-prompts.js";
+import { ClankerRole } from "../prompting/role-prompts.js";
 import { getRepoRoot } from "../repo-root.js";
 import {
   buildDashboardCommands,
@@ -20,11 +20,7 @@ import {
   type SlashCommandHandler,
 } from "../dashboard/dashboard-commands.js";
 import { backfillTaskPackets, startEventStream } from "../dashboard/event-stream.js";
-import {
-  inspectCodexPane,
-  maybeSendBasePrompt,
-  type PendingAction,
-} from "../dashboard/pending-actions.js";
+import { inspectCodexPane, type PendingAction } from "../dashboard/pending-actions.js";
 import {
   makeDashboardTick,
   type DashboardTickState,
@@ -82,7 +78,6 @@ export const runDashboard = async ({}: {}): Promise<void> => {
   const knownTaskIds = new Set<string>();
   let lastDateKey: string | null = null;
   const pendingActions = new Map<string, PendingAction>();
-  const basePromptSent = new Set<string>();
   const plannerDispatchState: PlannerDispatchState = {
     pending: false,
     sentAt: 0,
@@ -283,40 +278,6 @@ export const runDashboard = async ({}: {}): Promise<void> => {
   const inspectPane = ({ paneId }: { paneId: string }) =>
     inspectCodexPane({ paneId, capturePane, hasEscalationPrompt });
 
-  const sendBasePrompt = async ({
-    paneId,
-    role,
-  }: {
-    paneId: string;
-    role: ClankerRole;
-  }): Promise<void> => {
-    const alreadySent = basePromptSent.has(paneId);
-    await maybeSendBasePrompt({
-      paneId,
-      role,
-      basePromptSent,
-      inspectPane,
-      sendKeys,
-      buildBasePrompt: ({ role: promptRole }) =>
-        buildBasePrompt({
-          role: promptRole,
-          paths: { tasksDir: paths.tasksDir, historyDir: paths.historyDir },
-        }),
-    });
-    if (alreadySent || !basePromptSent.has(paneId)) {
-      return;
-    }
-    await appendEvent({
-      eventsLog: paths.eventsLog,
-      event: {
-        ts: new Date().toISOString(),
-        type: "BASE_PROMPT",
-        msg: `base prompt sent (${role})`,
-        slaveId: role,
-      },
-    });
-  };
-
   const tick = makeDashboardTick({
     repoRoot,
     config,
@@ -327,7 +288,6 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     plannerDispatchState,
     state: dashboardState,
     inspectPane,
-    sendBasePrompt,
     pauseRetryMs: PAUSE_RETRY_MS,
     plannerPromptTimeoutMs: PLANNER_PROMPT_TIMEOUT_MS,
   });
