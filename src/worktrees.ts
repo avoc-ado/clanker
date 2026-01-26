@@ -111,7 +111,15 @@ export const ensureRoleWorktrees = async ({
     await runGit({ args: ["rev-parse", "--verify", ref], cwd: repoRoot });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`worktree ref ${ref} not found (run "git fetch origin"). Details: ${message}`);
+    const helper = [
+      `worktree ref ${ref} not found.`,
+      `Git error: ${message}`,
+      "Fix:",
+      "- If this repo has an origin remote: git fetch origin",
+      "- If no origin remote: git remote add origin <url> && git fetch origin",
+      "- If you want a local stand-in: git update-ref refs/remotes/origin/main HEAD",
+    ].join("\n");
+    throw new Error(helper);
   }
   await mkdir(getWorktreeRoot({ repoRoot }), { recursive: true });
   for (const spec of specs) {

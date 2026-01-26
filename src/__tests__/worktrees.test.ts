@@ -64,6 +64,6 @@ describe("worktrees", () => {
         slaves: 0,
         ref: "origin/main",
       }),
-    ).rejects.toThrow("worktree ref origin/main not found");
+    ).rejects.toThrow("worktree ref origin/main not found.");
   });
 });
