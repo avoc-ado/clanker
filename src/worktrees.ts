@@ -114,10 +114,12 @@ export const ensureRoleWorktrees = async ({
     const helper = [
       `worktree ref ${ref} not found.`,
       `Git error: ${message}`,
+      "Clanker needs a GitHub remote named origin with primary branch main.",
       "Fix:",
-      "- If this repo has an origin remote: git fetch origin",
-      "- If no origin remote: git remote add origin <url> && git fetch origin",
-      "- If you want a local stand-in: git update-ref refs/remotes/origin/main HEAD",
+      "- Create a GitHub repo and set default branch to main.",
+      "- git remote add origin <url>",
+      "- git fetch origin",
+      "- git push -u origin main",
     ].join("\n");
     throw new Error(helper);
   }
