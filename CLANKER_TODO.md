@@ -48,11 +48,11 @@
 
 ## Now
 
-- Switch to yargs for args parsing everywhere (CLI + dashboard commands).
-- Usage limit handling: detect Codex "You've hit your usage limit" message in production, pause + poll `/status` until reset, then resume (IT real should still fail fast).
-- When clanker starts, it can fail if no origin/main is configured. Print a prettier helper message after the git error. Current error message is as follows:'
-  command failed: worktree ref origin/main not found (run "git fetch origin"). Details: Command failed: git rev-parse --verify origin/main
-  fatal: Needed a single revision
+- When clanker starts, it can fail if no origin/main is configured. Print a prettier helper message after the git error. Current error message is as follows:
+
+```
+command failed: worktree ref origin/main not found (run "git fetch origin"). Details: Command failed: git rev-parse --verify origin/main
+fatal: Needed a single revision
 
 Error: worktree ref origin/main not found (run "git fetch origin"). Details: Command failed: git rev-parse --verify origin/main
 fatal: Needed a single revision
@@ -60,8 +60,29 @@ fatal: Needed a single revision
     at ensureRoleWorktrees (file:///./clanker/dist/worktrees.js:62:15)
     at async runLaunch (file:///./clanker/dist/commands/launch.js:299:27)
     at async main (file:///./clanker/dist/cli.js:145:13)
+```
 
-'
+- When launching clanker for the first time, after onboarding, .clanker/worktree dirs are created for the 5 default roles (3 slaves, etc). Then clanker fails with the message
+
+```
+command failed: Command failed: tmux set-hook -t clanker-airline-protocol client-detached if -F \"#{==:#{session_name},clanker-airline-protocol}\" { run-shell \"tmux list-clients -t clanker-airline-protocol: 2>/dev/null | wc -l | grep -q '^0$' && tmux kill-session -t clanker-airline-protocol:\" }
+syntax error
+
+Error: Command failed: tmux set-hook -t clanker-airline-protocol client-detached if -F \"#{==:#{session_name},clanker-airline-protocol}\" { run-shell \"tmux list-clients -t clanker-airline-protocol: 2>/dev/null | wc -l | grep -q '^0$' && tmux kill-session -t clanker-airline-protocol:\" }
+syntax error
+
+    at genericNodeError (node:internal/errors:998:15)
+    at wrappedFn (node:internal/errors:543:14)
+    at ChildProcess.exithandler (node:child_process:417:12)
+    at ChildProcess.emit (node:events:508:28)
+    at maybeClose (node:internal/child_process:1085:16)
+    at Socket.<anonymous> (node:internal/child_process:456:11)
+    at Socket.emit (node:events:508:28)
+    at Pipe.<anonymous> (node:net:346:12)
+```
+
+- Switch to yargs for args parsing everywhere (CLI + dashboard commands).
+- Usage limit handling: detect Codex "You've hit your usage limit" message in production, pause + poll `/status` until reset, then resume (IT real should still fail fast).
 
 ## Blind-Spot Audit (List)
 
