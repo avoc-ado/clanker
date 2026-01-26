@@ -157,7 +157,7 @@ export const dispatchPlannerPrompt = async ({
 
   let targetPaneId = plannerPaneId ?? null;
   if (!targetPaneId) {
-    const panes = await listPanes({ sessionName: config.tmuxFilter });
+    const panes = await listPanes({ sessionPrefix: config.tmuxFilter });
     const plannerPane = selectPlannerPane({ panes });
     targetPaneId = plannerPane?.paneId ?? null;
   }

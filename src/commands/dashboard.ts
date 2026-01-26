@@ -203,7 +203,7 @@ export const runDashboard = async ({}: {}): Promise<void> => {
               : `resumed ${role}`,
       },
     });
-    const panes = await listPanes({ sessionName: config.tmuxFilter });
+    const panes = await listPanes({ sessionPrefix: config.tmuxFilter });
     const plannerPanes = panes.filter((pane) => Boolean(parsePlannerTitle({ title: pane.title })));
     const judgePanes = panes.filter((pane) => Boolean(parseJudgeTitle({ title: pane.title })));
     const slavePanes = panes.filter((pane) => Boolean(extractSlaveId({ title: pane.title })));

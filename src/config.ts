@@ -61,7 +61,8 @@ export const CONFIG_COMMENTS: Record<ConfigKey, string> = {
   slaves: `# default: ${DEFAULT_CONFIG.slaves}. Number of Slave terminals.`,
   backlog: `# default: ${DEFAULT_CONFIG.backlog}. Queued task backlog target.`,
   startImmediately: `# default: ${DEFAULT_CONFIG.startImmediately}. Start in /resume state.`,
-  tmuxFilter: "# default: clanker-<repo>. Tmux session filter override.",
+  tmuxFilter:
+    "# default: clanker-<repo>. Tmux session name (tmux) or session prefix (iTerm2) override.",
   codexCommand: `# default: ${DEFAULT_CONFIG.codexCommand}. Command used to launch Codex CLI.`,
   promptFile: '# default: "". (testing/automation) Prompt file path for plan dispatch.',
 };

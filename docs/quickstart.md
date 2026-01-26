@@ -10,7 +10,7 @@ read_when: first-use, onboarding
 ## Start
 
 - macOS default uses iTerm2 (install iTerm2 or pass `--tmux`).
-- iTerm2 mode runs a background tmux session for routing; use `--tmux` to attach directly.
+- iTerm2 mode runs background tmux sessions (one per pane); use `--tmux` to attach directly.
 - Agents run inside worktrees at `./.clanker/worktree/<role>-<num>` (created from `origin/main`).
 - `clanker` (onboarding + spawn iTerm2 window; exits)
 - `clanker --tmux` (onboarding + spawn tmux session; exits)
@@ -41,7 +41,7 @@ read_when: first-use, onboarding
 1. `clanker` (onboarding; creates `clanker.yaml` + `.clanker/` if missing)
 2. Accept defaults or edit missing `clanker.yaml` fields (prompted one-by-one)
 3. `clanker` spawns a 3x2 iTerm2 grid: dashboard + planner + judge + 3 slaves
-4. tmux session is still available: `tmux attach -t clanker-<repo>`
+4. tmux sessions are still available: `tmux attach -t clanker-<repo>-dashboard` (or `-planner-1`, `-judge-1`, `-slave-1`, ...)
 
 ### Plan + Execute
 
@@ -65,7 +65,7 @@ read_when: first-use, onboarding
 
 ### Shutdown
 
-1. Stop each pane (Ctrl-C) or `tmux kill-session`
+1. Stop each pane (Ctrl-C) or `tmux kill-session -t clanker-<repo>-dashboard` (repeat for each pane)
 2. State stays in `.clanker/` for later `clanker` run
 
 ## Observability
@@ -127,7 +127,7 @@ read_when: first-use, onboarding
 ## Config
 
 See `clanker.yaml` for `slaves`, `backlog`, `tmuxFilter`, `codexCommand`, `promptFile` (testing/automation), `startImmediately`.
-`tmuxFilter` is a tmux session filter; leave empty to use `clanker-<repo>`.
+`tmuxFilter` is the tmux session name (tmux mode) or session prefix (iTerm2 mode); leave empty to use `clanker-<repo>`.
 `startImmediately` controls initial state: true → auto `/resume`; false → start paused.
 
 ## Verify

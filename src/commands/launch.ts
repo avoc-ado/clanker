@@ -121,24 +121,6 @@ const listPaneIds = async ({ sessionName }: { sessionName: string }): Promise<st
     .map((entry) => entry.paneId);
 };
 
-const listWindowPaneId = async ({
-  sessionName,
-  windowName,
-}: {
-  sessionName: string;
-  windowName: string;
-}): Promise<string | null> => {
-  try {
-    const output = await runTmux({
-      args: ["list-panes", "-t", `${sessionName}:${windowName}`, "-F", "#{pane_id}"],
-    });
-    const paneId = output.split("\n")[0]?.trim();
-    return paneId && paneId.length > 0 ? paneId : null;
-  } catch {
-    return null;
-  }
-};
-
 const createLayout = async ({
   sessionName,
   cwd,
@@ -176,50 +158,27 @@ const createLayout = async ({
   return listPaneIds({ sessionName });
 };
 
-const ensureWindowedLayout = async ({
+const ensureSession = async ({
   sessionName,
   cwd,
-  specs,
+  windowName,
   hideStatus,
 }: {
   sessionName: string;
   cwd: string;
-  specs: PaneSpec[];
+  windowName: string;
   hideStatus?: boolean;
-}): Promise<string[]> => {
-  const targets: string[] = [];
-  for (let i = 0; i < specs.length; i += 1) {
-    const title = specs[i]?.title ?? `clanker-${i + 1}`;
-    let paneId = await listWindowPaneId({ sessionName, windowName: title });
-    if (!paneId) {
-      await runTmux({ args: ["new-window", "-t", sessionName, "-n", title, "-c", cwd] });
-      paneId = await listWindowPaneId({ sessionName, windowName: title });
-    }
-    if (!paneId) {
-      throw new Error(`failed to create tmux window ${title}`);
-    }
-    targets.push(`${sessionName}:${title}`);
+}): Promise<string> => {
+  const exists = await hasSession({ sessionName });
+  if (!exists) {
+    await runTmux({
+      args: ["new-session", "-d", "-s", sessionName, "-n", windowName, "-c", cwd],
+    });
+  } else {
+    await runTmux({ args: ["rename-window", "-t", `${sessionName}:0`, windowName] });
   }
-  return targets;
-};
-
-const createWindowedLayout = async ({
-  sessionName,
-  cwd,
-  specs,
-  hideStatus,
-}: {
-  sessionName: string;
-  cwd: string;
-  specs: PaneSpec[];
-  hideStatus?: boolean;
-}): Promise<string[]> => {
-  const firstName = specs[0]?.title ?? "clanker";
-  await runTmux({
-    args: ["new-session", "-d", "-s", sessionName, "-n", firstName, "-c", cwd],
-  });
   await applySessionOptions({ sessionName, hideStatus });
-  return ensureWindowedLayout({ sessionName, cwd, specs, hideStatus });
+  return `${sessionName}:${windowName}`;
 };
 
 const attachSession = async ({ sessionName }: { sessionName: string }): Promise<void> => {
@@ -276,21 +235,31 @@ const escapeShellArg = ({ value }: { value: string }): string => {
   return `'${value.replace(/'/g, "'\\''")}'`;
 };
 
+const buildSessionName = ({
+  sessionPrefix,
+  title,
+}: {
+  sessionPrefix: string;
+  title: string;
+}): string => `${sessionPrefix}-${title}`;
+
 export const buildTmuxAttachCommands = ({
-  sessionName,
-  windowNames,
+  targets,
   tmuxSocket,
 }: {
-  sessionName: string;
-  windowNames: string[];
+  targets: { sessionName: string; windowName?: string }[];
   tmuxSocket?: string;
 }): string[] => {
-  return windowNames.map((name) => {
-    const target = `${sessionName}:${name}`;
+  return targets.map((target) => {
+    const windowName = target.windowName;
+    const selectTarget = windowName ? `${target.sessionName}:${windowName}` : null;
     const socketArgs = tmuxSocket ? `-S ${escapeShellArg({ value: tmuxSocket })} ` : "";
     const tmuxBin = "tmux";
-    const attach = `attach-session -t ${escapeShellArg({ value: sessionName })}`;
-    const select = `select-window -t ${escapeShellArg({ value: target })}`;
+    const attach = `attach-session -t ${escapeShellArg({ value: target.sessionName })}`;
+    if (!selectTarget) {
+      return `${tmuxBin} ${socketArgs}${attach}`.trim();
+    }
+    const select = `select-window -t ${escapeShellArg({ value: selectTarget })}`;
     return `${tmuxBin} ${socketArgs}${attach} \\; ${select}`.trim();
   });
 };
@@ -373,7 +342,7 @@ export const runLaunch = async ({
     },
   });
 
-  const sessionName = config.tmuxFilter ?? `clanker-${repoRoot.split("/").pop() ?? "repo"}`;
+  const sessionPrefix = config.tmuxFilter ?? `clanker-${repoRoot.split("/").pop() ?? "repo"}`;
   const worktreeSpecs = await ensureRoleWorktrees({
     repoRoot,
     planners: config.planners,
@@ -399,43 +368,61 @@ export const runLaunch = async ({
   const nodeArgs = await resolvePnpArgs({ cliPath });
 
   const isItermMode = !forceTmux && process.platform === "darwin";
-  const sessionExists = await hasSession({ sessionName });
-  if (!sessionExists) {
-    const paneTargets = isItermMode
-      ? await createWindowedLayout({
-          sessionName,
-          cwd: repoRoot,
-          specs,
-          hideStatus: true,
-        })
-      : await createLayout({
-          sessionName,
-          cwd: repoRoot,
-          paneCount: specs.length,
-        });
-    await configurePanes({ sessionName, paneTargets, specs, cliPath, nodeArgs, repoRoot });
-    await configureDetachHooks({ sessionName });
-  } else if (isItermMode) {
-    await applySessionOptions({ sessionName, hideStatus: true });
-    const paneTargets = await ensureWindowedLayout({
-      sessionName,
-      cwd: repoRoot,
-      specs,
-      hideStatus: true,
-    });
-    await configurePanes({ sessionName, paneTargets, specs, cliPath, nodeArgs, repoRoot });
-    await configureDetachHooks({ sessionName });
-  }
-
   if (isItermMode) {
+    const sessionTargets: {
+      sessionName: string;
+      windowName: string;
+      paneTarget: string;
+      spec: PaneSpec;
+    }[] = [];
+    for (const spec of specs) {
+      const targetSessionName = buildSessionName({ sessionPrefix, title: spec.title });
+      const paneTarget = await ensureSession({
+        sessionName: targetSessionName,
+        cwd: spec.cwd,
+        windowName: spec.title,
+        hideStatus: true,
+      });
+      sessionTargets.push({
+        sessionName: targetSessionName,
+        windowName: spec.title,
+        paneTarget,
+        spec,
+      });
+    }
+    for (const sessionTarget of sessionTargets) {
+      await configurePanes({
+        sessionName: sessionTarget.sessionName,
+        paneTargets: [sessionTarget.paneTarget],
+        specs: [sessionTarget.spec],
+        cliPath,
+        nodeArgs,
+        repoRoot,
+      });
+      await configureDetachHooks({ sessionName: sessionTarget.sessionName });
+    }
     const commands = buildTmuxAttachCommands({
-      sessionName,
-      windowNames: specs.map((spec) => spec.title),
+      targets: sessionTargets.map((sessionTarget) => ({
+        sessionName: sessionTarget.sessionName,
+        windowName: sessionTarget.windowName,
+      })),
       tmuxSocket: process.env.CLANKER_TMUX_SOCKET,
     });
     await launchIterm({ cwd: repoRoot, commands });
     console.log("clanker started iTerm2 window");
     return;
+  }
+
+  const sessionName = sessionPrefix;
+  const sessionExists = await hasSession({ sessionName });
+  if (!sessionExists) {
+    const paneTargets = await createLayout({
+      sessionName,
+      cwd: repoRoot,
+      paneCount: specs.length,
+    });
+    await configurePanes({ sessionName, paneTargets, specs, cliPath, nodeArgs, repoRoot });
+    await configureDetachHooks({ sessionName });
   }
 
   if (attach) {
