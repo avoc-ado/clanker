@@ -30,9 +30,7 @@ export const inspectCodexPane = async ({
   const lines = content.split("\n");
   const hasPrompt = lines.some((line) => PROMPT_MARKER.test(line.trimStart()));
   const hasEscalation = hasEscalationPrompt({ content });
-  const isWorking = lines.some(
-    (line) => line.includes("Working") && line.toLowerCase().includes(WORKING_MATCH),
-  );
+  const isWorking = lines.some((line) => line.toLowerCase().includes(WORKING_MATCH));
   const isPaused = lines.some((line) => line.toLowerCase().includes("paused"));
   return { hasPrompt, isWorking, isPaused, hasEscalation };
 };

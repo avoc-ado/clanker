@@ -33,7 +33,7 @@ describe("inspectCodexPane", () => {
   test("parses prompt, working, paused, and escalation flags", async () => {
     const content = [
       "› prompt here",
-      "Working (esc to interrupt)",
+      "Reasoning (esc to interrupt)",
       "paused",
       "Press enter to confirm",
     ].join("\n");
