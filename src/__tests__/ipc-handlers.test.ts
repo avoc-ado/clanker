@@ -97,6 +97,61 @@ describe("ipc handlers", () => {
     expect(missingNote).toContain("note");
   });
 
+  test("task_request assigns work and judge_request returns needs_judge prompts", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-ipc-"));
+    const paths = getClankerPaths({ repoRoot: root });
+    await ensureStateDirs({ paths });
+    const handlers = buildIpcHandlers({ paths });
+
+    await handlers.task_create({
+      payload: { task: { id: "t1", status: "queued", prompt: "ship it" } },
+      context: {},
+    });
+
+    const taskResponse = await handlers.task_request({
+      payload: { podId: "slave-1" },
+      context: {},
+    });
+    expect(taskResponse).toMatchObject({ taskId: "t1" });
+    expect(String((taskResponse as { prompt?: string }).prompt ?? "")).toContain("clanker slave");
+
+    const assigned = await loadTask({ tasksDir: paths.tasksDir, id: "t1" });
+    expect(assigned?.status).toBe("running");
+    expect(assigned?.assignedSlaveId).toBe("slave-1");
+    expect(Boolean(assigned?.promptedAt)).toBe(true);
+
+    await handlers.task_status({
+      payload: { taskId: "t1", status: "needs_judge" },
+      context: {},
+    });
+
+    const judgeResponse = await handlers.judge_request({
+      payload: { podId: "judge-1" },
+      context: {},
+    });
+    expect(judgeResponse).toMatchObject({ taskId: "t1" });
+    expect(String((judgeResponse as { prompt?: string }).prompt ?? "")).toContain("clanker judge");
+  });
+
+  test("task_request and judge_request return null when queue is empty", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-ipc-"));
+    const paths = getClankerPaths({ repoRoot: root });
+    await ensureStateDirs({ paths });
+    const handlers = buildIpcHandlers({ paths });
+
+    const taskResponse = await handlers.task_request({
+      payload: { podId: "slave-1" },
+      context: {},
+    });
+    expect(taskResponse).toMatchObject({ taskId: null });
+
+    const judgeResponse = await handlers.judge_request({
+      payload: { podId: "judge-1" },
+      context: {},
+    });
+    expect(judgeResponse).toMatchObject({ taskId: null });
+  });
+
   test("validates payloads", async () => {
     const root = await mkdtemp(join(tmpdir(), "clanker-ipc-"));
     const paths = getClankerPaths({ repoRoot: root });

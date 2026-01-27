@@ -40,6 +40,8 @@
 - Replace env overrides with CLI args/config where appropriate (`--codex-command`, `--codex-tty`, `--disable-codex`)
 - Deduplicate prompt helpers (e.g. `getPromptMode`) into shared util
 - Keep tmux session alive before respawn in real IT flow
+- Real IT: planner auto-dispatch waits for Codex prompt readiness; `yarn test:it:real` passes
+- IPC: add `task_request` + `judge_request` handlers; shared composite prompt builders
 
 ## Stack Rank
 
@@ -47,7 +49,6 @@
 
 ## Now
 
-- IPC: implement `task_request` + `judge_request` handlers in `src/ipc/handlers.ts`.
 - IPC: route dispatch/assignment through IPC broker (dashboard), not file polling.
 - Tests: add IT coverage for worktree pods updating root state via IPC; ensure no immediate prompts on `/resume`.
 - Refactor: add IPC-first gateway (`task-gateway.ts`) used across CLI + handlers; remove duplicated fs logic.

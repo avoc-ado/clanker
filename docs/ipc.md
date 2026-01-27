@@ -79,8 +79,11 @@ Request a task assignment.
 Response:
 
 ```json
-{ "ok": true, "data": { "taskId": "t1", "prompt": "base + task prompt" } }
+{ "ok": true, "data": { "taskId": "t1", "status": "running", "prompt": "base + task prompt" } }
 ```
+
+- When no work is available: `{ "ok": true, "data": { "taskId": null } }`
+- Handler assigns queued work to `podId` when possible and records `TASK_PROMPTED`.
 
 ### task_status (slave/judge -> dashboard)
 
@@ -115,8 +118,10 @@ Request next `needs_judge` task.
 Response:
 
 ```json
-{ "ok": true, "data": { "taskId": "t1", "prompt": "base + judge prompt" } }
+{ "ok": true, "data": { "taskId": "t1", "status": "needs_judge", "prompt": "base + judge prompt" } }
 ```
+
+- When no `needs_judge` tasks exist: `{ "ok": true, "data": { "taskId": null } }`
 
 ## Fallback Behavior
 

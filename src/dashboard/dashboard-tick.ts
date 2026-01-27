@@ -4,7 +4,6 @@ import type { PromptSettings } from "../prompting.js";
 import { appendEvent } from "../state/events.js";
 import { readRecentEvents } from "../state/read-events.js";
 import { listTasks, loadTask, saveTask } from "../state/tasks.js";
-import type { TaskRecord } from "../state/tasks.js";
 import { readHeartbeats } from "../state/read-heartbeats.js";
 import { isHeartbeatStale } from "../state/heartbeat.js";
 import { assignQueuedTasks } from "../state/assign.js";
@@ -17,13 +16,8 @@ import { loadState, saveState } from "../state/state.js";
 import type { PromptApprovalRequest, PromptApprovalState } from "../state/state.js";
 import { dispatchPlannerPrompt, preparePlannerPrompt } from "../commands/plan.js";
 import { HEARTBEAT_STALE_MS } from "../constants.js";
-import {
-  buildBasePrompt,
-  buildJudgeTaskDispatch,
-  buildTaskFileDispatch,
-  ClankerRole,
-  mergePromptSections,
-} from "../prompting/role-prompts.js";
+import { ClankerRole } from "../prompting/role-prompts.js";
+import { buildJudgePrompts, buildSlavePrompts } from "../prompting/composite-prompts.js";
 import { getCurrentPaneId, listPanes, selectPane, sendKey, sendKeys } from "../tmux.js";
 import {
   processPendingActions,
@@ -278,42 +272,7 @@ export const makeDashboardTick = ({
     const slavePaneMap = new Map<string, string>(
       cappedSlavePanes.map((entry) => [entry.slaveId, entry.pane.paneId]),
     );
-    const buildCompositePrompt = ({ role, body }: { role: ClankerRole; body: string }): string =>
-      mergePromptSections({
-        sections: [
-          buildBasePrompt({
-            role,
-            paths: { tasksDir: paths.tasksDir, historyDir: paths.historyDir },
-          }),
-          body,
-        ],
-      });
-    const buildSlavePrompt = ({
-      task,
-    }: {
-      task: TaskRecord;
-    }): { displayPrompt: string; dispatchPrompt: string } => {
-      const taskPrompt = task.prompt ?? "";
-      const fileDispatch = buildTaskFileDispatch({ taskId: task.id, tasksDir: paths.tasksDir });
-      const displayPrompt = buildCompositePrompt({ role: ClankerRole.Slave, body: taskPrompt });
-      const dispatchBody = promptSettings.mode === "file" ? fileDispatch : taskPrompt;
-      const dispatchPrompt = buildCompositePrompt({ role: ClankerRole.Slave, body: dispatchBody });
-      return { displayPrompt, dispatchPrompt };
-    };
-    const buildJudgePrompt = ({
-      task,
-    }: {
-      task: TaskRecord;
-    }): { displayPrompt: string; dispatchPrompt: string } => {
-      const promptBody = buildJudgeTaskDispatch({
-        taskId: task.id,
-        tasksDir: paths.tasksDir,
-        historyDir: paths.historyDir,
-        title: task.title,
-      });
-      const prompt = buildCompositePrompt({ role: ClankerRole.Judge, body: promptBody });
-      return { displayPrompt: prompt, dispatchPrompt: prompt };
-    };
+    const promptPaths = { tasksDir: paths.tasksDir, historyDir: paths.historyDir };
     const sendApprovedPrompt = async ({
       approved,
     }: {
@@ -409,7 +368,11 @@ export const makeDashboardTick = ({
         if (!paneId) {
           return;
         }
-        const { displayPrompt, dispatchPrompt } = buildSlavePrompt({ task: latest });
+        const { displayPrompt, dispatchPrompt } = buildSlavePrompts({
+          task: latest,
+          promptSettings,
+          paths: promptPaths,
+        });
         if (!approvalState.autoApprove.slave) {
           const approvalKey = `task:${latest.id}:slave`;
           await enqueueApproval({
@@ -579,11 +542,23 @@ export const makeDashboardTick = ({
     if (!plannerPaused && readyCount < config.backlog && !plannerDispatchState.pending) {
       const approvalKey = "planner:backlog";
       if (approvalState.autoApprove.planner) {
-        const dispatched = await dispatchPlannerPrompt({ repoRoot, plannerPaneId });
-        if (dispatched) {
-          plannerDispatchState.pending = true;
-          plannerDispatchState.sentAt = Date.now();
-          plannerDispatchState.taskCountAt = tasks.length;
+        if (plannerPaneId) {
+          const paneState = await inspectPane({ paneId: plannerPaneId });
+          if (!paneState.isWorking && !paneState.hasEscalation && paneState.hasPrompt) {
+            const dispatched = await dispatchPlannerPrompt({ repoRoot, plannerPaneId });
+            if (dispatched) {
+              plannerDispatchState.pending = true;
+              plannerDispatchState.sentAt = Date.now();
+              plannerDispatchState.taskCountAt = tasks.length;
+            }
+          }
+        } else {
+          const dispatched = await dispatchPlannerPrompt({ repoRoot, plannerPaneId });
+          if (dispatched) {
+            plannerDispatchState.pending = true;
+            plannerDispatchState.sentAt = Date.now();
+            plannerDispatchState.taskCountAt = tasks.length;
+          }
         }
       } else if (!hasApprovalKey({ key: approvalKey })) {
         const prepared = await preparePlannerPrompt({ repoRoot });
@@ -638,7 +613,10 @@ export const makeDashboardTick = ({
         const paneState = await inspectPane({ paneId: judgePaneId });
         if (paneState.hasPrompt && !paneState.isWorking && !paneState.hasEscalation) {
           const task = needsJudgeTasks[0];
-          const { displayPrompt, dispatchPrompt } = buildJudgePrompt({ task });
+          const { displayPrompt, dispatchPrompt } = buildJudgePrompts({
+            task,
+            paths: promptPaths,
+          });
           if (!approvalState.autoApprove.judge) {
             const approvalKey = `task:${task.id}:judge`;
             await enqueueApproval({

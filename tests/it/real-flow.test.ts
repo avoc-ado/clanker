@@ -59,7 +59,16 @@ describe("integration: real flow", () => {
       await runCli({ cwd: root, args: ["doctor", "--fix"] });
       await writeFile(
         join(root, ".clanker", "state.json"),
-        JSON.stringify({ paused: false, tasks: [] }),
+        JSON.stringify({
+          paused: false,
+          pausedRoles: { planner: false, judge: false, slave: false },
+          promptApprovals: {
+            autoApprove: { planner: true, judge: true, slave: true },
+            queue: [],
+            approved: null,
+          },
+          tasks: [],
+        }),
         "utf-8",
       );
 
