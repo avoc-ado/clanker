@@ -10,6 +10,7 @@ import { transitionTaskStatus } from "../state/task-status.js";
 import { listTasks, loadTask, saveTask, type TaskRecord, type TaskStatus } from "../state/tasks.js";
 import { buildHandoffContent, buildNoteContent } from "../state/task-content.js";
 import { applyTaskUsage, type TaskUsageInput } from "../state/task-usage.js";
+import { ensureJudgeCheckoutForTask, ensureSlaveCommitForTask } from "../state/task-commits.js";
 import type { IpcHandlers } from "./server.js";
 
 interface TaskCreatePayload {
@@ -129,7 +130,25 @@ export const buildIpcHandlers = ({ paths }: { paths: ClankerPaths }): IpcHandler
       if (!task) {
         throw new Error(`Task not found: ${taskId}`);
       }
-      await transitionTaskStatus({ task, status, paths });
+      const config = await loadConfig({ repoRoot: paths.repoRoot });
+      if (status === "needs_judge") {
+        const commitResult = await ensureSlaveCommitForTask({
+          repoRoot: paths.repoRoot,
+          paths,
+          config,
+          task,
+        });
+        if (commitResult.status === "commit_failed") {
+          throw new Error(
+            `Slave commit required before needs_judge (${commitResult.message ?? "commit failed"})`,
+          );
+        }
+      }
+      const latestTask = await loadTask({ tasksDir: paths.tasksDir, id: taskId });
+      if (!latestTask) {
+        throw new Error(`Task not found: ${taskId}`);
+      }
+      await transitionTaskStatus({ task: latestTask, status, paths });
       return { taskId, status };
     },
     task_request: async ({ payload }) => {
@@ -182,7 +201,20 @@ export const buildIpcHandlers = ({ paths }: { paths: ClankerPaths }): IpcHandler
       if (!targetTask) {
         return { taskId: null };
       }
-      const { dispatchPrompt } = buildJudgePrompts({ task: targetTask, paths: promptPaths });
+      const config = await loadConfig({ repoRoot: paths.repoRoot });
+      const judgeCheckout = await ensureJudgeCheckoutForTask({
+        repoRoot: paths.repoRoot,
+        paths,
+        config,
+        task: targetTask,
+      });
+      const latestTask = await loadTask({ tasksDir: paths.tasksDir, id: targetTask.id });
+      const taskForPrompt = latestTask ?? targetTask;
+      const { dispatchPrompt } = buildJudgePrompts({
+        task: taskForPrompt,
+        paths: promptPaths,
+        judgeCheckout,
+      });
       await appendEvent({
         eventsLog: paths.eventsLog,
         event: {
@@ -199,15 +231,22 @@ export const buildIpcHandlers = ({ paths }: { paths: ClankerPaths }): IpcHandler
       const data = payload as TaskHandoffPayload;
       const taskId = requireString({ value: data?.taskId, label: "taskId" });
       const role = requireRole({ value: data?.role });
+      const task = await loadTask({ tasksDir: paths.tasksDir, id: taskId });
+      const diffs = data?.diffs ?? "";
+      const autoDiffs =
+        diffs.trim().length > 0
+          ? diffs
+          : role === "slave" && task?.slaveCommitSha
+            ? `commit: ${task.slaveCommitSha}`
+            : diffs;
       const content = buildHandoffContent({
         role,
         summary: data?.summary ?? "",
         tests: data?.tests ?? "",
-        diffs: data?.diffs ?? "",
+        diffs: autoDiffs,
         risks: data?.risks ?? "",
       });
       await writeHistory({ historyDir: paths.historyDir, taskId, role, content });
-      const task = await loadTask({ tasksDir: paths.tasksDir, id: taskId });
       if (task && data?.usage) {
         const next = applyTaskUsage({ task, usage: data.usage });
         if (next) {

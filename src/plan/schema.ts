@@ -1,7 +1,18 @@
 export const TASK_SCHEMA = {
   required: ["id", "status", "prompt"],
   status: ["queued", "running", "needs_judge", "rework", "done", "blocked", "paused", "failed"],
-  optional: ["ownerDirs", "ownerFiles", "baseMainSha", "assignedSlaveId", "resumeSlaveId", "usage"],
+  optional: [
+    "ownerDirs",
+    "ownerFiles",
+    "baseMainSha",
+    "assignedSlaveId",
+    "resumeSlaveId",
+    "slaveCommitSha",
+    "slaveCommittedAt",
+    "judgeCheckedOutSha",
+    "judgeCheckedOutAt",
+    "usage",
+  ],
 };
 
 export const formatTaskSchema = (): string => {
@@ -15,6 +26,10 @@ export const formatTaskSchema = (): string => {
     "- baseMainSha?: string",
     "- assignedSlaveId?: string",
     "- resumeSlaveId?: string",
+    "- slaveCommitSha?: string",
+    "- slaveCommittedAt?: string",
+    "- judgeCheckedOutSha?: string",
+    "- judgeCheckedOutAt?: string",
     "- usage?: { tokens: number; cost: number; judgeTokens?: number; judgeCost?: number }",
   ].join("\n");
 };

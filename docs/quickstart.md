@@ -34,6 +34,9 @@ read_when: first-use, onboarding
 - Commands: `/relaunch [--fresh] [target]`, `/task <id> <status>`, `/focus`
 - History: Up/Down to recall commands; last 50 entries persisted to disk
 - Slash list: `/` to list and filter, `/help` to list
+- Prompts require approval in the dashboard unless auto-approve is enabled.
+- Planner worktree syncs to `origin/main` on planner start when clean.
+- Slaves attempt a commit before `needs_judge`; judge prompts include and check out that commit when possible.
 
 ## End-to-end Flow (manual panes)
 

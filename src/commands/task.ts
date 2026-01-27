@@ -1,3 +1,4 @@
+import { loadConfig } from "../config.js";
 import { getClankerPaths } from "../paths.js";
 import { ensureStateDirs } from "../state/ensure-state.js";
 import { appendEvent } from "../state/events.js";
@@ -7,6 +8,7 @@ import { transitionTaskStatus } from "../state/task-status.js";
 import { writeHistory } from "../state/history.js";
 import { buildHandoffContent, buildNoteContent } from "../state/task-content.js";
 import { applyTaskUsage, type TaskUsageInput } from "../state/task-usage.js";
+import { ensureSlaveCommitForTask } from "../state/task-commits.js";
 import { TASK_SCHEMA } from "../plan/schema.js";
 import { mkdir, readdir, rename, stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -147,6 +149,24 @@ export const runTask = async ({ args }: { args: string[] }): Promise<void> => {
           throw new Error(`Invalid status: ${nextStatus}`);
         }
         const status = nextStatus as TaskStatus;
+        const existingTask = await loadTask({ tasksDir: paths.tasksDir, id });
+        if (!existingTask) {
+          throw new Error(`Task not found: ${id}`);
+        }
+        if (status === "needs_judge") {
+          const config = await loadConfig({ repoRoot });
+          const commitResult = await ensureSlaveCommitForTask({
+            repoRoot,
+            paths,
+            config,
+            task: existingTask,
+          });
+          if (commitResult.status === "commit_failed") {
+            throw new Error(
+              `Slave commit required before needs_judge (${commitResult.message ?? "commit failed"})`,
+            );
+          }
+        }
         const handled = await tryIpc({
           type: "task_status",
           payload: { taskId: id, status },
@@ -262,15 +282,27 @@ export const runTask = async ({ args }: { args: string[] }): Promise<void> => {
         const tests = String(argv.tests ?? "");
         const diffs = String(argv.diffs ?? "");
         const risks = String(argv.risks ?? "");
+        const task = await loadTask({ tasksDir: paths.tasksDir, id });
+        const autoDiffs =
+          diffs.length > 0
+            ? diffs
+            : role === "slave" && task?.slaveCommitSha
+              ? `commit: ${task.slaveCommitSha}`
+              : diffs;
         const usage = getUsageFromArgs({ argv });
         const handled = await tryIpc({
           type: "task_handoff",
-          payload: { taskId: id, role, summary, tests, diffs, risks, usage },
+          payload: { taskId: id, role, summary, tests, diffs: autoDiffs, risks, usage },
         });
         if (!handled) {
-          const content = buildHandoffContent({ role, summary, tests, diffs, risks });
+          const content = buildHandoffContent({
+            role,
+            summary,
+            tests,
+            diffs: autoDiffs,
+            risks,
+          });
           await writeHistory({ historyDir: paths.historyDir, taskId: id, role, content });
-          const task = await loadTask({ tasksDir: paths.tasksDir, id });
           if (task && applyTaskUsage({ task, usage })) {
             await saveTask({ tasksDir: paths.tasksDir, task });
             await appendEvent({

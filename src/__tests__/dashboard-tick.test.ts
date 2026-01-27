@@ -95,6 +95,8 @@ describe("makeDashboardTick", () => {
       dispatch: "dispatch",
       promptPath: ".clanker/plan-prompt.txt",
     });
+    const ensureJudgeCheckoutForTask = async () =>
+      ({ status: "checked_out", commitSha: "sha" }) as const;
     const getCurrentPaneId = async () => "pane-slave";
     const listPanes = async () => [
       { paneId: "pane-planner", title: "clanker:planner-1" },
@@ -230,6 +232,7 @@ describe("makeDashboardTick", () => {
         saveState,
         dispatchPlannerPrompt,
         preparePlannerPrompt,
+        ensureJudgeCheckoutForTask,
         getCurrentPaneId,
         listPanes,
         selectPane,
@@ -324,6 +327,8 @@ describe("makeDashboardTick", () => {
       dispatch: "dispatch",
       promptPath: ".clanker/plan-prompt.txt",
     });
+    const ensureJudgeCheckoutForTask = async () =>
+      ({ status: "checked_out", commitSha: "sha" }) as const;
     const getCurrentPaneId = async () => "pane-slave";
     const listPanes = async () => [
       { paneId: "pane-planner", title: "clanker:planner-1" },
@@ -413,6 +418,7 @@ describe("makeDashboardTick", () => {
         saveState,
         dispatchPlannerPrompt,
         preparePlannerPrompt,
+        ensureJudgeCheckoutForTask,
         getCurrentPaneId,
         listPanes,
         selectPane,
@@ -499,6 +505,8 @@ describe("makeDashboardTick", () => {
       dispatch: "dispatch",
       promptPath: ".clanker/plan-prompt.txt",
     });
+    const ensureJudgeCheckoutForTask = async () =>
+      ({ status: "checked_out", commitSha: "sha" }) as const;
     const getCurrentPaneId = async () => "pane-slave";
     const listPanes = async () => [{ paneId: "pane-slave", title: "clanker:slave-1" }];
     const selectPane = async () => undefined;
@@ -584,6 +592,7 @@ describe("makeDashboardTick", () => {
         saveState,
         dispatchPlannerPrompt,
         preparePlannerPrompt,
+        ensureJudgeCheckoutForTask,
         getCurrentPaneId,
         listPanes,
         selectPane,
@@ -661,6 +670,8 @@ describe("makeDashboardTick", () => {
       dispatch: "dispatch",
       promptPath: ".clanker/plan-prompt.txt",
     });
+    const ensureJudgeCheckoutForTask = async () =>
+      ({ status: "checked_out", commitSha: "sha" }) as const;
     const getCurrentPaneId = async () => "pane-dashboard";
     const listPanes = async () => [{ paneId: "pane-planner", title: "clanker:planner-1" }];
     const selectPane = async () => undefined;
@@ -747,6 +758,7 @@ describe("makeDashboardTick", () => {
         saveState,
         dispatchPlannerPrompt,
         preparePlannerPrompt,
+        ensureJudgeCheckoutForTask,
         getCurrentPaneId,
         listPanes,
         selectPane,
@@ -833,6 +845,8 @@ describe("makeDashboardTick", () => {
       dispatch: "dispatch",
       promptPath: ".clanker/plan-prompt.txt",
     });
+    const ensureJudgeCheckoutForTask = async () =>
+      ({ status: "checked_out", commitSha: "sha" }) as const;
     const getCurrentPaneId = async () => "pane-dashboard";
     const listPanes = async () => [{ paneId: "pane-judge", title: "clanker:judge-1" }];
     const selectPane = async () => undefined;
@@ -918,6 +932,7 @@ describe("makeDashboardTick", () => {
         saveState,
         dispatchPlannerPrompt,
         preparePlannerPrompt,
+        ensureJudgeCheckoutForTask,
         getCurrentPaneId,
         listPanes,
         selectPane,

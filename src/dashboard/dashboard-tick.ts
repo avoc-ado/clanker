@@ -19,6 +19,7 @@ import { dispatchPlannerPrompt, preparePlannerPrompt } from "../commands/plan.js
 import { HEARTBEAT_STALE_MS } from "../constants.js";
 import { ClankerRole } from "../prompting/role-prompts.js";
 import { buildJudgePrompts, buildSlavePrompts } from "../prompting/composite-prompts.js";
+import { ensureJudgeCheckoutForTask } from "../state/task-commits.js";
 import { getCurrentPaneId, listPanes, selectPane, sendKey, sendKeys } from "../tmux.js";
 import {
   processPendingActions,
@@ -70,6 +71,7 @@ interface DashboardTickDeps {
   saveState: typeof saveState;
   dispatchPlannerPrompt: typeof dispatchPlannerPrompt;
   preparePlannerPrompt: typeof preparePlannerPrompt;
+  ensureJudgeCheckoutForTask: typeof ensureJudgeCheckoutForTask;
   getCurrentPaneId: typeof getCurrentPaneId;
   listPanes: typeof listPanes;
   selectPane: typeof selectPane;
@@ -96,6 +98,7 @@ const defaultDeps: DashboardTickDeps = {
   saveState,
   dispatchPlannerPrompt,
   preparePlannerPrompt,
+  ensureJudgeCheckoutForTask,
   getCurrentPaneId,
   listPanes,
   selectPane,
@@ -151,6 +154,7 @@ export const makeDashboardTick = ({
     saveState,
     dispatchPlannerPrompt,
     preparePlannerPrompt,
+    ensureJudgeCheckoutForTask,
     getCurrentPaneId,
     listPanes,
     selectPane,
@@ -304,6 +308,10 @@ export const makeDashboardTick = ({
         return "sent";
       }
       if (approved.kind === "judge-task") {
+        const taskId = approved.taskId;
+        if (!taskId) {
+          return "skip";
+        }
         const judgePaneId = judgePanes[0]?.paneId ?? null;
         if (!judgePaneId) {
           return "retry";
@@ -312,7 +320,24 @@ export const makeDashboardTick = ({
         if (paneState.isWorking || paneState.hasEscalation || !paneState.hasPrompt) {
           return "retry";
         }
-        await sendKeys({ paneId: judgePaneId, text: approved.dispatch });
+        const task = await loadTask({ tasksDir: paths.tasksDir, id: taskId });
+        if (!task) {
+          return "skip";
+        }
+        const judgeCheckout = await ensureJudgeCheckoutForTask({
+          repoRoot,
+          paths,
+          config,
+          task,
+        });
+        const latestTask = await loadTask({ tasksDir: paths.tasksDir, id: taskId });
+        const taskForPrompt = latestTask ?? task;
+        const { dispatchPrompt } = buildJudgePrompts({
+          task: taskForPrompt,
+          paths: promptPaths,
+          judgeCheckout,
+        });
+        await sendKeys({ paneId: judgePaneId, text: dispatchPrompt });
         return "sent";
       }
       const taskId = approved.taskId;
@@ -619,11 +644,11 @@ export const makeDashboardTick = ({
         const paneState = await inspectPane({ paneId: judgePaneId });
         if (paneState.hasPrompt && !paneState.isWorking && !paneState.hasEscalation) {
           const task = needsJudgeTasks[0];
-          const { displayPrompt, dispatchPrompt } = buildJudgePrompts({
-            task,
-            paths: promptPaths,
-          });
           if (!approvalState.autoApprove.judge) {
+            const { displayPrompt, dispatchPrompt } = buildJudgePrompts({
+              task,
+              paths: promptPaths,
+            });
             const approvalKey = `task:${task.id}:judge`;
             await enqueueApproval({
               request: {
@@ -639,6 +664,19 @@ export const makeDashboardTick = ({
               },
             });
           } else {
+            const judgeCheckout = await ensureJudgeCheckoutForTask({
+              repoRoot,
+              paths,
+              config,
+              task,
+            });
+            const latestTask = await loadTask({ tasksDir: paths.tasksDir, id: task.id });
+            const taskForPrompt = latestTask ?? task;
+            const { dispatchPrompt } = buildJudgePrompts({
+              task: taskForPrompt,
+              paths: promptPaths,
+              judgeCheckout,
+            });
             await sendKeys({ paneId: judgePaneId, text: dispatchPrompt });
           }
         }

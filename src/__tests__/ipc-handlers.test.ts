@@ -1,12 +1,25 @@
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { jest } from "@jest/globals";
 import { getClankerPaths } from "../paths.js";
 import { ensureStateDirs } from "../state/ensure-state.js";
 import { loadTask } from "../state/tasks.js";
-import { buildIpcHandlers } from "../ipc/handlers.js";
+
+const runGitMock = jest.fn<Promise<string>, [{ args: string[]; cwd: string }]>();
+
+jest.unstable_mockModule("../git.js", () => ({
+  runGit: runGitMock,
+}));
+
+const { buildIpcHandlers } = await import("../ipc/handlers.js");
 
 describe("ipc handlers", () => {
+  beforeEach(() => {
+    runGitMock.mockReset();
+    runGitMock.mockResolvedValue("");
+  });
+
   test("writes tasks, status, handoff, and heartbeat", async () => {
     const root = await mkdtemp(join(tmpdir(), "clanker-ipc-"));
     const paths = getClankerPaths({ repoRoot: root });

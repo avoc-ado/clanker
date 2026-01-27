@@ -9,7 +9,14 @@ jest.unstable_mockModule("../git.js", () => ({
   runGit: runGitMock,
 }));
 
-const { ensureRoleWorktrees, getWorktreePath, listWorktreeSpecs } = await import("../worktrees.js");
+const {
+  ensureRoleWorktrees,
+  getWorktreePath,
+  listWorktreeSpecs,
+  syncWorktreeToOriginMain,
+  commitWorktreeChanges,
+  checkoutWorktreeCommit,
+} = await import("../worktrees.js");
 
 describe("worktrees", () => {
   beforeEach(() => {
@@ -94,5 +101,205 @@ describe("worktrees", () => {
         ref: "origin/main",
       }),
     ).rejects.toThrow("Clanker needs a GitHub remote named origin with primary branch main.");
+  });
+
+  test("syncWorktreeToOriginMain skips dirty worktree", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-worktrees-"));
+    const worktreePath = getWorktreePath({ repoRoot: root, role: "planner", index: 1 });
+    await mkdir(worktreePath, { recursive: true });
+    await writeFile(join(worktreePath, ".git"), "gitdir: /tmp/fake", "utf-8");
+    runGitMock.mockImplementation(async ({ args }) => {
+      if (args[0] === "status") {
+        return " M file.ts";
+      }
+      if (args[0] === "rev-parse") {
+        return "sha-dirty";
+      }
+      return "";
+    });
+    const result = await syncWorktreeToOriginMain({ repoRoot: root, worktreePath });
+    expect(result.status).toBe("dirty");
+    expect(result.headSha).toBe("sha-dirty");
+    expect(runGitMock.mock.calls.some(([call]) => call.args[0] === "checkout")).toBe(false);
+  });
+
+  test("syncWorktreeToOriginMain reports missing worktree", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-worktrees-"));
+    const worktreePath = getWorktreePath({ repoRoot: root, role: "planner", index: 1 });
+    const result = await syncWorktreeToOriginMain({ repoRoot: root, worktreePath });
+    expect(result.status).toBe("missing_worktree");
+    expect(runGitMock).not.toHaveBeenCalled();
+  });
+
+  test("syncWorktreeToOriginMain checks out origin/main when clean", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-worktrees-"));
+    const worktreePath = getWorktreePath({ repoRoot: root, role: "planner", index: 1 });
+    await mkdir(worktreePath, { recursive: true });
+    await writeFile(join(worktreePath, ".git"), "gitdir: /tmp/fake", "utf-8");
+    runGitMock.mockImplementation(async ({ args }) => {
+      if (args[0] === "rev-parse") {
+        return "sha-clean";
+      }
+      return "";
+    });
+    const result = await syncWorktreeToOriginMain({ repoRoot: root, worktreePath });
+    expect(result.status).toBe("synced");
+    const checkoutCall = runGitMock.mock.calls.find(([call]) => call.args[0] === "checkout");
+    expect(checkoutCall?.[0].args).toEqual(["checkout", "--detach", "origin/main"]);
+  });
+
+  test("syncWorktreeToOriginMain surfaces sync failures", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-worktrees-"));
+    const worktreePath = getWorktreePath({ repoRoot: root, role: "planner", index: 1 });
+    await mkdir(worktreePath, { recursive: true });
+    await writeFile(join(worktreePath, ".git"), "gitdir: /tmp/fake", "utf-8");
+    runGitMock.mockImplementation(async ({ args, cwd }) => {
+      if (cwd === root && args[0] === "fetch") {
+        throw new Error("fetch failed");
+      }
+      if (cwd === worktreePath && args[0] === "rev-parse") {
+        return "sha-after-failure";
+      }
+      return "";
+    });
+    const result = await syncWorktreeToOriginMain({ repoRoot: root, worktreePath });
+    expect(result.status).toBe("sync_failed");
+    expect(result.headSha).toBe("sha-after-failure");
+    expect(result.message).toContain("fetch failed");
+  });
+
+  test("commitWorktreeChanges captures head sha", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-worktrees-"));
+    const worktreePath = getWorktreePath({ repoRoot: root, role: "slave", index: 1 });
+    await mkdir(worktreePath, { recursive: true });
+    await writeFile(join(worktreePath, ".git"), "gitdir: /tmp/fake", "utf-8");
+    runGitMock.mockImplementation(async ({ args }) => {
+      if (args[0] === "status") {
+        return " M file.ts";
+      }
+      if (args[0] === "rev-parse") {
+        return "sha-commit";
+      }
+      return "";
+    });
+    const result = await commitWorktreeChanges({ worktreePath, taskId: "t1" });
+    expect(result.status).toBe("committed");
+    expect(result.headSha).toBe("sha-commit");
+  });
+
+  test("commitWorktreeChanges reports missing worktree", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-worktrees-"));
+    const worktreePath = getWorktreePath({ repoRoot: root, role: "slave", index: 1 });
+    const result = await commitWorktreeChanges({ worktreePath, taskId: "t-missing" });
+    expect(result.status).toBe("missing_worktree");
+  });
+
+  test("commitWorktreeChanges returns clean when no changes", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-worktrees-"));
+    const worktreePath = getWorktreePath({ repoRoot: root, role: "slave", index: 1 });
+    await mkdir(worktreePath, { recursive: true });
+    await writeFile(join(worktreePath, ".git"), "gitdir: /tmp/fake", "utf-8");
+    runGitMock.mockImplementation(async ({ args }) => {
+      if (args[0] === "status") {
+        return "";
+      }
+      if (args[0] === "rev-parse") {
+        return "sha-clean";
+      }
+      return "";
+    });
+    const result = await commitWorktreeChanges({ worktreePath, taskId: "t-clean" });
+    expect(result.status).toBe("clean");
+    expect(result.headSha).toBe("sha-clean");
+  });
+
+  test("commitWorktreeChanges reports commit errors", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-worktrees-"));
+    const worktreePath = getWorktreePath({ repoRoot: root, role: "slave", index: 1 });
+    await mkdir(worktreePath, { recursive: true });
+    await writeFile(join(worktreePath, ".git"), "gitdir: /tmp/fake", "utf-8");
+    runGitMock.mockImplementation(async ({ args }) => {
+      if (args[0] === "status") {
+        return " M file.ts";
+      }
+      if (args[0] === "commit") {
+        throw new Error("commit blew up");
+      }
+      if (args[0] === "rev-parse") {
+        return "sha-after-error";
+      }
+      return "";
+    });
+    const result = await commitWorktreeChanges({ worktreePath, taskId: "t-error" });
+    expect(result.status).toBe("commit_failed");
+    expect(result.headSha).toBe("sha-after-error");
+  });
+
+  test("checkoutWorktreeCommit detaches to commit", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-worktrees-"));
+    const worktreePath = getWorktreePath({ repoRoot: root, role: "judge", index: 1 });
+    await mkdir(worktreePath, { recursive: true });
+    await writeFile(join(worktreePath, ".git"), "gitdir: /tmp/fake", "utf-8");
+    runGitMock.mockImplementation(async ({ args }) => {
+      if (args[0] === "rev-parse") {
+        return "sha-judge";
+      }
+      return "";
+    });
+    const result = await checkoutWorktreeCommit({ worktreePath, commitSha: "abc123" });
+    expect(result.status).toBe("checked_out");
+    const checkoutCall = runGitMock.mock.calls.find(
+      ([call]) => call.args[0] === "checkout" && call.args[2] === "abc123",
+    );
+    expect(checkoutCall).toBeDefined();
+  });
+
+  test("checkoutWorktreeCommit reports missing worktree", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-worktrees-"));
+    const worktreePath = getWorktreePath({ repoRoot: root, role: "judge", index: 1 });
+    const result = await checkoutWorktreeCommit({ worktreePath, commitSha: "abc123" });
+    expect(result.status).toBe("missing_worktree");
+  });
+
+  test("checkoutWorktreeCommit blocks dirty worktree", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-worktrees-"));
+    const worktreePath = getWorktreePath({ repoRoot: root, role: "judge", index: 1 });
+    await mkdir(worktreePath, { recursive: true });
+    await writeFile(join(worktreePath, ".git"), "gitdir: /tmp/fake", "utf-8");
+    runGitMock.mockImplementation(async ({ args }) => {
+      if (args[0] === "status") {
+        return " M file.ts";
+      }
+      if (args[0] === "rev-parse") {
+        return "sha-dirty";
+      }
+      return "";
+    });
+    const result = await checkoutWorktreeCommit({ worktreePath, commitSha: "abc123" });
+    expect(result.status).toBe("dirty");
+    expect(result.headSha).toBe("sha-dirty");
+  });
+
+  test("checkoutWorktreeCommit reports checkout errors", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-worktrees-"));
+    const worktreePath = getWorktreePath({ repoRoot: root, role: "judge", index: 1 });
+    await mkdir(worktreePath, { recursive: true });
+    await writeFile(join(worktreePath, ".git"), "gitdir: /tmp/fake", "utf-8");
+    runGitMock.mockImplementation(async ({ args }) => {
+      if (args[0] === "status") {
+        return "";
+      }
+      if (args[0] === "checkout") {
+        throw new Error("checkout failed");
+      }
+      if (args[0] === "rev-parse") {
+        return "sha-after-checkout-fail";
+      }
+      return "";
+    });
+    const result = await checkoutWorktreeCommit({ worktreePath, commitSha: "abc123" });
+    expect(result.status).toBe("checkout_failed");
+    expect(result.headSha).toBe("sha-after-checkout-fail");
+    expect(result.message).toContain("checkout failed");
   });
 });

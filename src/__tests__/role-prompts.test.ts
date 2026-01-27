@@ -25,6 +25,7 @@ describe("role prompts", () => {
       paths: { tasksDir: "/tmp/.clanker/tasks", historyDir: "/tmp/.clanker/history" },
     });
     expect(prompt).toContain("clanker slave");
+    expect(prompt).toContain("Commit your changes before needs_judge");
     expect(prompt).toContain("clanker task status");
     expect(prompt).toContain("handoff");
   });
@@ -35,6 +36,7 @@ describe("role prompts", () => {
       paths: { tasksDir: "/tmp/.clanker/tasks", historyDir: "/tmp/.clanker/history" },
     });
     expect(prompt).toContain("clanker judge");
+    expect(prompt).toContain("Verify the slave commit");
     expect(prompt).toContain("done|rework|blocked");
   });
 

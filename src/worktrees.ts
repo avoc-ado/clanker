@@ -209,3 +209,179 @@ export const ensureRoleWorktrees = async ({
   }
   return specs;
 };
+
+const hasGitWorktree = async ({ worktreePath }: { worktreePath: string }): Promise<boolean> => {
+  try {
+    await stat(join(worktreePath, ".git"));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const isWorktreeDirty = async ({
+  worktreePath,
+}: {
+  worktreePath: string;
+}): Promise<boolean> => {
+  try {
+    const output = await runGit({ args: ["status", "--porcelain"], cwd: worktreePath });
+    return output.trim().length > 0;
+  } catch {
+    return false;
+  }
+};
+
+const fetchOriginMain = async ({ repoRoot }: { repoRoot: string }): Promise<void> => {
+  await runGit({ args: ["fetch", "origin", "main"], cwd: repoRoot });
+};
+
+const resolveHeadSha = async ({
+  worktreePath,
+}: {
+  worktreePath: string;
+}): Promise<string | null> => {
+  try {
+    const sha = await runGit({ args: ["rev-parse", "--verify", "HEAD"], cwd: worktreePath });
+    return sha.trim().length > 0 ? sha.trim() : null;
+  } catch {
+    return null;
+  }
+};
+
+export interface WorktreeSyncResult {
+  status: "synced" | "dirty" | "missing_worktree" | "sync_failed";
+  headSha?: string | null;
+  message?: string;
+}
+
+export const syncWorktreeToOriginMain = async ({
+  repoRoot,
+  worktreePath,
+}: {
+  repoRoot: string;
+  worktreePath: string;
+}): Promise<WorktreeSyncResult> => {
+  const exists = await hasGitWorktree({ worktreePath });
+  if (!exists) {
+    return { status: "missing_worktree" };
+  }
+  try {
+    await fetchOriginMain({ repoRoot });
+    const dirty = await isWorktreeDirty({ worktreePath });
+    if (dirty) {
+      return {
+        status: "dirty",
+        headSha: await resolveHeadSha({ worktreePath }),
+      };
+    }
+    await runGit({ args: ["checkout", "--detach", "origin/main"], cwd: worktreePath });
+    return {
+      status: "synced",
+      headSha: await resolveHeadSha({ worktreePath }),
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      status: "sync_failed",
+      headSha: await resolveHeadSha({ worktreePath }),
+      message,
+    };
+  }
+};
+
+export interface WorktreeCommitResult {
+  status: "missing_worktree" | "clean" | "committed" | "commit_failed";
+  headSha?: string | null;
+  message?: string;
+}
+
+const makeTaskCommitMessage = ({
+  taskId,
+  taskTitle,
+}: {
+  taskId: string;
+  taskTitle?: string;
+}): string => {
+  const label = taskTitle ? `${taskId} ${taskTitle}` : taskId;
+  return `feat(task): ${label}`.slice(0, 120);
+};
+
+export const commitWorktreeChanges = async ({
+  worktreePath,
+  taskId,
+  taskTitle,
+}: {
+  worktreePath: string;
+  taskId: string;
+  taskTitle?: string;
+}): Promise<WorktreeCommitResult> => {
+  const exists = await hasGitWorktree({ worktreePath });
+  if (!exists) {
+    return { status: "missing_worktree" };
+  }
+  try {
+    const dirty = await isWorktreeDirty({ worktreePath });
+    if (!dirty) {
+      return { status: "clean", headSha: await resolveHeadSha({ worktreePath }) };
+    }
+    await runGit({ args: ["add", "-A"], cwd: worktreePath });
+    try {
+      await runGit({
+        args: ["commit", "-m", makeTaskCommitMessage({ taskId, taskTitle })],
+        cwd: worktreePath,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.toLowerCase().includes("nothing to commit")) {
+        return {
+          status: "commit_failed",
+          headSha: await resolveHeadSha({ worktreePath }),
+          message,
+        };
+      }
+    }
+    return { status: "committed", headSha: await resolveHeadSha({ worktreePath }) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      status: "commit_failed",
+      headSha: await resolveHeadSha({ worktreePath }),
+      message,
+    };
+  }
+};
+
+export interface WorktreeCheckoutResult {
+  status: "missing_worktree" | "dirty" | "checked_out" | "checkout_failed";
+  headSha?: string | null;
+  message?: string;
+}
+
+export const checkoutWorktreeCommit = async ({
+  worktreePath,
+  commitSha,
+}: {
+  worktreePath: string;
+  commitSha: string;
+}): Promise<WorktreeCheckoutResult> => {
+  const exists = await hasGitWorktree({ worktreePath });
+  if (!exists) {
+    return { status: "missing_worktree" };
+  }
+  try {
+    const dirty = await isWorktreeDirty({ worktreePath });
+    if (dirty) {
+      return { status: "dirty", headSha: await resolveHeadSha({ worktreePath }) };
+    }
+    await runGit({ args: ["checkout", "--detach", commitSha], cwd: worktreePath });
+    return { status: "checked_out", headSha: await resolveHeadSha({ worktreePath }) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      status: "checkout_failed",
+      headSha: await resolveHeadSha({ worktreePath }),
+      message,
+    };
+  }
+};
