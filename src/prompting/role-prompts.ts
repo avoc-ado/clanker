@@ -19,7 +19,7 @@ export const buildBasePrompt = ({
         "You are the clanker planner.",
         "Plan only; do not edit code or run tests.",
         "Create exactly one task packet per prompt.",
-        `Write task JSON files to ${paths.tasksDir} with status "queued".`,
+        "Create task packets via `clanker task add` (prefer `--json` when needed).",
         "Keep tasks small, independent, and testable.",
         `Inspect ${paths.tasksDir} and ${paths.historyDir} to avoid duplicates.`,
         "Fill in blanks: research code/docs/web; write findings to docs/research/.",
@@ -62,7 +62,8 @@ export const buildPlanFileDispatch = ({
 }: {
   promptPath: string;
   tasksDir: string;
-}): string => `Open ${promptPath} and follow it exactly. Create task packets in ${tasksDir} now.`;
+}): string =>
+  `Open ${promptPath} and follow it exactly. Create task packets via clanker task add now.`;
 
 export const buildTaskFileDispatch = ({
   taskId,

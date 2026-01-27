@@ -9,4 +9,8 @@ describe("sparkline", () => {
     const line = sparkline({ values: [0, 1, 2, 3] });
     expect(line.length).toBe(4);
   });
+
+  test("renders blanks for non-positive max", () => {
+    expect(sparkline({ values: [-2, -1, 0] })).toBe("   ");
+  });
 });

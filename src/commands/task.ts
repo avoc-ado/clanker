@@ -5,12 +5,15 @@ import type { TaskStatus } from "../state/tasks.js";
 import { saveTask, loadTask } from "../state/tasks.js";
 import { transitionTaskStatus } from "../state/task-status.js";
 import { writeHistory } from "../state/history.js";
+import { buildHandoffContent, buildNoteContent } from "../state/task-content.js";
+import { applyTaskUsage, type TaskUsageInput } from "../state/task-usage.js";
 import { TASK_SCHEMA } from "../plan/schema.js";
 import { mkdir, readdir, rename, stat } from "node:fs/promises";
 import { join } from "node:path";
 import yargs from "yargs";
 import type { Argv, ArgumentsCamelCase } from "yargs";
 import { getRepoRoot } from "../repo-root.js";
+import { sendIpcRequest } from "../ipc/client.js";
 
 const requireValue = ({ value, label }: { value: string | undefined; label: string }): string => {
   if (!value || value.length === 0) {
@@ -41,18 +44,29 @@ const getUsageFromArgs = ({
     judgeTok?: number;
     judgeCost?: number;
   };
-}): {
-  tokens?: number;
-  cost?: number;
-  judgeTokens?: number;
-  judgeCost?: number;
-} => {
+}): TaskUsageInput => {
   return {
     tokens: parseOptionalNumber({ value: argv.tok }),
     cost: parseOptionalNumber({ value: argv.cost }),
     judgeTokens: parseOptionalNumber({ value: argv.judgeTok }),
     judgeCost: parseOptionalNumber({ value: argv.judgeCost }),
   };
+};
+
+const tryIpc = async ({ type, payload }: { type: string; payload: unknown }): Promise<boolean> => {
+  const socketPath = process.env.CLANKER_IPC_SOCKET?.trim();
+  if (!socketPath) {
+    return false;
+  }
+  try {
+    const response = await sendIpcRequest({ socketPath, type, payload });
+    if (!response.ok) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 export const runTask = async ({ args }: { args: string[] }): Promise<void> => {
@@ -73,35 +87,49 @@ export const runTask = async ({ args }: { args: string[] }): Promise<void> => {
       (y: Argv) =>
         y
           .positional("id", { type: "string" })
-          .positional("prompt", { type: "string", array: true }),
+          .positional("prompt", { type: "string", array: true })
+          .option("json", { type: "string" }),
       async (
         argv: ArgumentsCamelCase<{
           id: string;
           prompt?: (string | number)[];
+          json?: string;
         }>,
       ) => {
         const id = requireValue({ value: argv.id as string | undefined, label: "task id" });
         const prompt = (argv.prompt ?? []).map(String).join(" ").trim();
-        if (!prompt) {
-          throw new Error("Missing prompt text");
+        const jsonRaw = argv.json?.trim() ?? "";
+        const task = (() => {
+          if (jsonRaw.length > 0) {
+            const parsed = JSON.parse(jsonRaw) as Record<string, unknown>;
+            return {
+              ...parsed,
+              id: typeof parsed.id === "string" && parsed.id.length > 0 ? parsed.id : id,
+              status: typeof parsed.status === "string" ? parsed.status : "queued",
+              prompt: typeof parsed.prompt === "string" ? parsed.prompt : prompt,
+            };
+          }
+          if (!prompt) {
+            throw new Error("Missing prompt text");
+          }
+          return { id, status: "queued", prompt };
+        })();
+        const handled = await tryIpc({ type: "task_create", payload: { task } });
+        if (!handled) {
+          await saveTask({
+            tasksDir: paths.tasksDir,
+            task: task as Parameters<typeof saveTask>[0]["task"],
+          });
+          await appendEvent({
+            eventsLog: paths.eventsLog,
+            event: {
+              ts: new Date().toISOString(),
+              type: "TASK_CREATED",
+              msg: "task created",
+              taskId: id,
+            },
+          });
         }
-        await saveTask({
-          tasksDir: paths.tasksDir,
-          task: {
-            id,
-            status: "queued",
-            prompt,
-          },
-        });
-        await appendEvent({
-          eventsLog: paths.eventsLog,
-          event: {
-            ts: new Date().toISOString(),
-            type: "TASK_CREATED",
-            msg: "task created",
-            taskId: id,
-          },
-        });
         console.log(`task ${id} queued`);
       },
     )
@@ -119,11 +147,17 @@ export const runTask = async ({ args }: { args: string[] }): Promise<void> => {
           throw new Error(`Invalid status: ${nextStatus}`);
         }
         const status = nextStatus as TaskStatus;
-        const task = await loadTask({ tasksDir: paths.tasksDir, id });
-        if (!task) {
-          throw new Error(`Task not found: ${id}`);
+        const handled = await tryIpc({
+          type: "task_status",
+          payload: { taskId: id, status },
+        });
+        if (!handled) {
+          const task = await loadTask({ tasksDir: paths.tasksDir, id });
+          if (!task) {
+            throw new Error(`Task not found: ${id}`);
+          }
+          await transitionTaskStatus({ task, status, paths });
         }
-        await transitionTaskStatus({ task, status, paths });
         console.log(`task ${id} -> ${nextStatus}`);
       },
     )
@@ -157,17 +191,20 @@ export const runTask = async ({ args }: { args: string[] }): Promise<void> => {
         if (!content) {
           throw new Error("Missing note content");
         }
-        await writeHistory({ historyDir: paths.historyDir, taskId: id, role, content });
         const usage = getUsageFromArgs({ argv });
-        if (usage.tokens || usage.cost || usage.judgeCost || usage.judgeTokens) {
+        const handled = await tryIpc({
+          type: "task_note",
+          payload: { taskId: id, role, content, usage },
+        });
+        if (!handled) {
+          await writeHistory({
+            historyDir: paths.historyDir,
+            taskId: id,
+            role,
+            content: buildNoteContent({ content }),
+          });
           const task = await loadTask({ tasksDir: paths.tasksDir, id });
-          if (task) {
-            task.usage = {
-              tokens: usage.tokens ?? task.usage?.tokens ?? 0,
-              cost: usage.cost ?? task.usage?.cost ?? 0,
-              judgeTokens: usage.judgeTokens ?? task.usage?.judgeTokens,
-              judgeCost: usage.judgeCost ?? task.usage?.judgeCost,
-            };
+          if (task && applyTaskUsage({ task, usage })) {
             await saveTask({ tasksDir: paths.tasksDir, task });
             await appendEvent({
               eventsLog: paths.eventsLog,
@@ -178,9 +215,9 @@ export const runTask = async ({ args }: { args: string[] }): Promise<void> => {
                 taskId: id,
                 slaveId: task.assignedSlaveId,
                 data: {
-                  tok: task.usage.tokens,
-                  cost: task.usage.cost,
-                  judgeCost: task.usage.judgeCost,
+                  tok: task.usage?.tokens,
+                  cost: task.usage?.cost,
+                  judgeCost: task.usage?.judgeCost,
                 },
               },
             });
@@ -225,33 +262,16 @@ export const runTask = async ({ args }: { args: string[] }): Promise<void> => {
         const tests = String(argv.tests ?? "");
         const diffs = String(argv.diffs ?? "");
         const risks = String(argv.risks ?? "");
-        const content = [
-          `# ${role} handoff`,
-          "",
-          "## Summary",
-          summary || "(none)",
-          "",
-          "## Tests",
-          tests || "(not provided)",
-          "",
-          "## Diffs",
-          diffs || "(not provided)",
-          "",
-          "## Risks",
-          risks || "(none)",
-          "",
-        ].join("\n");
-        await writeHistory({ historyDir: paths.historyDir, taskId: id, role, content });
         const usage = getUsageFromArgs({ argv });
-        if (usage.tokens || usage.cost || usage.judgeCost || usage.judgeTokens) {
+        const handled = await tryIpc({
+          type: "task_handoff",
+          payload: { taskId: id, role, summary, tests, diffs, risks, usage },
+        });
+        if (!handled) {
+          const content = buildHandoffContent({ role, summary, tests, diffs, risks });
+          await writeHistory({ historyDir: paths.historyDir, taskId: id, role, content });
           const task = await loadTask({ tasksDir: paths.tasksDir, id });
-          if (task) {
-            task.usage = {
-              tokens: usage.tokens ?? task.usage?.tokens ?? 0,
-              cost: usage.cost ?? task.usage?.cost ?? 0,
-              judgeTokens: usage.judgeTokens ?? task.usage?.judgeTokens,
-              judgeCost: usage.judgeCost ?? task.usage?.judgeCost,
-            };
+          if (task && applyTaskUsage({ task, usage })) {
             await saveTask({ tasksDir: paths.tasksDir, task });
             await appendEvent({
               eventsLog: paths.eventsLog,
@@ -262,9 +282,9 @@ export const runTask = async ({ args }: { args: string[] }): Promise<void> => {
                 taskId: id,
                 slaveId: task.assignedSlaveId,
                 data: {
-                  tok: task.usage.tokens,
-                  cost: task.usage.cost,
-                  judgeCost: task.usage.judgeCost,
+                  tok: task.usage?.tokens,
+                  cost: task.usage?.cost,
+                  judgeCost: task.usage?.judgeCost,
                 },
               },
             });
@@ -281,23 +301,29 @@ export const runTask = async ({ args }: { args: string[] }): Promise<void> => {
         const id = requireValue({ value: argv.id as string | undefined, label: "task id" });
         const prompt =
           "Verify main behavior matches current plan. Run the minimal app checks and report pass/fail.";
-        await saveTask({
-          tasksDir: paths.tasksDir,
-          task: {
-            id,
-            status: "queued",
-            prompt,
-          },
+        const handled = await tryIpc({
+          type: "task_create",
+          payload: { task: { id, status: "queued", prompt } },
         });
-        await appendEvent({
-          eventsLog: paths.eventsLog,
-          event: {
-            ts: new Date().toISOString(),
-            type: "TASK_CREATED",
-            msg: "health-check task created",
-            taskId: id,
-          },
-        });
+        if (!handled) {
+          await saveTask({
+            tasksDir: paths.tasksDir,
+            task: {
+              id,
+              status: "queued",
+              prompt,
+            },
+          });
+          await appendEvent({
+            eventsLog: paths.eventsLog,
+            event: {
+              ts: new Date().toISOString(),
+              type: "TASK_CREATED",
+              msg: "health-check task created",
+              taskId: id,
+            },
+          });
+        }
         console.log(`health-check task ${id} queued`);
       },
     )

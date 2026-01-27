@@ -6,6 +6,7 @@ import { spawnCodex } from "./spawn-codex.js";
 import { extractResumeCommand } from "../codex/resume.js";
 import { getRelaunchPrompt } from "./relaunch-prompt.js";
 import { RELAUNCH_SIGNALS, type RelaunchMode } from "../constants.js";
+import { sendIpcRequest } from "../ipc/client.js";
 
 export const runCodexSupervisor = async ({
   paths,
@@ -43,6 +44,28 @@ export const runCodexSupervisor = async ({
   let pendingRelaunch: RelaunchMode | null = null;
 
   const heartbeatTimer = setInterval(() => {
+    const payload = {
+      podId: id,
+      pid: process.pid,
+      role,
+      ts: new Date().toISOString(),
+    };
+    const socketPath = process.env.CLANKER_IPC_SOCKET?.trim();
+    if (socketPath) {
+      void sendIpcRequest({
+        socketPath,
+        type: "heartbeat",
+        payload,
+      }).catch(() => {
+        void writeHeartbeat({
+          heartbeatDir: paths.heartbeatDir,
+          slaveId: id,
+          pid: process.pid,
+          role,
+        });
+      });
+      return;
+    }
     void writeHeartbeat({
       heartbeatDir: paths.heartbeatDir,
       slaveId: id,

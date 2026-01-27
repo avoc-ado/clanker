@@ -79,7 +79,13 @@ read_when: first-use, onboarding
 
 1. Write/update `docs/plan-*.md`
 2. `/resume` injects plan context (or set `startImmediately: true` if you want auto-resume; default false)
-3. Tasks land in `.clanker/tasks/*.json`
+3. Planner uses `clanker task add` to create task packets; dashboard stores them in `.clanker/tasks/*.json`
+
+## IPC (no-escalation mode)
+
+- Set `CLANKER_IPC_SOCKET` before launch to run with socket IPC (see `docs/ipc.md`).
+- Pods send task/status/handoff via IPC; dashboard persists to `.clanker/`.
+
 4. Slaves execute → `needs_judge`
 5. Judge verifies → `done` or `rework`
 

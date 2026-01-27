@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildContextPack } from "../context/context-pack.js";
@@ -49,9 +49,25 @@ describe("buildContextPack", () => {
     await mkdir(historyDir, { recursive: true });
     const planPath = join(docsDir, "plan-ghost.md");
     await writeFile(planPath, "temp", "utf-8");
-    await import("node:fs/promises").then(({ chmod }) => chmod(planPath, 0o000));
+    await chmod(planPath, 0o000);
 
     const pack = await buildContextPack({ repoRoot: root, historyDir });
     expect(pack.entries.length).toBe(0);
+  });
+
+  test("handles unreadable history file", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-ctx-history-file-"));
+    const docsDir = join(root, "docs");
+    const historyDir = join(root, ".clanker", "history");
+    await mkdir(docsDir, { recursive: true });
+    await mkdir(historyDir, { recursive: true });
+    await writeFile(join(docsDir, "plan-ok.md"), "plan", "utf-8");
+    const historyPath = join(historyDir, "task-1-slave.md");
+    await writeFile(historyPath, "summary", "utf-8");
+    await chmod(historyPath, 0o000);
+
+    const pack = await buildContextPack({ repoRoot: root, historyDir });
+    expect(pack.entries.length).toBe(1);
+    expect(pack.entries[0]?.title).toBe("plan-ok.md");
   });
 });

@@ -1,6 +1,7 @@
 import { appendFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { jest } from "@jest/globals";
+import { getWorktreePath } from "../../src/worktrees.js";
 import {
   ensureTmuxInstalled,
   getCliPath,
@@ -39,7 +40,7 @@ describe("integration: real flow", () => {
       const root = await makeTmpRepo({
         planLines: [
           'Goal: create artifacts/it-cli.js with the exact contents: console.log("IT_OK");',
-          "Use shell commands to write task packets into .clanker/tasks immediately.",
+          "Use `clanker task add` to create task packets immediately.",
           "Write task packets with ids it-1 and it-2 (one per prompt).",
           "Requirement: planner must output a minimum of 2 task packets.",
           "Ensure at least two tasks (no upper cap). Split into create + verify tasks.",
@@ -47,6 +48,11 @@ describe("integration: real flow", () => {
       });
       await setupRealMode({ root });
       const artifactPath = join(root, "artifacts", "it-cli.js");
+      const worktreeArtifactPath = join(
+        getWorktreePath({ repoRoot: root, role: "slave", index: 1 }),
+        "artifacts",
+        "it-cli.js",
+      );
       const debugLogPath = join(repoRoot, ".clanker", "it-real-debug.log");
 
       await runCli({ cwd: root, args: ["doctor", "--fix"] });
@@ -57,6 +63,7 @@ describe("integration: real flow", () => {
       );
 
       const session = `clanker-it-${Date.now()}`;
+      const ipcSocket = join(root, ".clanker", "ipc.sock");
       const cliPath = getCliPath();
       const { codexCommand } = await resolveCodexCommand({ root });
       const tmuxSocket = process.env.CLANKER_TMUX_SOCKET;
@@ -267,6 +274,9 @@ describe("integration: real flow", () => {
         await runTmux({ args: ["set-window-option", "-g", "automatic-rename", "off"] });
         await runTmux({ args: ["set-option", "-g", "set-titles", "off"] });
         await runTmux({ args: ["set-environment", "-t", session, "CLANKER_CODEX_TTY", "1"] });
+        await runTmux({
+          args: ["set-environment", "-t", session, "CLANKER_IPC_SOCKET", ipcSocket],
+        });
         await runTmux({
           args: ["set-environment", "-t", session, "CLANKER_PROMPT_MODE", "file"],
         });
@@ -480,7 +490,12 @@ describe("integration: real flow", () => {
               const raw = await readFile(artifactPath, "utf-8");
               return raw.includes("IT_OK");
             } catch {
-              return false;
+              try {
+                const raw = await readFile(worktreeArtifactPath, "utf-8");
+                return raw.includes("IT_OK");
+              } catch {
+                return false;
+              }
             }
           },
         });

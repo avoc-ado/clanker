@@ -61,6 +61,15 @@ describe("role prompts", () => {
     expect(prompt).toContain("/tmp/.clanker/history/task-t9-slave.md");
   });
 
+  test("buildJudgeTaskDispatch falls back to task id", () => {
+    const prompt = buildJudgeTaskDispatch({
+      taskId: "t10",
+      tasksDir: "/tmp/.clanker/tasks",
+      historyDir: "/tmp/.clanker/history",
+    });
+    expect(prompt).toContain("Review task t10.");
+  });
+
   test("mergePromptSections dedupes and trims", () => {
     const prompt = mergePromptSections({
       sections: ["Line A\n\nLine B", "Line A\nLine C\n\n", ""],
@@ -74,5 +83,13 @@ describe("role prompts", () => {
       tasksDir: "/tmp/.clanker/tasks",
     });
     expect(prompt).toBeNull();
+  });
+
+  test("buildBasePrompt returns value for unknown role", () => {
+    const prompt = buildBasePrompt({
+      role: "unknown-role" as ClankerRole,
+      paths: { tasksDir: "/tmp/.clanker/tasks", historyDir: "/tmp/.clanker/history" },
+    });
+    expect(prompt).toBe("unknown-role");
   });
 });

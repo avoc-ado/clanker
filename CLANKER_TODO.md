@@ -47,6 +47,14 @@
 
 ## Now
 
+- IPC: implement `task_request` + `judge_request` handlers in `src/ipc/handlers.ts`.
+- IPC: route dispatch/assignment through IPC broker (dashboard), not file polling.
+- Tests: add IT coverage for worktree pods updating root state via IPC; ensure no immediate prompts on `/resume`.
+- Refactor: add IPC-first gateway (`task-gateway.ts`) used across CLI + handlers; remove duplicated fs logic.
+- IPC perf: avoid repeated 5s timeouts when dashboard absent (socket-exists check or short-lived down cache).
+- IPC reliability: replace env knobs with code constants (no dead envvars). Add grace/retry/spool constants + bounded GC; set spool max bytes = 1 MB.
+- Docs: align `docs/ipc.md` with implemented message types; mark planned vs shipped.
+
 - When clanker starts, it can fail if no origin/main is configured. Print a prettier helper message after the git error. Current error message is as follows:
 
 ```

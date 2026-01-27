@@ -25,3 +25,4 @@ read_when: testing, ops
 - Real mode requires codex CLI on PATH (override with `CLANKER_IT_REAL_COMMAND`). If missing it fails fast (`npm i -g @openai/codex`).
 - Select mode with `CLANKER_IT_MODE=stub|real` (default: stub). `yarn test:it` runs stub only.
 - Real mode can use `--prompt-file .clanker/plan-prompt.txt` (or config `promptFile`) to dispatch short prompts that reference plan/task files.
+- Slaves run inside worktrees at `.clanker/worktree/<role>-<n>`; artifacts from real mode may be created under the slave worktree instead of the repo root.

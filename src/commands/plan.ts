@@ -17,6 +17,7 @@ import {
 } from "../prompting/role-prompts.js";
 import { parsePlannerTitle } from "../tmux-title-utils.js";
 import { getRepoRoot } from "../repo-root.js";
+import { sendIpcRequest } from "../ipc/client.js";
 
 const formatContextEntries = ({
   entries,
@@ -47,7 +48,8 @@ export const buildPlannerPrompt = ({
   const docList = planDocs.map((doc) => `- ${doc}`).join("\n");
   return [
     `Use the plan docs included below and create task packets in ${tasksDir}.`,
-    "Task packets are JSON files.",
+    "Use `clanker task add` to create task packets (prefer JSON for structured fields).",
+    "If available, use `clanker task add <id> --json '{...}'` instead of writing files directly.",
     "If a task looks too large or risks running out of tokens, split it into smaller tasks.",
     "Clanker will re-prompt for more tasks as needed.",
     "Do not require clanker-specific commands inside the task prompt.",
@@ -118,6 +120,18 @@ export const preparePlannerPrompt = async ({
   repoRoot?: string;
 }): Promise<PlannerPromptPayload | null> => {
   const resolvedRoot = repoRoot ?? getRepoRoot();
+  const ipcSocket = process.env.CLANKER_IPC_SOCKET?.trim();
+  if (ipcSocket) {
+    try {
+      await sendIpcRequest({
+        socketPath: ipcSocket,
+        type: "hello",
+        payload: { podId: "planner", role: "planner", worktree: resolvedRoot },
+      });
+    } catch {
+      // ignore hello failures
+    }
+  }
   const paths = getClankerPaths({ repoRoot: resolvedRoot });
   await ensureStateDirs({ paths });
   const config = await loadConfig({ repoRoot: resolvedRoot });

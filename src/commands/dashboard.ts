@@ -28,6 +28,8 @@ import {
   type PlannerDispatchState,
 } from "../dashboard/dashboard-tick.js";
 import { extractSlaveId, parseJudgeTitle, parsePlannerTitle } from "../tmux-title-utils.js";
+import { buildIpcHandlers } from "../ipc/handlers.js";
+import { startIpcServer } from "../ipc/server.js";
 
 const COMMAND_HISTORY_LIMIT = 50;
 const STREAM_LIMIT = 200;
@@ -90,6 +92,14 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     path: paths.commandHistoryPath,
     maxEntries: COMMAND_HISTORY_LIMIT,
   });
+
+  const ipcSocket = process.env.CLANKER_IPC_SOCKET?.trim();
+  const ipcServer = ipcSocket
+    ? await startIpcServer({
+        socketPath: ipcSocket,
+        handlers: buildIpcHandlers({ paths }),
+      })
+    : null;
 
   let slashCommands: SlashCommandHandler[] = [];
   const commandCompleter = (line: string): [string[], string] => {
@@ -456,6 +466,9 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     rl.close();
     if (stopStream) {
       stopStream();
+    }
+    if (ipcServer) {
+      void ipcServer.close();
     }
   };
 

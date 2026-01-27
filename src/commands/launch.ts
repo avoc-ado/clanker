@@ -272,6 +272,7 @@ const configurePanes = async ({
   cliPath,
   nodeArgs,
   repoRoot,
+  ipcSocket,
 }: {
   sessionName: string;
   paneTargets: string[];
@@ -279,11 +280,17 @@ const configurePanes = async ({
   cliPath: string;
   nodeArgs: string[];
   repoRoot: string;
+  ipcSocket?: string;
 }): Promise<void> => {
   const tmuxSocket = process.env.CLANKER_TMUX_SOCKET;
   if (tmuxSocket && tmuxSocket.length > 0) {
     await runTmux({
       args: ["set-environment", "-t", sessionName, "CLANKER_TMUX_SOCKET", tmuxSocket],
+    });
+  }
+  if (ipcSocket && ipcSocket.length > 0) {
+    await runTmux({
+      args: ["set-environment", "-t", sessionName, "CLANKER_IPC_SOCKET", ipcSocket],
     });
   }
   await runTmux({
@@ -344,6 +351,11 @@ export const runLaunch = async ({
   });
 
   const sessionPrefix = config.tmuxFilter ?? `clanker-${repoRoot.split("/").pop() ?? "repo"}`;
+  const ipcSocket =
+    process.env.CLANKER_IPC_SOCKET?.trim() ?? join(repoRoot, ".clanker", "ipc.sock");
+  if (!process.env.CLANKER_IPC_SOCKET) {
+    process.env.CLANKER_IPC_SOCKET = ipcSocket;
+  }
   const worktreeSpecs = await ensureRoleWorktrees({
     repoRoot,
     planners: config.planners,
@@ -399,6 +411,7 @@ export const runLaunch = async ({
         cliPath,
         nodeArgs,
         repoRoot,
+        ipcSocket,
       });
       await configureDetachHooks({ sessionName: sessionTarget.sessionName });
     }
@@ -422,7 +435,15 @@ export const runLaunch = async ({
       cwd: repoRoot,
       paneCount: specs.length,
     });
-    await configurePanes({ sessionName, paneTargets, specs, cliPath, nodeArgs, repoRoot });
+    await configurePanes({
+      sessionName,
+      paneTargets,
+      specs,
+      cliPath,
+      nodeArgs,
+      repoRoot,
+      ipcSocket,
+    });
     await configureDetachHooks({ sessionName });
   }
 

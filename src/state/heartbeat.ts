@@ -26,15 +26,17 @@ export const writeHeartbeat = async ({
   slaveId,
   pid,
   role,
+  ts,
 }: {
   heartbeatDir: string;
   slaveId: string;
   pid?: number;
   role?: Heartbeat["role"];
+  ts?: string;
 }): Promise<void> => {
   const payload: Heartbeat = {
     slaveId,
-    ts: new Date().toISOString(),
+    ts: ts ?? new Date().toISOString(),
     pid,
     role,
   };

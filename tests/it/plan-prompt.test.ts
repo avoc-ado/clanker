@@ -29,5 +29,6 @@ describe("integration: plan prompt", () => {
     await ensureExists({ path: promptPath, label: "plan prompt" });
     const prompt = await readFile(promptPath, "utf-8");
     expect(prompt).toContain(requirement);
+    expect(prompt).toContain("clanker task add");
   });
 });
