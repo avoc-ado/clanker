@@ -16,6 +16,7 @@ const baseTask = {
   id: "t1",
   status: "running",
   prompt: "ship it",
+  title: "Improve prompts",
 } satisfies TaskRecord;
 
 const inlineSettings = {
@@ -47,6 +48,10 @@ describe("composite prompts", () => {
       promptSettings: inlineSettings,
     });
     expect(inlinePrompts.dispatchPrompt).toContain("ship it");
+    expect(inlinePrompts.dispatchPrompt).toContain("Task id: t1: Improve prompts");
+    expect(inlinePrompts.dispatchPrompt).toContain("clanker task status t1");
+    expect(inlinePrompts.dispatchPrompt).toContain("clanker task handoff t1 slave");
+    expect(inlinePrompts.dispatchPrompt).toContain("clanker task note t1 slave");
 
     const filePrompts = buildSlavePrompts({
       task: baseTask,
@@ -54,6 +59,7 @@ describe("composite prompts", () => {
       promptSettings: fileSettings,
     });
     expect(filePrompts.dispatchPrompt).toContain("/tmp/.clanker/tasks/t1.json");
+    expect(filePrompts.dispatchPrompt).toContain("clanker task status t1");
   });
 
   test("buildJudgePrompts includes task + handoff paths", () => {

@@ -43,15 +43,24 @@ export const buildSlavePrompts = ({
 }): { displayPrompt: string; dispatchPrompt: string } => {
   const taskPrompt = task.prompt ?? "";
   const fileDispatch = buildTaskFileDispatch({ taskId: task.id, tasksDir: paths.tasksDir });
+  const taskLabel = task.title ? `${task.id}: ${task.title}` : task.id;
+  const taskContext = [
+    `Task id: ${taskLabel}`,
+    `Status command: clanker task status ${task.id} needs_judge|blocked|failed`,
+    `Handoff command: clanker task handoff ${task.id} slave --summary "..." --tests "..." --diffs "..." --risks "..."`,
+    `Note command: clanker task note ${task.id} slave "..."`,
+  ].join("\n");
+  const buildBody = ({ body }: { body: string }): string =>
+    [taskContext, body].filter((part) => part.trim().length > 0).join("\n\n");
   const displayPrompt = buildCompositePrompt({
     role: ClankerRole.Slave,
-    body: taskPrompt,
+    body: buildBody({ body: taskPrompt }),
     paths,
   });
   const dispatchBody = promptSettings.mode === "file" ? fileDispatch : taskPrompt;
   const dispatchPrompt = buildCompositePrompt({
     role: ClankerRole.Slave,
-    body: dispatchBody,
+    body: buildBody({ body: dispatchBody }),
     paths,
   });
   return { displayPrompt, dispatchPrompt };
