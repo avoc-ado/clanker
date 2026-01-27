@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 export enum ClankerRole {
   Planner = "planner",
@@ -13,6 +13,7 @@ export const buildBasePrompt = ({
   role: ClankerRole;
   paths: { tasksDir: string; historyDir: string };
 }): string => {
+  const stateDir = dirname(paths.tasksDir);
   switch (role) {
     case ClankerRole.Planner:
       return [
@@ -21,6 +22,7 @@ export const buildBasePrompt = ({
         "Create exactly one task packet per prompt.",
         "Create task packets via `clanker task add` (prefer `--json` when needed).",
         "Keep tasks small, independent, and testable.",
+        `Clanker state lives at ${stateDir} (repo root); avoid per-worktree .clanker dirs.`,
         `Inspect ${paths.tasksDir} and ${paths.historyDir} to avoid duplicates.`,
         "Fill in blanks: research code/docs/web; write findings to docs/research/.",
         "Include standard deps/config/testing flows for a well-tested product.",
@@ -62,8 +64,14 @@ export const buildPlanFileDispatch = ({
 }: {
   promptPath: string;
   tasksDir: string;
-}): string =>
-  `Open ${promptPath} and follow it exactly. Create task packets via clanker task add now.`;
+}): string => {
+  const stateDir = dirname(tasksDir);
+  return [
+    `Open ${promptPath} and follow it exactly.`,
+    `Clanker state lives at ${stateDir} (repo root).`,
+    "Create task packets via clanker task add now.",
+  ].join(" ");
+};
 
 export const buildTaskFileDispatch = ({
   taskId,

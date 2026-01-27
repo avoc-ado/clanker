@@ -16,6 +16,7 @@ describe("role prompts", () => {
     });
     expect(prompt).toContain("clanker planner");
     expect(prompt).toContain("one task packet");
+    expect(prompt).toContain("/tmp/.clanker");
   });
 
   test("slave base prompt includes status + handoff", () => {
@@ -38,9 +39,12 @@ describe("role prompts", () => {
   });
 
   test("buildPlanFileDispatch includes prompt path", () => {
-    expect(
-      buildPlanFileDispatch({ promptPath: "plan.txt", tasksDir: "/tmp/.clanker/tasks" }),
-    ).toContain("plan.txt");
+    const prompt = buildPlanFileDispatch({
+      promptPath: "plan.txt",
+      tasksDir: "/tmp/.clanker/tasks",
+    });
+    expect(prompt).toContain("plan.txt");
+    expect(prompt).toContain("/tmp/.clanker");
   });
 
   test("buildTaskFileDispatch includes task path", () => {

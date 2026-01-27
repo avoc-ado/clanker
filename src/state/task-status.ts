@@ -72,7 +72,7 @@ export const transitionTaskStatus = async ({
       title: task.title ? `Follow-up: ${task.title}` : `Follow-up: ${task.id}`,
       prompt: [
         `Follow-up for blocked task ${task.id}.`,
-        "Review .clanker/history for prior handoffs and notes.",
+        `Review ${paths.historyDir} for prior handoffs and notes.`,
         "Resolve the blocker, then complete the original goal.",
       ].join("\n"),
       ownerDirs: task.ownerDirs,

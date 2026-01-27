@@ -136,5 +136,6 @@ describe("transitionTaskStatus", () => {
     const followup = tasks.find((entry) => entry.id.startsWith("followup-t4-"));
     expect(followup?.status).toBe("queued");
     expect(followup?.prompt).toContain("blocked task t4");
+    expect(followup?.prompt).toContain(paths.historyDir);
   });
 });
