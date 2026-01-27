@@ -1041,4 +1041,126 @@ describe("makeDashboardTick", () => {
     await tick();
     expect(plannerDispatchCalls).toBe(0);
   });
+
+  test("dedupes slave panes before slicing for assignment", async () => {
+    const tasks: TaskRecord[] = [
+      { id: "t1", status: "queued", prompt: "one" },
+      { id: "t2", status: "queued", prompt: "two" },
+    ];
+    const seenAvailableSlaves: string[][] = [];
+    const tick = makeDashboardTick({
+      repoRoot: "/repo",
+      config: {
+        planners: 1,
+        judges: 1,
+        slaves: 3,
+        backlog: 0,
+        startImmediately: true,
+        tmuxFilter: "clanker",
+      },
+      paths: {
+        repoRoot: "/repo",
+        stateDir: "/repo/.clanker",
+        eventsLog: "/repo/.clanker/events.log",
+        statePath: "/repo/.clanker/state.json",
+        tasksDir: "/repo/.clanker/tasks",
+        historyDir: "/repo/.clanker/history",
+        heartbeatDir: "/repo/.clanker/heartbeat",
+        metricsPath: "/repo/.clanker/metrics.json",
+        logsDir: "/repo/.clanker/logs",
+        locksDir: "/repo/.clanker/locks",
+        archiveDir: "/repo/.clanker/archive",
+        archiveTasksDir: "/repo/.clanker/archive/tasks",
+        commandHistoryPath: "/repo/.clanker/command-history.json",
+      },
+      promptSettings: {
+        mode: "file",
+        planPromptPath: ".clanker/plan-prompt.txt",
+        planPromptAbsolutePath: "/repo/.clanker/plan-prompt.txt",
+      },
+      knownTaskIds: new Set<string>(),
+      pendingActions: new Map<string, PendingAction>(),
+      plannerDispatchState: { pending: false, sentAt: 0, taskCountAt: 0 },
+      state: {
+        dashboardPaneId: "pane-dashboard",
+        lastSlavePaneId: null,
+        pendingEscalationPaneId: null,
+        restorePaneId: null,
+        lastTickAt: 0,
+        lastGitFiles: new Set<string>(),
+        staleSlaves: new Set<string>(),
+        lastStatusLine: "",
+        idleStartedAt: Date.now(),
+        lastApprovalId: null,
+      },
+      inspectPane: async () => ({
+        hasPrompt: true,
+        isWorking: false,
+        isPaused: false,
+        hasEscalation: false,
+      }),
+      pauseRetryMs: 1,
+      plannerPromptTimeoutMs: 10,
+      deps: {
+        appendEvent: async () => undefined,
+        readRecentEvents: async () => [],
+        listTasks: async () => tasks,
+        loadTask: async ({ id }: { id: string }) => tasks.find((task) => task.id === id) ?? null,
+        saveTask: async () => undefined,
+        readHeartbeats: async () => [],
+        assignQueuedTasks: async ({ availableSlaves }: { availableSlaves: string[] }) => {
+          seenAvailableSlaves.push(availableSlaves);
+          return [];
+        },
+        acquireTaskLock: async () => ({ release: async () => undefined }),
+        computeSlaveCap: () => 2,
+        appendMetricSeries: ({ series, value }: { series: number[]; value: number }) => [
+          ...series,
+          value,
+        ],
+        loadMetrics: async () => ({
+          updatedAt: new Date().toISOString(),
+          taskCount: 0,
+          reworkCount: 0,
+          conflictCount: 0,
+          idleMinutes: 0,
+          tokenBurn: 0,
+          burnHistory: [],
+          backlogHistory: [],
+        }),
+        saveMetrics: async () => undefined,
+        listDirtyFiles: async () => [],
+        countLockConflicts: () => 0,
+        loadState: async () =>
+          ({
+            paused: false,
+            pausedRoles: { planner: false, judge: false, slave: false },
+            promptApprovals: {
+              autoApprove: { planner: true, judge: true, slave: true },
+              queue: [],
+              approved: null,
+            },
+            tasks: [],
+          }) satisfies ClankerState,
+        saveState: async () => undefined,
+        dispatchPlannerPrompt: async () => null,
+        preparePlannerPrompt: async () => null,
+        getCurrentPaneId: async () => null,
+        listPanes: async () => [
+          { paneId: "pane-planner", title: "clanker:planner-1" },
+          { paneId: "pane-judge", title: "clanker:judge-1" },
+          { paneId: "pane-slave-a", title: "clanker:slave-1" },
+          { paneId: "pane-slave-b", title: "clanker:slave-1" },
+          { paneId: "pane-slave-c", title: "clanker:slave-2" },
+        ],
+        selectPane: async () => undefined,
+        sendKey: async () => undefined,
+        sendKeys: async () => undefined,
+      },
+    });
+
+    await tick();
+
+    expect(seenAvailableSlaves[0]).toEqual(["slave-1", "slave-2"]);
+  });
 });

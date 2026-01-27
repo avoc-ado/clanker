@@ -4,6 +4,7 @@ import type { PromptSettings } from "../prompting.js";
 import { appendEvent } from "../state/events.js";
 import { readRecentEvents } from "../state/read-events.js";
 import { listTasks, loadTask, saveTask } from "../state/tasks.js";
+import type { TaskRecord } from "../state/tasks.js";
 import { readHeartbeats } from "../state/read-heartbeats.js";
 import { isHeartbeatStale } from "../state/heartbeat.js";
 import { assignQueuedTasks } from "../state/assign.js";
@@ -11,7 +12,7 @@ import { acquireTaskLock } from "../state/task-claim.js";
 import { computeSlaveCap } from "../scheduler.js";
 import { appendMetricSeries, loadMetrics, saveMetrics } from "../state/metrics.js";
 import { listDirtyFiles } from "../git.js";
-import { countLockConflicts } from "../state/locks.js";
+import { buildLockState, countLockConflicts, hasLockConflict } from "../state/locks.js";
 import { loadState, saveState } from "../state/state.js";
 import type { PromptApprovalRequest, PromptApprovalState } from "../state/state.js";
 import { dispatchPlannerPrompt, preparePlannerPrompt } from "../commands/plan.js";
@@ -101,6 +102,8 @@ const defaultDeps: DashboardTickDeps = {
   sendKey,
   sendKeys,
 };
+
+const BUSY_STATUSES = new Set(["running", "needs_judge", "rework", "blocked", "paused"]);
 
 export const makeDashboardTick = ({
   repoRoot,
@@ -233,8 +236,11 @@ export const makeDashboardTick = ({
       .filter((entry): entry is { pane: (typeof panes)[number]; slaveId: string } =>
         Boolean(entry.slaveId),
       );
+    const uniqueSlavePanes = [
+      ...new Map(slavePanes.map((entry) => [entry.slaveId, entry])).values(),
+    ];
     const plannerPaneId = plannerPanes[0]?.paneId ?? null;
-    const slavePaneCount = slavePanes.length;
+    const slavePaneCount = uniqueSlavePanes.length;
     const needsJudgeTasks = tasks
       .filter((task) => task.status === "needs_judge")
       .sort((a, b) => a.id.localeCompare(b.id));
@@ -268,7 +274,7 @@ export const makeDashboardTick = ({
       tokenBurnPerMin,
       burnCap: 100,
     });
-    const cappedSlavePanes = slavePanes.slice(0, schedulerCap);
+    const cappedSlavePanes = uniqueSlavePanes.slice(0, schedulerCap);
     const slavePaneMap = new Map<string, string>(
       cappedSlavePanes.map((entry) => [entry.slaveId, entry.pane.paneId]),
     );
@@ -411,13 +417,13 @@ export const makeDashboardTick = ({
 
     const currentPane = await getCurrentPaneId();
     if (currentPane && currentPane !== state.dashboardPaneId) {
-      const isSlavePane = slavePanes.some((entry) => entry.pane.paneId === currentPane);
+      const isSlavePane = uniqueSlavePanes.some((entry) => entry.pane.paneId === currentPane);
       if (isSlavePane) {
         state.lastSlavePaneId = currentPane;
       }
     }
-    if (!state.lastSlavePaneId && slavePanes.length > 0) {
-      state.lastSlavePaneId = slavePanes[0]?.pane.paneId ?? null;
+    if (!state.lastSlavePaneId && uniqueSlavePanes.length > 0) {
+      state.lastSlavePaneId = uniqueSlavePanes[0]?.pane.paneId ?? null;
     }
 
     const judgeRolePaused = liveState.paused || liveState.pausedRoles.judge;
@@ -442,7 +448,7 @@ export const makeDashboardTick = ({
         });
       }
     } else {
-      for (const entry of slavePanes) {
+      for (const entry of uniqueSlavePanes) {
         const escalation = await inspectPane({ paneId: entry.pane.paneId });
         if (escalation.hasEscalation) {
           const paneLabel = normalizePaneTitle({ title: entry.pane.title });
@@ -581,9 +587,9 @@ export const makeDashboardTick = ({
     const assignmentsPaused =
       liveState.paused || liveState.pausedRoles.slave || liveState.pausedRoles.planner;
     if (!assignmentsPaused) {
-      const availableSlaves = cappedSlavePanes
-        .map((entry) => entry.slaveId)
-        .filter((slaveId) => !state.staleSlaves.has(slaveId));
+      const availableSlaves = [...new Set(cappedSlavePanes.map((entry) => entry.slaveId))].filter(
+        (slaveId) => !state.staleSlaves.has(slaveId),
+      );
 
       const assigned = await assignQueuedTasks({
         tasks,
@@ -646,9 +652,40 @@ export const makeDashboardTick = ({
       await promptTask({ taskId: task.id, assignedSlaveId: task.assignedSlaveId });
     }
 
+    const slaveIds = slavePanes.map((entry) => entry.slaveId);
+    const uniqueSlaveIds = [...new Set(slaveIds)];
+    const duplicateSlaveIds = uniqueSlaveIds.filter(
+      (slaveId) => slaveIds.filter((candidate) => candidate === slaveId).length > 1,
+    );
+    const staleSet = state.staleSlaves;
+    const isStale = (task: TaskRecord): boolean =>
+      Boolean(task.assignedSlaveId && staleSet.has(task.assignedSlaveId));
+    const busyTasksForLocks = tasks.filter(
+      (task) => Boolean(task.assignedSlaveId) && BUSY_STATUSES.has(task.status) && !isStale(task),
+    );
+    const busySlaveIds = new Set(
+      busyTasksForLocks
+        .map((task) => task.assignedSlaveId)
+        .filter((slaveId): slaveId is string => Boolean(slaveId)),
+    );
+    const availableSlaveIds = [...new Set(cappedSlavePanes.map((entry) => entry.slaveId))].filter(
+      (slaveId) => !staleSet.has(slaveId),
+    );
+    const freeSlaveCount = availableSlaveIds.filter((slaveId) => !busySlaveIds.has(slaveId)).length;
+    const lockState = buildLockState({ tasks: busyTasksForLocks });
+    const queuedTasks = tasks.filter((task) => task.status === "queued");
+    const lockBlockedCount = queuedTasks.filter((task) =>
+      hasLockConflict({ task, lockState }),
+    ).length;
+    const assignableCount = Math.max(
+      0,
+      Math.min(queuedTasks.length - lockBlockedCount, freeSlaveCount),
+    );
+
     const statusLine = [
       `panes=${panes.length}`,
       `slavePanes=${slavePaneCount}`,
+      `slaveIds=${uniqueSlaveIds.length}${duplicateSlaveIds.length > 0 ? "!" : ""}`,
       `paused=${liveState.paused ? "yes" : "no"}`,
       `tasks=${tasks.length}`,
       `ready=${readyCount}`,
@@ -656,6 +693,9 @@ export const makeDashboardTick = ({
       `judge=${needsJudgeCount}`,
       `rework=${reworkCount}`,
       `blocked=${blockedCount}`,
+      `free=${freeSlaveCount}`,
+      `assignable=${assignableCount}`,
+      `lockBlocked=${lockBlockedCount}`,
       `escalation=${state.pendingEscalationPaneId ? "pending" : "none"}`,
       `hb=${heartbeats.length}`,
       `stale=${staleCount}`,
