@@ -32,9 +32,7 @@ export const inspectCodexPane = async ({
   const tailLines = lines.slice(-10);
   const tailContent = tailLines.join("\n");
   const hasPrompt = lines.some((line) => PROMPT_MARKER.test(line.trimStart()));
-  const tailHasConfirm = tailLines.some((line) =>
-    line.toLowerCase().includes("enter to confirm"),
-  );
+  const tailHasConfirm = tailLines.some((line) => line.toLowerCase().includes("enter to confirm"));
   const hasEscalation = hasEscalationPrompt({ content: tailContent }) || tailHasConfirm;
   const isWorking = lines.some((line) => line.toLowerCase().includes(WORKING_MATCH));
   const isPaused = lines.some((line) => line.toLowerCase().includes("paused"));
