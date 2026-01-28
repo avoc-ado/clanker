@@ -898,6 +898,9 @@ describe("makeDashboardTick", () => {
         lastStatusLine: "",
         idleStartedAt: Date.now(),
         lastApprovalId: null,
+        usageLimitStatusSentAt: 0,
+        usageLimitLastSeenAt: 0,
+        usageLimitProbePaneId: null,
       },
       inspectPane: async () => ({
         hasPrompt: true,
@@ -941,6 +944,7 @@ describe("makeDashboardTick", () => {
               queue: [],
               approved: null,
             },
+            usageLimit: { active: false },
             tasks: [],
           }) satisfies ClankerState,
         saveState: async () => undefined,
@@ -1800,6 +1804,8 @@ describe("makeDashboardTick", () => {
         judges: 0,
         slaves: 1,
         backlog: 1,
+        lockConflictsEnabled: true,
+        lockConflictsBlockPlanner: false,
         startImmediately: true,
         tmuxFilter: "clanker",
       },
@@ -1878,6 +1884,7 @@ describe("makeDashboardTick", () => {
           ({
             paused: false,
             pausedRoles: { planner: false, judge: false, slave: false },
+            lockConflicts: {},
             promptApprovals: {
               autoApprove: { planner: true, judge: true, slave: true },
               queue: [],
@@ -1929,6 +1936,8 @@ describe("makeDashboardTick", () => {
         judges: 0,
         slaves: 1,
         backlog: 1,
+        lockConflictsEnabled: true,
+        lockConflictsBlockPlanner: false,
         startImmediately: true,
         tmuxFilter: "clanker",
       },
@@ -2007,6 +2016,7 @@ describe("makeDashboardTick", () => {
           ({
             paused: true,
             pausedRoles: { planner: false, judge: false, slave: false },
+            lockConflicts: {},
             promptApprovals: {
               autoApprove: { planner: true, judge: true, slave: true },
               queue: [],
@@ -2052,6 +2062,8 @@ describe("makeDashboardTick", () => {
         judges: 0,
         slaves: 1,
         backlog: 1,
+        lockConflictsEnabled: true,
+        lockConflictsBlockPlanner: false,
         startImmediately: true,
         tmuxFilter: "clanker",
       },
@@ -2130,6 +2142,7 @@ describe("makeDashboardTick", () => {
           ({
             paused: true,
             pausedRoles: { planner: false, judge: false, slave: false },
+            lockConflicts: {},
             promptApprovals: {
               autoApprove: { planner: true, judge: true, slave: true },
               queue: [],
@@ -2174,6 +2187,8 @@ describe("makeDashboardTick", () => {
         judges: 0,
         slaves: 1,
         backlog: 1,
+        lockConflictsEnabled: true,
+        lockConflictsBlockPlanner: false,
         startImmediately: true,
         tmuxFilter: "clanker",
       },
@@ -2252,6 +2267,7 @@ describe("makeDashboardTick", () => {
           ({
             paused: true,
             pausedRoles: { planner: false, judge: false, slave: false },
+            lockConflicts: {},
             promptApprovals: {
               autoApprove: { planner: true, judge: true, slave: true },
               queue: [],
@@ -2330,6 +2346,8 @@ describe("makeDashboardTick", () => {
         judges: 1,
         slaves: 1,
         backlog: 1,
+        lockConflictsEnabled: true,
+        lockConflictsBlockPlanner: false,
         startImmediately: true,
         tmuxFilter: "clanker",
       },
@@ -2402,6 +2420,7 @@ describe("makeDashboardTick", () => {
           ({
             paused: false,
             pausedRoles: { planner: false, judge: false, slave: false },
+            lockConflicts: {},
             promptApprovals: {
               autoApprove: { planner: true, judge: true, slave: true },
               queue: [],
@@ -2457,6 +2476,8 @@ describe("makeDashboardTick", () => {
         judges: 0,
         slaves: 0,
         backlog: 1,
+        lockConflictsEnabled: true,
+        lockConflictsBlockPlanner: false,
         startImmediately: true,
         tmuxFilter: "clanker",
       },
@@ -2547,6 +2568,7 @@ describe("makeDashboardTick", () => {
           ({
             paused: false,
             pausedRoles: { planner: false, judge: false, slave: false },
+            lockConflicts: {},
             promptApprovals: {
               autoApprove: { planner: true, judge: true, slave: true },
               queue: [],

@@ -15,7 +15,6 @@ import type { TaskUsageInput } from "../state/task-usage.js";
 import { ensureJudgeCheckoutForTask, ensureSlaveCommitForTask } from "../state/task-commits.js";
 import { syncSlaveWorktreeForPrompt } from "../state/slave-sync.js";
 import { loadJudgeReworkNote } from "../state/rework-note.js";
-import { loadState } from "../state/state.js";
 import type { IpcHandlers } from "./server.js";
 import {
   writeTaskCreate,
