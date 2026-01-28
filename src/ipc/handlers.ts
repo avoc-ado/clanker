@@ -12,6 +12,7 @@ import { acquireTaskLock } from "../state/task-claim.js";
 import { listTasks, loadTask, saveTask, type TaskRecord, type TaskStatus } from "../state/tasks.js";
 import type { TaskUsageInput } from "../state/task-usage.js";
 import { ensureJudgeCheckoutForTask, ensureSlaveCommitForTask } from "../state/task-commits.js";
+import { syncSlaveWorktreeForPrompt } from "../state/slave-sync.js";
 import type { IpcHandlers } from "./server.js";
 import {
   writeTaskCreate,
@@ -215,19 +216,28 @@ export const buildIpcHandlers = ({ paths }: { paths: ClankerPaths }): IpcHandler
           return { taskId: latest.id, status: latest.status };
         }
         const promptSettings = await loadPromptSettingsForRepo({ repoRoot: paths.repoRoot });
-        const { dispatchPrompt } = buildSlavePrompts({
+        const config = await loadConfig({ repoRoot: paths.repoRoot });
+        const syncResult = await syncSlaveWorktreeForPrompt({
+          repoRoot: paths.repoRoot,
+          paths,
+          config,
           task: latest,
+        });
+        const { dispatchPrompt } = buildSlavePrompts({
+          task: syncResult.task,
           paths: promptPaths,
           promptSettings,
+          syncNote: syncResult.note,
         });
-        const wasPrompted = Boolean(latest.promptedAt);
+        const taskForPrompt = syncResult.task;
+        const wasPrompted = Boolean(taskForPrompt.promptedAt);
         const promptedAt = new Date().toISOString();
-        latest.assignedSlaveId = podId;
-        if (latest.status === "queued") {
-          latest.status = "running";
+        taskForPrompt.assignedSlaveId = podId;
+        if (taskForPrompt.status === "queued") {
+          taskForPrompt.status = "running";
         }
-        latest.promptedAt = promptedAt;
-        await saveTask({ tasksDir: paths.tasksDir, task: latest });
+        taskForPrompt.promptedAt = promptedAt;
+        await saveTask({ tasksDir: paths.tasksDir, task: taskForPrompt });
         await appendEvent({
           eventsLog: paths.eventsLog,
           event: {
@@ -235,10 +245,10 @@ export const buildIpcHandlers = ({ paths }: { paths: ClankerPaths }): IpcHandler
             type: "TASK_PROMPTED",
             msg: wasPrompted ? "task prompt re-sent via ipc" : "task prompt requested via ipc",
             slaveId: podId,
-            taskId: latest.id,
+            taskId: taskForPrompt.id,
           },
         });
-        return { taskId: latest.id, prompt: dispatchPrompt, status: latest.status };
+        return { taskId: taskForPrompt.id, prompt: dispatchPrompt, status: taskForPrompt.status };
       } finally {
         await claim.release();
       }

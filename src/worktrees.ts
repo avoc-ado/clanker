@@ -259,16 +259,20 @@ export interface WorktreeSyncResult {
 export const syncWorktreeToOriginMain = async ({
   repoRoot,
   worktreePath,
+  fetch = true,
 }: {
   repoRoot: string;
   worktreePath: string;
+  fetch?: boolean;
 }): Promise<WorktreeSyncResult> => {
   const exists = await hasGitWorktree({ worktreePath });
   if (!exists) {
     return { status: "missing_worktree" };
   }
   try {
-    await fetchOriginMain({ repoRoot });
+    if (fetch) {
+      await fetchOriginMain({ repoRoot });
+    }
     const dirty = await isWorktreeDirty({ worktreePath });
     if (dirty) {
       return {

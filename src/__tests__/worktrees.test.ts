@@ -148,6 +148,27 @@ describe("worktrees", () => {
     expect(checkoutCall?.[0].args).toEqual(["checkout", "--detach", "origin/main"]);
   });
 
+  test("syncWorktreeToOriginMain skips fetch when disabled", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-worktrees-"));
+    const worktreePath = getWorktreePath({ repoRoot: root, role: "planner", index: 1 });
+    await mkdir(worktreePath, { recursive: true });
+    await writeFile(join(worktreePath, ".git"), "gitdir: /tmp/fake", "utf-8");
+    runGitMock.mockImplementation(async ({ args }) => {
+      if (args[0] === "rev-parse") {
+        return "sha-clean";
+      }
+      return "";
+    });
+    const result = await syncWorktreeToOriginMain({
+      repoRoot: root,
+      worktreePath,
+      fetch: false,
+    });
+    expect(result.status).toBe("synced");
+    const fetchCalls = runGitMock.mock.calls.filter(([call]) => call.args[0] === "fetch");
+    expect(fetchCalls.length).toBe(0);
+  });
+
   test("syncWorktreeToOriginMain surfaces sync failures", async () => {
     const root = await mkdtemp(join(tmpdir(), "clanker-worktrees-"));
     const worktreePath = getWorktreePath({ repoRoot: root, role: "planner", index: 1 });

@@ -20,6 +20,7 @@ import { HEARTBEAT_STALE_MS, JUDGE_PROMPT_STALE_MS, SLAVE_PROMPT_STALE_MS } from
 import { ClankerRole } from "../prompting/role-prompts.js";
 import { buildJudgePrompts, buildSlavePrompts } from "../prompting/composite-prompts.js";
 import { ensureJudgeCheckoutForTask } from "../state/task-commits.js";
+import { syncSlaveWorktreeForPrompt } from "../state/slave-sync.js";
 import { getCurrentPaneId, listPanes, selectPane, sendKey, sendKeys } from "../tmux.js";
 import { drainIpcSpool } from "../ipc/spool.js";
 import { buildIpcHandlers } from "../ipc/handlers.js";
@@ -74,6 +75,7 @@ interface DashboardTickDeps {
   dispatchPlannerPrompt: typeof dispatchPlannerPrompt;
   preparePlannerPrompt: typeof preparePlannerPrompt;
   ensureJudgeCheckoutForTask: typeof ensureJudgeCheckoutForTask;
+  syncSlaveWorktreeForPrompt: typeof syncSlaveWorktreeForPrompt;
   getCurrentPaneId: typeof getCurrentPaneId;
   listPanes: typeof listPanes;
   selectPane: typeof selectPane;
@@ -101,6 +103,7 @@ const defaultDeps: DashboardTickDeps = {
   dispatchPlannerPrompt,
   preparePlannerPrompt,
   ensureJudgeCheckoutForTask,
+  syncSlaveWorktreeForPrompt,
   getCurrentPaneId,
   listPanes,
   selectPane,
@@ -157,6 +160,7 @@ export const makeDashboardTick = ({
     dispatchPlannerPrompt,
     preparePlannerPrompt,
     ensureJudgeCheckoutForTask,
+    syncSlaveWorktreeForPrompt,
     getCurrentPaneId,
     listPanes,
     selectPane,
@@ -435,13 +439,21 @@ export const makeDashboardTick = ({
         if (!paneId) {
           return;
         }
-        const { displayPrompt, dispatchPrompt } = buildSlavePrompts({
+        const syncResult = await syncSlaveWorktreeForPrompt({
+          repoRoot,
+          paths,
+          config,
           task: latest,
+        });
+        const { displayPrompt, dispatchPrompt } = buildSlavePrompts({
+          task: syncResult.task,
           promptSettings,
           paths: promptPaths,
+          syncNote: syncResult.note,
         });
+        const taskForPrompt = syncResult.task;
         if (!approvalState.autoApprove.slave) {
-          const approvalKey = `task:${latest.id}:slave`;
+          const approvalKey = `task:${taskForPrompt.id}:slave`;
           await enqueueApproval({
             request: {
               id: approvalKey,
@@ -451,16 +463,16 @@ export const makeDashboardTick = ({
               prompt: displayPrompt,
               dispatch: dispatchPrompt,
               createdAt: new Date().toISOString(),
-              taskId: latest.id,
-              taskTitle: latest.title,
+              taskId: taskForPrompt.id,
+              taskTitle: taskForPrompt.title,
               assignedSlaveId: slaveId,
             },
           });
           return;
         }
         await sendKeys({ paneId, text: dispatchPrompt });
-        latest.promptedAt = new Date().toISOString();
-        await saveTask({ tasksDir: paths.tasksDir, task: latest });
+        taskForPrompt.promptedAt = new Date().toISOString();
+        await saveTask({ tasksDir: paths.tasksDir, task: taskForPrompt });
         await appendEvent({
           eventsLog: paths.eventsLog,
           event: {
@@ -468,7 +480,7 @@ export const makeDashboardTick = ({
             type: "TASK_PROMPTED",
             msg: "sent task prompt",
             slaveId,
-            taskId: latest.id,
+            taskId: taskForPrompt.id,
           },
         });
       } finally {

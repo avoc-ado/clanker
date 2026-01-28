@@ -39,6 +39,7 @@ const STREAM_TAGS = {
   JUDGE_CHECKOUT: { tag: "JOUT", color: "blue" },
   JUDGE_CHECKOUT_SKIPPED: { tag: "JSKP", color: "yellow" },
   JUDGE_CHECKOUT_FAILED: { tag: "JERR", color: "red" },
+  SLAVE_SYNC: { tag: "SYNC", color: "cyan" },
   DASH_STATUS: { tag: "STAT", color: "gray" },
   PAUSED: { tag: "PAUS", color: "yellow" },
   RESUMED: { tag: "RSUM", color: "green" },

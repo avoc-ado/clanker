@@ -6,6 +6,8 @@ import { ClankerRole } from "../prompting/role-prompts.js";
 import type { PendingAction } from "../dashboard/pending-actions.js";
 import { makeDashboardTick } from "../dashboard/dashboard-tick.js";
 
+const syncSlaveWorktreeForPrompt = async ({ task }: { task: TaskRecord }) => ({ task });
+
 describe("makeDashboardTick", () => {
   let previousIpcSocket: string | undefined;
 
@@ -248,6 +250,7 @@ describe("makeDashboardTick", () => {
         dispatchPlannerPrompt,
         preparePlannerPrompt,
         ensureJudgeCheckoutForTask,
+        syncSlaveWorktreeForPrompt,
         getCurrentPaneId,
         listPanes,
         selectPane,
@@ -434,6 +437,7 @@ describe("makeDashboardTick", () => {
         dispatchPlannerPrompt,
         preparePlannerPrompt,
         ensureJudgeCheckoutForTask,
+        syncSlaveWorktreeForPrompt,
         getCurrentPaneId,
         listPanes,
         selectPane,
@@ -608,6 +612,7 @@ describe("makeDashboardTick", () => {
         dispatchPlannerPrompt,
         preparePlannerPrompt,
         ensureJudgeCheckoutForTask,
+        syncSlaveWorktreeForPrompt,
         getCurrentPaneId,
         listPanes,
         selectPane,
@@ -774,6 +779,7 @@ describe("makeDashboardTick", () => {
         dispatchPlannerPrompt,
         preparePlannerPrompt,
         ensureJudgeCheckoutForTask,
+        syncSlaveWorktreeForPrompt,
         getCurrentPaneId,
         listPanes,
         selectPane,
@@ -948,6 +954,7 @@ describe("makeDashboardTick", () => {
         dispatchPlannerPrompt,
         preparePlannerPrompt,
         ensureJudgeCheckoutForTask,
+        syncSlaveWorktreeForPrompt,
         getCurrentPaneId,
         listPanes,
         selectPane,
@@ -1060,6 +1067,7 @@ describe("makeDashboardTick", () => {
         saveState: async () => undefined,
         dispatchPlannerPrompt,
         preparePlannerPrompt: async () => null,
+        syncSlaveWorktreeForPrompt,
         getCurrentPaneId: async () => null,
         listPanes: async () => [{ paneId: "pane-planner", title: "clanker:planner-1" }],
         selectPane: async () => undefined,
@@ -1175,6 +1183,7 @@ describe("makeDashboardTick", () => {
         saveState: async () => undefined,
         dispatchPlannerPrompt: async () => null,
         preparePlannerPrompt: async () => null,
+        syncSlaveWorktreeForPrompt,
         getCurrentPaneId: async () => null,
         listPanes: async () => [
           { paneId: "pane-planner", title: "clanker:planner-1" },
@@ -1305,6 +1314,7 @@ describe("makeDashboardTick", () => {
         saveState: async () => undefined,
         dispatchPlannerPrompt: async () => null,
         preparePlannerPrompt: async () => null,
+        syncSlaveWorktreeForPrompt,
         getCurrentPaneId: async () => null,
         listPanes: async () => [
           { paneId: "pane-planner", title: "clanker:planner-1" },
@@ -1429,6 +1439,7 @@ describe("makeDashboardTick", () => {
         preparePlannerPrompt: async () => null,
         ensureJudgeCheckoutForTask: async () =>
           ({ status: "checked_out", commitSha: "sha" }) as const,
+        syncSlaveWorktreeForPrompt,
         getCurrentPaneId: async () => null,
         listPanes: async () => [{ paneId: "pane-judge", title: "clanker:judge-1" }],
         selectPane: async () => undefined,
@@ -1549,6 +1560,7 @@ describe("makeDashboardTick", () => {
         preparePlannerPrompt: async () => null,
         ensureJudgeCheckoutForTask: async () =>
           ({ status: "checked_out", commitSha: "sha" }) as const,
+        syncSlaveWorktreeForPrompt,
         getCurrentPaneId: async () => null,
         listPanes: async () => [{ paneId: "pane-judge", title: "clanker:judge-1" }],
         selectPane: async () => undefined,
