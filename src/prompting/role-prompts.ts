@@ -20,7 +20,7 @@ export const buildBasePrompt = ({
         "You are the clanker planner.",
         "Plan only; do not edit code or run tests.",
         "Create exactly one task packet per prompt.",
-        "Create task packets via `clanker task add` (prefer `--json` when needed).",
+        "Create task packets via `clanker task add <id> --json` (prefer `--json` when needed).",
         "Keep tasks small, independent, and testable.",
         `Clanker state lives at ${stateDir} (repo root); avoid per-worktree .clanker dirs.`,
         `Inspect ${paths.tasksDir} and ${paths.historyDir} to avoid duplicates.`,
@@ -72,7 +72,7 @@ export const buildPlanFileDispatch = ({
   return [
     `Open ${promptPath} and follow it exactly.`,
     `Clanker state lives at ${stateDir} (repo root).`,
-    "Create task packets via clanker task add now.",
+    "Create task packets via clanker task add <id> --json now.",
   ].join(" ");
 };
 
