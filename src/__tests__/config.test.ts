@@ -16,7 +16,7 @@ describe("loadConfig", () => {
     expect(config.planners).toBe(1);
     expect(config.judges).toBe(1);
     expect(config.slaves).toBe(3);
-    expect(config.backlog).toBe(3);
+    expect(config.backlog).toBe(1);
     expect(config.startImmediately).toBe(false);
     expect(config.tmuxFilter).toBe(`clanker-${basename(root)}`);
     expect(config.codexCommand).toBe("codex --no-alt-screen --sandbox workspace-write");
@@ -77,7 +77,7 @@ describe("loadConfig", () => {
     expect(config.planners).toBe(1);
     expect(config.judges).toBe(1);
     expect(config.slaves).toBe(2);
-    expect(config.backlog).toBe(3);
+    expect(config.backlog).toBe(1);
     expect(config.startImmediately).toBe(false);
     expect(config.tmuxFilter).toBe(`clanker-${basename(root)}`);
     expect(config.codexCommand).toBe("codex --no-alt-screen --sandbox workspace-write");
@@ -153,7 +153,7 @@ describe("loadConfig", () => {
     expect(config.planners).toBe(1);
     expect(config.judges).toBe(1);
     expect(config.slaves).toBe(3);
-    expect(config.backlog).toBe(3);
+    expect(config.backlog).toBe(1);
     expect(config.startImmediately).toBe(false);
     expect(config.tmuxFilter).toBe(`clanker-${basename(root)}`);
     expect(config.codexCommand).toBe("codex --no-alt-screen --sandbox workspace-write");
