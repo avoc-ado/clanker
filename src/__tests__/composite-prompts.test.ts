@@ -74,6 +74,16 @@ describe("composite prompts", () => {
     expect(prompts.displayPrompt).toContain("clanker slave");
   });
 
+  test("buildSlavePrompts includes rework notes when provided", () => {
+    const prompts = buildSlavePrompts({
+      task: { ...baseTask, status: "rework" },
+      paths: promptPaths,
+      promptSettings: inlineSettings,
+      reworkNote: "Judge handoff (rework guidance): fix tests",
+    });
+    expect(prompts.dispatchPrompt).toContain("Judge handoff (rework guidance): fix tests");
+  });
+
   test("buildJudgePrompts includes task + handoff paths", () => {
     const prompts = buildJudgePrompts({
       task: baseTask,

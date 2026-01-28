@@ -21,6 +21,7 @@ import { ClankerRole } from "../prompting/role-prompts.js";
 import { buildJudgePrompts, buildSlavePrompts } from "../prompting/composite-prompts.js";
 import { ensureJudgeCheckoutForTask } from "../state/task-commits.js";
 import { syncSlaveWorktreeForPrompt } from "../state/slave-sync.js";
+import { loadJudgeReworkNote } from "../state/rework-note.js";
 import { getCurrentPaneId, listPanes, selectPane, sendKey, sendKeys } from "../tmux.js";
 import { drainIpcSpool } from "../ipc/spool.js";
 import { buildIpcHandlers } from "../ipc/handlers.js";
@@ -450,11 +451,16 @@ export const makeDashboardTick = ({
           config,
           task: latest,
         });
+        const reworkNote = await loadJudgeReworkNote({
+          historyDir: paths.historyDir,
+          task: syncResult.task,
+        });
         const { displayPrompt, dispatchPrompt } = buildSlavePrompts({
           task: syncResult.task,
           promptSettings,
           paths: promptPaths,
           syncNote: syncResult.note,
+          reworkNote,
         });
         const taskForPrompt = syncResult.task;
         if (!approvalState.autoApprove.slave) {
@@ -834,6 +840,7 @@ export const makeDashboardTick = ({
             task: latest,
             promptSettings,
             paths: promptPaths,
+            reworkNote: await loadJudgeReworkNote({ historyDir: paths.historyDir, task: latest }),
           });
           await sendKeys({ paneId, text: dispatchPrompt });
           latest.promptedAt = new Date().toISOString();

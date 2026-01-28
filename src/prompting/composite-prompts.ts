@@ -38,11 +38,13 @@ export const buildSlavePrompts = ({
   paths,
   promptSettings,
   syncNote,
+  reworkNote,
 }: {
   task: TaskRecord;
   paths: CompositePromptPaths;
   promptSettings: PromptSettings;
   syncNote?: string;
+  reworkNote?: string;
 }): { displayPrompt: string; dispatchPrompt: string } => {
   const taskPrompt = task.prompt ?? "";
   const fileDispatch = buildTaskFileDispatch({ taskId: task.id, tasksDir: paths.tasksDir });
@@ -56,7 +58,9 @@ export const buildSlavePrompts = ({
     `Note command: clanker task note ${task.id} slave "..."`,
   ].join("\n");
   const buildBody = ({ body }: { body: string }): string =>
-    [taskContext, syncNote ?? "", body].filter((part) => part.trim().length > 0).join("\n\n");
+    [taskContext, reworkNote ?? "", syncNote ?? "", body]
+      .filter((part) => part.trim().length > 0)
+      .join("\n\n");
   const displayPrompt = buildCompositePrompt({
     role: ClankerRole.Slave,
     body: buildBody({ body: taskPrompt }),

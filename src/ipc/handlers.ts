@@ -13,6 +13,7 @@ import { listTasks, loadTask, saveTask, type TaskRecord, type TaskStatus } from 
 import type { TaskUsageInput } from "../state/task-usage.js";
 import { ensureJudgeCheckoutForTask, ensureSlaveCommitForTask } from "../state/task-commits.js";
 import { syncSlaveWorktreeForPrompt } from "../state/slave-sync.js";
+import { loadJudgeReworkNote } from "../state/rework-note.js";
 import { loadState } from "../state/state.js";
 import type { IpcHandlers } from "./server.js";
 import {
@@ -228,11 +229,16 @@ export const buildIpcHandlers = ({ paths }: { paths: ClankerPaths }): IpcHandler
           config,
           task: latest,
         });
+        const reworkNote = await loadJudgeReworkNote({
+          historyDir: paths.historyDir,
+          task: syncResult.task,
+        });
         const { dispatchPrompt } = buildSlavePrompts({
           task: syncResult.task,
           paths: promptPaths,
           promptSettings,
           syncNote: syncResult.note,
+          reworkNote,
         });
         const taskForPrompt = syncResult.task;
         const wasPrompted = Boolean(taskForPrompt.promptedAt);
