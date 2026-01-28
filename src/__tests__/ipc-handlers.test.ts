@@ -2,9 +2,10 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { jest } from "@jest/globals";
+import { JUDGE_PROMPT_STALE_MS } from "../constants.js";
 import { getClankerPaths } from "../paths.js";
 import { ensureStateDirs } from "../state/ensure-state.js";
-import { loadTask } from "../state/tasks.js";
+import { loadTask, saveTask } from "../state/tasks.js";
 
 const runGitMock = jest.fn<Promise<string>, [{ args: string[]; cwd: string }]>();
 
@@ -127,6 +128,12 @@ describe("ipc handlers", () => {
     });
     expect(taskResponse).toMatchObject({ taskId: "t1" });
     expect(String((taskResponse as { prompt?: string }).prompt ?? "")).toContain("clanker slave");
+    const repeatTaskResponse = await handlers.task_request({
+      payload: { podId: "slave-1" },
+      context: {},
+    });
+    expect(repeatTaskResponse).toMatchObject({ taskId: "t1" });
+    expect((repeatTaskResponse as { prompt?: string }).prompt).toBeUndefined();
 
     const assigned = await loadTask({ tasksDir: paths.tasksDir, id: "t1" });
     expect(assigned?.status).toBe("running");
@@ -144,6 +151,27 @@ describe("ipc handlers", () => {
     });
     expect(judgeResponse).toMatchObject({ taskId: "t1" });
     expect(String((judgeResponse as { prompt?: string }).prompt ?? "")).toContain("clanker judge");
+    const repeatJudgeResponse = await handlers.judge_request({
+      payload: { podId: "judge-1" },
+      context: {},
+    });
+    expect(repeatJudgeResponse).toMatchObject({ taskId: null });
+
+    const staleTask = await loadTask({ tasksDir: paths.tasksDir, id: "t1" });
+    if (staleTask) {
+      staleTask.judgePromptedAt = new Date(
+        Date.now() - JUDGE_PROMPT_STALE_MS - 1_000,
+      ).toISOString();
+      await saveTask({ tasksDir: paths.tasksDir, task: staleTask });
+    }
+    const staleJudgeResponse = await handlers.judge_request({
+      payload: { podId: "judge-1" },
+      context: {},
+    });
+    expect(staleJudgeResponse).toMatchObject({ taskId: "t1" });
+    expect(String((staleJudgeResponse as { prompt?: string }).prompt ?? "")).toContain(
+      "clanker judge",
+    );
   });
 
   test("task_request and judge_request return null when queue is empty", async () => {

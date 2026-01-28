@@ -64,6 +64,16 @@ describe("composite prompts", () => {
     expect(filePrompts.dispatchPrompt).toContain("clanker task status t1");
   });
 
+  test("buildSlavePrompts handles missing prompt", () => {
+    const taskWithoutPrompt = { id: "t2", status: "running" } satisfies TaskRecord;
+    const prompts = buildSlavePrompts({
+      task: taskWithoutPrompt,
+      paths: promptPaths,
+      promptSettings: inlineSettings,
+    });
+    expect(prompts.displayPrompt).toContain("clanker slave");
+  });
+
   test("buildJudgePrompts includes task + handoff paths", () => {
     const prompts = buildJudgePrompts({
       task: baseTask,

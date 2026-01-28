@@ -7,6 +7,21 @@ import type { PendingAction } from "../dashboard/pending-actions.js";
 import { makeDashboardTick } from "../dashboard/dashboard-tick.js";
 
 describe("makeDashboardTick", () => {
+  let previousIpcSocket: string | undefined;
+
+  beforeEach(() => {
+    previousIpcSocket = process.env.CLANKER_IPC_SOCKET;
+    delete process.env.CLANKER_IPC_SOCKET;
+  });
+
+  afterEach(() => {
+    if (previousIpcSocket) {
+      process.env.CLANKER_IPC_SOCKET = previousIpcSocket;
+      return;
+    }
+    delete process.env.CLANKER_IPC_SOCKET;
+  });
+
   test("drives scheduler, escalations, and metrics", async () => {
     const appendEventCalls: ClankerEvent[] = [];
     const appendEvent = async ({ event }: { event: ClankerEvent }) => {
@@ -1177,5 +1192,134 @@ describe("makeDashboardTick", () => {
     await tick();
 
     expect(seenAvailableSlaves[0]).toEqual(["slave-1", "slave-2"]);
+  });
+
+  test("skips assignment and prompting in ipc broker mode", async () => {
+    process.env.CLANKER_IPC_SOCKET = "/tmp/clanker-ipc.sock";
+    let assignCalls = 0;
+    const assignQueuedTasks = async () => {
+      assignCalls += 1;
+      return [];
+    };
+    const sendKeysCalls: Array<{ paneId: string; text: string }> = [];
+    const tick = makeDashboardTick({
+      repoRoot: "/repo",
+      config: {
+        planners: 1,
+        judges: 1,
+        slaves: 1,
+        backlog: 0,
+        startImmediately: true,
+        tmuxFilter: "clanker",
+      },
+      paths: {
+        repoRoot: "/repo",
+        stateDir: "/repo/.clanker",
+        eventsLog: "/repo/.clanker/events.log",
+        statePath: "/repo/.clanker/state.json",
+        tasksDir: "/repo/.clanker/tasks",
+        historyDir: "/repo/.clanker/history",
+        heartbeatDir: "/repo/.clanker/heartbeat",
+        metricsPath: "/repo/.clanker/metrics.json",
+        logsDir: "/repo/.clanker/logs",
+        locksDir: "/repo/.clanker/locks",
+        archiveDir: "/repo/.clanker/archive",
+        archiveTasksDir: "/repo/.clanker/archive/tasks",
+        commandHistoryPath: "/repo/.clanker/command-history.json",
+      },
+      promptSettings: {
+        mode: "file",
+        planPromptPath: ".clanker/plan-prompt.txt",
+        planPromptAbsolutePath: "/repo/.clanker/plan-prompt.txt",
+      },
+      knownTaskIds: new Set<string>(),
+      pendingActions: new Map<string, PendingAction>(),
+      plannerDispatchState: { pending: false, sentAt: 0, taskCountAt: 0 },
+      state: {
+        dashboardPaneId: null,
+        lastSlavePaneId: null,
+        pendingEscalationPaneId: null,
+        restorePaneId: null,
+        lastTickAt: Date.now(),
+        lastGitFiles: new Set<string>(),
+        staleSlaves: new Set<string>(),
+        lastStatusLine: "",
+        idleStartedAt: Date.now(),
+        lastApprovalId: null,
+      },
+      inspectPane: async () => ({
+        hasPrompt: true,
+        isWorking: false,
+        isPaused: false,
+        hasEscalation: false,
+      }),
+      pauseRetryMs: 1,
+      plannerPromptTimeoutMs: 10,
+      deps: {
+        appendEvent: async () => undefined,
+        readRecentEvents: async () => [],
+        listTasks: async () => [
+          {
+            id: "t1",
+            status: "running",
+            assignedSlaveId: "slave-1",
+            prompt: "do it",
+          } satisfies TaskRecord,
+        ],
+        loadTask: async () => ({
+          id: "t1",
+          status: "running",
+          assignedSlaveId: "slave-1",
+          prompt: "do it",
+        }),
+        saveTask: async () => undefined,
+        readHeartbeats: async () => [],
+        assignQueuedTasks,
+        acquireTaskLock: async () => ({ release: async () => undefined }),
+        computeSlaveCap: () => 1,
+        appendMetricSeries: ({ series, value }) => [...series, value],
+        loadMetrics: async () => ({
+          updatedAt: new Date().toISOString(),
+          taskCount: 0,
+          reworkCount: 0,
+          conflictCount: 0,
+          idleMinutes: 0,
+          tokenBurn: 0,
+          burnHistory: [],
+          backlogHistory: [],
+        }),
+        saveMetrics: async () => undefined,
+        listDirtyFiles: async () => [],
+        countLockConflicts: () => 0,
+        loadState: async () =>
+          ({
+            paused: false,
+            pausedRoles: { planner: false, judge: false, slave: false },
+            promptApprovals: {
+              autoApprove: { planner: true, judge: true, slave: true },
+              queue: [],
+              approved: null,
+            },
+            tasks: [],
+          }) satisfies ClankerState,
+        saveState: async () => undefined,
+        dispatchPlannerPrompt: async () => null,
+        preparePlannerPrompt: async () => null,
+        getCurrentPaneId: async () => null,
+        listPanes: async () => [
+          { paneId: "pane-planner", title: "clanker:planner-1" },
+          { paneId: "pane-slave", title: "clanker:slave-1" },
+        ],
+        selectPane: async () => undefined,
+        sendKey: async () => undefined,
+        sendKeys: async ({ paneId, text }: { paneId: string; text: string }) => {
+          sendKeysCalls.push({ paneId, text });
+        },
+      },
+    });
+
+    await tick();
+    expect(assignCalls).toBe(0);
+    expect(sendKeysCalls.length).toBe(0);
   });
 });

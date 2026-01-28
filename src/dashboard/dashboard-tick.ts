@@ -16,7 +16,7 @@ import { buildLockState, countLockConflicts, hasLockConflict } from "../state/lo
 import { loadState, saveState } from "../state/state.js";
 import type { PromptApprovalRequest, PromptApprovalState } from "../state/state.js";
 import { dispatchPlannerPrompt, preparePlannerPrompt } from "../commands/plan.js";
-import { HEARTBEAT_STALE_MS } from "../constants.js";
+import { HEARTBEAT_STALE_MS, JUDGE_PROMPT_STALE_MS } from "../constants.js";
 import { ClankerRole } from "../prompting/role-prompts.js";
 import { buildJudgePrompts, buildSlavePrompts } from "../prompting/composite-prompts.js";
 import { ensureJudgeCheckoutForTask } from "../state/task-commits.js";
@@ -282,7 +282,24 @@ export const makeDashboardTick = ({
     const slavePaneMap = new Map<string, string>(
       cappedSlavePanes.map((entry) => [entry.slaveId, entry.pane.paneId]),
     );
+    const brokerMode = Boolean(process.env.CLANKER_IPC_SOCKET?.trim());
     const promptPaths = { tasksDir: paths.tasksDir, historyDir: paths.historyDir };
+    const isJudgePromptStale = ({
+      task,
+      nowMs,
+    }: {
+      task: { judgePromptedAt?: string };
+      nowMs: number;
+    }) => {
+      if (!task.judgePromptedAt) {
+        return true;
+      }
+      const parsed = new Date(task.judgePromptedAt).getTime();
+      if (!Number.isFinite(parsed)) {
+        return true;
+      }
+      return nowMs - parsed > JUDGE_PROMPT_STALE_MS;
+    };
     const sendApprovedPrompt = async ({
       approved,
     }: {
@@ -611,7 +628,7 @@ export const makeDashboardTick = ({
 
     const assignmentsPaused =
       liveState.paused || liveState.pausedRoles.slave || liveState.pausedRoles.planner;
-    if (!assignmentsPaused) {
+    if (!brokerMode && !assignmentsPaused) {
       const availableSlaves = [...new Set(cappedSlavePanes.map((entry) => entry.slaveId))].filter(
         (slaveId) => !state.staleSlaves.has(slaveId),
       );
@@ -638,56 +655,77 @@ export const makeDashboardTick = ({
       }
     }
 
-    if (!judgeRolePaused && needsJudgeTasks.length > 0) {
+    if (!brokerMode && !judgeRolePaused && needsJudgeTasks.length > 0) {
       const judgePaneId = judgePanes[0]?.paneId ?? null;
       if (judgePaneId) {
         const paneState = await inspectPane({ paneId: judgePaneId });
         if (paneState.hasPrompt && !paneState.isWorking && !paneState.hasEscalation) {
-          const task = needsJudgeTasks[0];
-          if (!approvalState.autoApprove.judge) {
-            const { displayPrompt, dispatchPrompt } = buildJudgePrompts({
-              task,
-              paths: promptPaths,
-            });
-            const approvalKey = `task:${task.id}:judge`;
-            await enqueueApproval({
-              request: {
-                id: approvalKey,
-                key: approvalKey,
-                role: "judge",
-                kind: "judge-task",
-                prompt: displayPrompt,
-                dispatch: dispatchPrompt,
-                createdAt: new Date().toISOString(),
-                taskId: task.id,
-                taskTitle: task.title,
-              },
-            });
-          } else {
-            const judgeCheckout = await ensureJudgeCheckoutForTask({
-              repoRoot,
-              paths,
-              config,
-              task,
-            });
-            const latestTask = await loadTask({ tasksDir: paths.tasksDir, id: task.id });
-            const taskForPrompt = latestTask ?? task;
-            const { dispatchPrompt } = buildJudgePrompts({
-              task: taskForPrompt,
-              paths: promptPaths,
-              judgeCheckout,
-            });
-            await sendKeys({ paneId: judgePaneId, text: dispatchPrompt });
+          const nowMs = Date.now();
+          const task =
+            needsJudgeTasks.find((entry) => isJudgePromptStale({ task: entry, nowMs })) ?? null;
+          if (task) {
+            if (!approvalState.autoApprove.judge) {
+              const { displayPrompt, dispatchPrompt } = buildJudgePrompts({
+                task,
+                paths: promptPaths,
+              });
+              const approvalKey = `task:${task.id}:judge`;
+              await enqueueApproval({
+                request: {
+                  id: approvalKey,
+                  key: approvalKey,
+                  role: "judge",
+                  kind: "judge-task",
+                  prompt: displayPrompt,
+                  dispatch: dispatchPrompt,
+                  createdAt: new Date().toISOString(),
+                  taskId: task.id,
+                  taskTitle: task.title,
+                },
+              });
+            } else {
+              const claim = await acquireTaskLock({
+                locksDir: paths.locksDir,
+                key: `judge-prompt-${task.id}`,
+              });
+              if (claim) {
+                try {
+                  const latest = await loadTask({ tasksDir: paths.tasksDir, id: task.id });
+                  if (latest && latest.status === "needs_judge") {
+                    if (isJudgePromptStale({ task: latest, nowMs })) {
+                      const judgeCheckout = await ensureJudgeCheckoutForTask({
+                        repoRoot,
+                        paths,
+                        config,
+                        task: latest,
+                      });
+                      const { dispatchPrompt } = buildJudgePrompts({
+                        task: latest,
+                        paths: promptPaths,
+                        judgeCheckout,
+                      });
+                      await sendKeys({ paneId: judgePaneId, text: dispatchPrompt });
+                      latest.judgePromptedAt = new Date().toISOString();
+                      await saveTask({ tasksDir: paths.tasksDir, task: latest });
+                    }
+                  }
+                } finally {
+                  await claim.release();
+                }
+              }
+            }
           }
         }
       }
     }
 
-    for (const task of tasks) {
-      if (!task.assignedSlaveId || !task.prompt || task.promptedAt) {
-        continue;
+    if (!brokerMode) {
+      for (const task of tasks) {
+        if (!task.assignedSlaveId || !task.prompt || task.promptedAt) {
+          continue;
+        }
+        await promptTask({ taskId: task.id, assignedSlaveId: task.assignedSlaveId });
       }
-      await promptTask({ taskId: task.id, assignedSlaveId: task.assignedSlaveId });
     }
 
     const slaveIds = slavePanes.map((entry) => entry.slaveId);

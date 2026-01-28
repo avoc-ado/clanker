@@ -34,6 +34,7 @@ export interface TaskRecord {
   slaveCommittedAt?: string;
   judgeCheckedOutSha?: string;
   judgeCheckedOutAt?: string;
+  judgePromptedAt?: string;
   usage?: TaskUsage;
 }
 
@@ -80,6 +81,9 @@ const parseTaskRecord = ({ value }: { value: unknown }): TaskRecord | null => {
     return null;
   }
   if (record.judgeCheckedOutAt && typeof record.judgeCheckedOutAt !== "string") {
+    return null;
+  }
+  if (record.judgePromptedAt && typeof record.judgePromptedAt !== "string") {
     return null;
   }
   if (record.usage) {

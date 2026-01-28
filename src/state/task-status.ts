@@ -33,6 +33,7 @@ export const transitionTaskStatus = async ({
   })();
 
   task.status = status;
+  task.judgePromptedAt = undefined;
   if (status === "rework") {
     task.promptedAt = undefined;
   }

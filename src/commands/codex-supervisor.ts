@@ -1,12 +1,25 @@
+import { loadConfig } from "../config.js";
+import { inspectCodexPane } from "../dashboard/pending-actions.js";
 import type { ClankerPaths } from "../paths.js";
 import { appendEvent } from "../state/events.js";
 import { writeHeartbeat } from "../state/heartbeat.js";
 import { loadState } from "../state/state.js";
+import { capturePane, listPanes, sendKeys } from "../tmux.js";
 import { spawnCodex } from "./spawn-codex.js";
 import { extractResumeCommand } from "../codex/resume.js";
 import { getRelaunchPrompt } from "./relaunch-prompt.js";
 import { RELAUNCH_SIGNALS, type RelaunchMode } from "../constants.js";
 import { sendIpcRequest } from "../ipc/client.js";
+import { getRuntimeOverrides } from "../runtime/overrides.js";
+
+const IPC_POLL_MS = 2_000;
+const ESCALATION_PROMPT_MATCHES = [
+  "Would you like to run the following command?",
+  "Press enter to confirm",
+];
+
+const hasEscalationPrompt = ({ content }: { content: string }): boolean =>
+  ESCALATION_PROMPT_MATCHES.some((pattern) => content.includes(pattern));
 
 export const runCodexSupervisor = async ({
   paths,
@@ -74,6 +87,105 @@ export const runCodexSupervisor = async ({
     });
   }, 10_000);
 
+  const ipcSocket = process.env.CLANKER_IPC_SOCKET?.trim() ?? "";
+  const isIpcRequester = ipcSocket.length > 0 && (role === "slave" || role === "judge");
+  const overrides = getRuntimeOverrides();
+  const isCodexTty = Boolean(overrides.codexTty);
+  if (role !== "planner") {
+    await appendEvent({
+      eventsLog: paths.eventsLog,
+      event: {
+        ts: new Date().toISOString(),
+        type: "IPC_INIT",
+        msg: isIpcRequester ? "ipc polling enabled" : "ipc polling disabled (missing socket)",
+        slaveId: id,
+      },
+    });
+  }
+  let ipcPollInFlight = false;
+  let cachedTmuxFilter: string | undefined;
+  const resolveTmuxFilter = async (): Promise<string | undefined> => {
+    if (cachedTmuxFilter !== undefined) {
+      return cachedTmuxFilter;
+    }
+    const config = await loadConfig({ repoRoot: paths.repoRoot });
+    cachedTmuxFilter = config.tmuxFilter;
+    return cachedTmuxFilter;
+  };
+  const findPaneIdForRole = async (): Promise<string | null> => {
+    const sessionPrefix = await resolveTmuxFilter();
+    const panes = await listPanes({ sessionPrefix });
+    const match = panes.find((pane) => pane.title === `clanker:${id}` || pane.title === id);
+    return match?.paneId ?? null;
+  };
+  const requestIpcPrompt = async (): Promise<void> => {
+    if (!isIpcRequester || ipcPollInFlight || shuttingDown) {
+      return;
+    }
+    ipcPollInFlight = true;
+    try {
+      const paneId = isCodexTty ? await findPaneIdForRole() : null;
+      if (isCodexTty && !paneId) {
+        return;
+      }
+      if (!isCodexTty) {
+        const child = activeChild;
+        if (!child?.stdin?.writable) {
+          return;
+        }
+      }
+      const state = await loadState({ statePath: paths.statePath });
+      const isRolePaused = role === "judge" ? state.pausedRoles.judge : state.pausedRoles.slave;
+      if (state.paused || isRolePaused) {
+        return;
+      }
+      const paneState = paneId
+        ? await inspectCodexPane({ paneId, capturePane, hasEscalationPrompt })
+        : null;
+      if (paneState) {
+        if (paneState.isWorking || paneState.hasEscalation || !paneState.hasPrompt) {
+          return;
+        }
+      }
+      const type = role === "judge" ? "judge_request" : "task_request";
+      const response = await sendIpcRequest({
+        socketPath: ipcSocket,
+        type,
+        payload: { podId: id },
+      });
+      if (!response.ok) {
+        return;
+      }
+      const data = response.data as { taskId?: string | null; prompt?: string } | undefined;
+      if (!data?.taskId || !data.prompt) {
+        return;
+      }
+      if (isCodexTty && paneId) {
+        await sendKeys({ paneId, text: data.prompt });
+        return;
+      }
+      if (activeChild?.stdin?.writable) {
+        activeChild.stdin.write(`${data.prompt}\n`);
+      }
+    } catch {
+      // ignore ipc polling errors; fallback is dashboard-driven prompting
+    } finally {
+      ipcPollInFlight = false;
+    }
+  };
+  const ipcTimer = isIpcRequester
+    ? setInterval(() => {
+        void requestIpcPrompt();
+      }, IPC_POLL_MS)
+    : null;
+  ipcTimer?.unref?.();
+  const clearTimers = (): void => {
+    clearInterval(heartbeatTimer);
+    if (ipcTimer) {
+      clearInterval(ipcTimer);
+    }
+  };
+
   const startCodex = async ({
     override,
     autoContinue,
@@ -137,11 +249,11 @@ export const runCodexSupervisor = async ({
 
   const handleExit = async ({ code }: { code: number | null }): Promise<void> => {
     if (shuttingDown) {
-      clearInterval(heartbeatTimer);
+      clearTimers();
       process.exit(code ?? 0);
     }
     if (!pendingRelaunch) {
-      clearInterval(heartbeatTimer);
+      clearTimers();
       process.exit(code ?? 0);
     }
     const relaunchMode = pendingRelaunch;

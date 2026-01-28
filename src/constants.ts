@@ -7,3 +7,4 @@ export const RELAUNCH_SIGNALS = {
 
 export const HEARTBEAT_STALE_MS = 30_000;
 export const TASK_LOCK_TTL_MS = 60_000;
+export const JUDGE_PROMPT_STALE_MS = 60_000;

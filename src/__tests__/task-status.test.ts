@@ -138,4 +138,57 @@ describe("transitionTaskStatus", () => {
     expect(followup?.prompt).toContain("blocked task t4");
     expect(followup?.prompt).toContain(paths.historyDir);
   });
+
+  test("needs_judge emits usage data and clears judgePromptedAt", async () => {
+    const paths = await makePaths();
+    await import("node:fs/promises").then(({ mkdir }) =>
+      mkdir(paths.tasksDir, { recursive: true }),
+    );
+    await import("node:fs/promises").then(({ mkdir }) =>
+      mkdir(paths.stateDir, { recursive: true }),
+    );
+
+    const task = {
+      id: "t5",
+      status: "running",
+      prompt: "do",
+      assignedSlaveId: "slave-5",
+      judgePromptedAt: new Date().toISOString(),
+      usage: { tokens: 10, cost: 2, judgeCost: 1 },
+    } as const;
+    await saveTask({ tasksDir: paths.tasksDir, task });
+
+    await transitionTaskStatus({ task, status: "needs_judge", paths });
+
+    const updated = await import("../state/tasks.js").then(({ loadTask }) =>
+      loadTask({ tasksDir: paths.tasksDir, id: "t5" }),
+    );
+    expect(updated?.judgePromptedAt).toBeUndefined();
+    const eventRaw = await readFile(paths.eventsLog, "utf-8");
+    expect(eventRaw).toContain("TASK_NEEDS_JUDGE");
+    expect(eventRaw).toContain('"tok":10');
+  });
+
+  test("default status transition emits TASK_STATUS", async () => {
+    const paths = await makePaths();
+    await import("node:fs/promises").then(({ mkdir }) =>
+      mkdir(paths.tasksDir, { recursive: true }),
+    );
+    await import("node:fs/promises").then(({ mkdir }) =>
+      mkdir(paths.stateDir, { recursive: true }),
+    );
+
+    const task = {
+      id: "t6",
+      status: "queued",
+      prompt: "do",
+      assignedSlaveId: "slave-6",
+    } as const;
+    await saveTask({ tasksDir: paths.tasksDir, task });
+
+    await transitionTaskStatus({ task, status: "running", paths });
+
+    const eventRaw = await readFile(paths.eventsLog, "utf-8");
+    expect(eventRaw).toContain("TASK_STATUS");
+  });
 });
