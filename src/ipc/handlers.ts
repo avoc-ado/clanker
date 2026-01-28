@@ -1,5 +1,5 @@
 import { ensureConfigFile, loadConfig } from "../config.js";
-import { HEARTBEAT_STALE_MS, JUDGE_PROMPT_STALE_MS } from "../constants.js";
+import { HEARTBEAT_STALE_MS, JUDGE_PROMPT_STALE_MS, SLAVE_PROMPT_STALE_MS } from "../constants.js";
 import type { ClankerPaths } from "../paths.js";
 import { getPromptSettings, selectAssignedTask } from "../prompting.js";
 import { buildJudgePrompts, buildSlavePrompts } from "../prompting/composite-prompts.js";
@@ -220,7 +220,11 @@ export const buildIpcHandlers = ({ paths }: { paths: ClankerPaths }): IpcHandler
         if (latest.assignedSlaveId && latest.assignedSlaveId !== podId) {
           return { taskId: null };
         }
-        if (latest.promptedAt) {
+        const nowMs = Date.now();
+        if (
+          latest.promptedAt &&
+          !isTimestampStale({ ts: latest.promptedAt, nowMs, thresholdMs: SLAVE_PROMPT_STALE_MS })
+        ) {
           return { taskId: latest.id, status: latest.status };
         }
         const promptSettings = await loadPromptSettingsForRepo({ repoRoot: paths.repoRoot });
@@ -229,6 +233,7 @@ export const buildIpcHandlers = ({ paths }: { paths: ClankerPaths }): IpcHandler
           paths: promptPaths,
           promptSettings,
         });
+        const wasPrompted = Boolean(latest.promptedAt);
         const promptedAt = new Date().toISOString();
         latest.assignedSlaveId = podId;
         if (latest.status === "queued") {
@@ -241,7 +246,7 @@ export const buildIpcHandlers = ({ paths }: { paths: ClankerPaths }): IpcHandler
           event: {
             ts: promptedAt,
             type: "TASK_PROMPTED",
-            msg: "task prompt requested via ipc",
+            msg: wasPrompted ? "task prompt re-sent via ipc" : "task prompt requested via ipc",
             slaveId: podId,
             taskId: latest.id,
           },

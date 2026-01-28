@@ -37,6 +37,7 @@ export const buildBasePrompt = ({
         "Honor ownerDirs/ownerFiles in the task packet; avoid unrelated files.",
         "Run all listed tests; add missing tests when behavior changes.",
         "Commit your changes before needs_judge; include the commit in the handoff diffs.",
+        "After committing, execute the status and handoff commands in the shell (do not only print them).",
         "If task is too large, mark blocked with split guidance for planner.",
         "Fill in blanks: standard deps/testing flows; no shortcuts.",
         "Update status: clanker task status <id> needs_judge|blocked|failed.",

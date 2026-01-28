@@ -2,7 +2,7 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { jest } from "@jest/globals";
-import { JUDGE_PROMPT_STALE_MS } from "../constants.js";
+import { JUDGE_PROMPT_STALE_MS, SLAVE_PROMPT_STALE_MS } from "../constants.js";
 import { getClankerPaths } from "../paths.js";
 import { ensureStateDirs } from "../state/ensure-state.js";
 import { loadTask, saveTask } from "../state/tasks.js";
@@ -135,6 +135,20 @@ describe("ipc handlers", () => {
     expect(repeatTaskResponse).toMatchObject({ taskId: "t1" });
     expect((repeatTaskResponse as { prompt?: string }).prompt).toBeUndefined();
 
+    const staleTask = await loadTask({ tasksDir: paths.tasksDir, id: "t1" });
+    if (staleTask) {
+      staleTask.promptedAt = new Date(Date.now() - SLAVE_PROMPT_STALE_MS - 1_000).toISOString();
+      await saveTask({ tasksDir: paths.tasksDir, task: staleTask });
+    }
+    const staleTaskResponse = await handlers.task_request({
+      payload: { podId: "slave-1" },
+      context: {},
+    });
+    expect(staleTaskResponse).toMatchObject({ taskId: "t1" });
+    expect(String((staleTaskResponse as { prompt?: string }).prompt ?? "")).toContain(
+      "clanker slave",
+    );
+
     const assigned = await loadTask({ tasksDir: paths.tasksDir, id: "t1" });
     expect(assigned?.status).toBe("running");
     expect(assigned?.assignedSlaveId).toBe("slave-1");
@@ -157,12 +171,12 @@ describe("ipc handlers", () => {
     });
     expect(repeatJudgeResponse).toMatchObject({ taskId: null });
 
-    const staleTask = await loadTask({ tasksDir: paths.tasksDir, id: "t1" });
-    if (staleTask) {
-      staleTask.judgePromptedAt = new Date(
+    const staleJudgeTask = await loadTask({ tasksDir: paths.tasksDir, id: "t1" });
+    if (staleJudgeTask) {
+      staleJudgeTask.judgePromptedAt = new Date(
         Date.now() - JUDGE_PROMPT_STALE_MS - 1_000,
       ).toISOString();
-      await saveTask({ tasksDir: paths.tasksDir, task: staleTask });
+      await saveTask({ tasksDir: paths.tasksDir, task: staleJudgeTask });
     }
     const staleJudgeResponse = await handlers.judge_request({
       payload: { podId: "judge-1" },

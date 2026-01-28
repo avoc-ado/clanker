@@ -16,7 +16,7 @@ import { buildLockState, countLockConflicts, hasLockConflict } from "../state/lo
 import { loadState, saveState } from "../state/state.js";
 import type { PromptApprovalRequest, PromptApprovalState } from "../state/state.js";
 import { dispatchPlannerPrompt, preparePlannerPrompt } from "../commands/plan.js";
-import { HEARTBEAT_STALE_MS, JUDGE_PROMPT_STALE_MS } from "../constants.js";
+import { HEARTBEAT_STALE_MS, JUDGE_PROMPT_STALE_MS, SLAVE_PROMPT_STALE_MS } from "../constants.js";
 import { ClankerRole } from "../prompting/role-prompts.js";
 import { buildJudgePrompts, buildSlavePrompts } from "../prompting/composite-prompts.js";
 import { ensureJudgeCheckoutForTask } from "../state/task-commits.js";
@@ -299,6 +299,22 @@ export const makeDashboardTick = ({
         return true;
       }
       return nowMs - parsed > JUDGE_PROMPT_STALE_MS;
+    };
+    const isSlavePromptStale = ({
+      task,
+      nowMs,
+    }: {
+      task: { promptedAt?: string };
+      nowMs: number;
+    }) => {
+      if (!task.promptedAt) {
+        return false;
+      }
+      const parsed = new Date(task.promptedAt).getTime();
+      if (!Number.isFinite(parsed)) {
+        return true;
+      }
+      return nowMs - parsed > SLAVE_PROMPT_STALE_MS;
     };
     const sendApprovedPrompt = async ({
       approved,
@@ -725,6 +741,68 @@ export const makeDashboardTick = ({
           continue;
         }
         await promptTask({ taskId: task.id, assignedSlaveId: task.assignedSlaveId });
+      }
+    }
+
+    if (!brokerMode) {
+      for (const task of tasks) {
+        if (task.status !== "running" || !task.assignedSlaveId || !task.promptedAt) {
+          continue;
+        }
+        if (state.staleSlaves.has(task.assignedSlaveId)) {
+          continue;
+        }
+        if (!isSlavePromptStale({ task, nowMs })) {
+          continue;
+        }
+        const paneId = slavePaneMap.get(task.assignedSlaveId);
+        if (!paneId) {
+          continue;
+        }
+        const paneState = await inspectPane({ paneId });
+        if (paneState.isWorking || paneState.hasEscalation || !paneState.hasPrompt) {
+          continue;
+        }
+        const claim = await acquireTaskLock({
+          locksDir: paths.locksDir,
+          key: `reprompt-${task.id}`,
+        });
+        if (!claim) {
+          continue;
+        }
+        try {
+          const latest = await loadTask({ tasksDir: paths.tasksDir, id: task.id });
+          if (
+            !latest ||
+            latest.status !== "running" ||
+            !latest.assignedSlaveId ||
+            !latest.promptedAt ||
+            state.staleSlaves.has(latest.assignedSlaveId) ||
+            !isSlavePromptStale({ task: latest, nowMs: Date.now() })
+          ) {
+            continue;
+          }
+          const { dispatchPrompt } = buildSlavePrompts({
+            task: latest,
+            promptSettings,
+            paths: promptPaths,
+          });
+          await sendKeys({ paneId, text: dispatchPrompt });
+          latest.promptedAt = new Date().toISOString();
+          await saveTask({ tasksDir: paths.tasksDir, task: latest });
+          await appendEvent({
+            eventsLog: paths.eventsLog,
+            event: {
+              ts: new Date().toISOString(),
+              type: "TASK_PROMPTED",
+              msg: "reprompted stale task",
+              slaveId: latest.assignedSlaveId,
+              taskId: latest.id,
+            },
+          });
+        } finally {
+          await claim.release();
+        }
       }
     }
 

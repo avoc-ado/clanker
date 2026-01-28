@@ -48,6 +48,7 @@ export const buildSlavePrompts = ({
   const taskContext = [
     `Task id: ${taskLabel}`,
     "Commit requirement: commit before needs_judge; wrapper will attempt it but do not rely on it.",
+    "After committing, run the status and handoff commands in the shell (do not only print them).",
     `Status command: clanker task status ${task.id} needs_judge|blocked|failed`,
     `Handoff command: clanker task handoff ${task.id} slave --summary "..." --tests "..." --diffs "..." --risks "..."`,
     `Note command: clanker task note ${task.id} slave "..."`,
