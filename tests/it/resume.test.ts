@@ -24,5 +24,6 @@ describe("integration: resume", () => {
 
     const eventsRaw = await readFile(join(root, ".clanker", "events.log"), "utf-8");
     expect(eventsRaw).toContain('"type":"RESUMED"');
+    expect(eventsRaw).not.toContain('"type":"TASK_PROMPTED"');
   }, 10_000);
 });
