@@ -42,6 +42,7 @@
 - Keep tmux session alive before respawn in real IT flow
 - Real IT: planner auto-dispatch waits for Codex prompt readiness; `yarn test:it:real` passes
 - IPC: add `task_request` + `judge_request` handlers; shared composite prompt builders
+- Tests: add IT coverage for worktree pods updating root state via IPC; ensure no immediate prompts on `/resume`.
 
 ## Stack Rank
 
@@ -50,7 +51,6 @@
 ## Now
 
 - IPC: route dispatch/assignment through IPC broker (dashboard), not file polling.
-- Tests: add IT coverage for worktree pods updating root state via IPC; ensure no immediate prompts on `/resume`.
 - Refactor: add IPC-first gateway (`task-gateway.ts`) used across CLI + handlers; remove duplicated fs logic.
 - IPC perf: avoid repeated 5s timeouts when dashboard absent (socket-exists check or short-lived down cache).
 - IPC reliability: replace env knobs with code constants (no dead envvars). Add grace/retry/spool constants + bounded GC; set spool max bytes = 1 MB.
