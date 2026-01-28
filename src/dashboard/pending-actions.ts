@@ -26,7 +26,7 @@ export const inspectCodexPane = async ({
   capturePane: ({ paneId, lines }: { paneId: string; lines: number }) => Promise<string>;
   hasEscalationPrompt: ({ content }: { content: string }) => boolean;
 }): Promise<CodexPaneState> => {
-  const content = await capturePane({ paneId, lines: 40 });
+  const content = await capturePane({ paneId, lines: 80 });
   const lines = content.split("\n");
   const hasPrompt = lines.some((line) => PROMPT_MARKER.test(line.trimStart()));
   const hasEscalation = hasEscalationPrompt({ content });
