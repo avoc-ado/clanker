@@ -186,6 +186,9 @@ export const makeDashboardTick = ({
     state.lastTickAt = tickStartedAt;
     let liveState = await loadState({ statePath: paths.statePath });
     let approvalState: PromptApprovalState = liveState.promptApprovals;
+    const lockConflictsEnabled = liveState.lockConflicts.enabled ?? config.lockConflictsEnabled;
+    const lockConflictsBlockPlanner =
+      liveState.lockConflicts.blockPlanner ?? config.lockConflictsBlockPlanner;
     const persistApprovals = async ({
       nextApprovals,
     }: {
@@ -271,11 +274,13 @@ export const makeDashboardTick = ({
       : 1;
     const tokenBurnPerMin = Math.floor(tokenBurnWindow / windowMinutes);
 
-    const conflictCount = countLockConflicts({
-      tasks: tasks.filter((task) =>
-        ["running", "needs_judge", "rework", "blocked"].includes(task.status),
-      ),
-    });
+    const conflictCount = lockConflictsEnabled
+      ? countLockConflicts({
+          tasks: tasks.filter((task) =>
+            ["running", "needs_judge", "rework", "blocked"].includes(task.status),
+          ),
+        })
+      : 0;
     const schedulerCap = computeSlaveCap({
       slaveCap: config.slaves,
       readyCount,
@@ -610,6 +615,28 @@ export const makeDashboardTick = ({
       }
     }
     state.staleSlaves = nextStale;
+    const staleSet = state.staleSlaves;
+    const isStale = (task: TaskRecord): boolean =>
+      Boolean(task.assignedSlaveId && staleSet.has(task.assignedSlaveId));
+    const busyTasksForLocks = tasks.filter(
+      (task) => Boolean(task.assignedSlaveId) && BUSY_STATUSES.has(task.status) && !isStale(task),
+    );
+    const lockState = lockConflictsEnabled
+      ? buildLockState({ tasks: busyTasksForLocks })
+      : {
+          lockedDirs: new Set<string>(),
+          lockedFiles: new Set<string>(),
+          lockedFileTopDirs: new Set<string>(),
+        };
+    const queuedTasks = tasks.filter((task) => task.status === "queued");
+    const lockBlockedCount = lockConflictsEnabled
+      ? queuedTasks.filter((task) => hasLockConflict({ task, lockState })).length
+      : 0;
+    const shouldBlockPlannerForLocks =
+      lockConflictsEnabled &&
+      lockConflictsBlockPlanner &&
+      queuedTasks.length > 0 &&
+      lockBlockedCount >= queuedTasks.length;
     if (plannerDispatchState.pending) {
       if (tasks.length > plannerDispatchState.taskCountAt) {
         plannerDispatchState.pending = false;
@@ -618,7 +645,12 @@ export const makeDashboardTick = ({
       }
     }
     const plannerPaused = liveState.paused || liveState.pausedRoles.planner;
-    if (!plannerPaused && readyCount < config.backlog && !plannerDispatchState.pending) {
+    if (
+      !plannerPaused &&
+      readyCount < config.backlog &&
+      !plannerDispatchState.pending &&
+      !shouldBlockPlannerForLocks
+    ) {
       const approvalKey = "planner:backlog";
       if (approvalState.autoApprove.planner) {
         if (plannerPaneId) {
@@ -669,6 +701,7 @@ export const makeDashboardTick = ({
         availableSlaves,
         paths,
         staleSlaves: state.staleSlaves,
+        lockConflictsEnabled,
       });
 
       for (const task of assigned) {
@@ -826,12 +859,6 @@ export const makeDashboardTick = ({
     const duplicateSlaveIds = uniqueSlaveIds.filter(
       (slaveId) => slaveIds.filter((candidate) => candidate === slaveId).length > 1,
     );
-    const staleSet = state.staleSlaves;
-    const isStale = (task: TaskRecord): boolean =>
-      Boolean(task.assignedSlaveId && staleSet.has(task.assignedSlaveId));
-    const busyTasksForLocks = tasks.filter(
-      (task) => Boolean(task.assignedSlaveId) && BUSY_STATUSES.has(task.status) && !isStale(task),
-    );
     const busySlaveIds = new Set(
       busyTasksForLocks
         .map((task) => task.assignedSlaveId)
@@ -841,11 +868,6 @@ export const makeDashboardTick = ({
       (slaveId) => !staleSet.has(slaveId),
     );
     const freeSlaveCount = availableSlaveIds.filter((slaveId) => !busySlaveIds.has(slaveId)).length;
-    const lockState = buildLockState({ tasks: busyTasksForLocks });
-    const queuedTasks = tasks.filter((task) => task.status === "queued");
-    const lockBlockedCount = queuedTasks.filter((task) =>
-      hasLockConflict({ task, lockState }),
-    ).length;
     const assignableCount = Math.max(
       0,
       Math.min(queuedTasks.length - lockBlockedCount, freeSlaveCount),

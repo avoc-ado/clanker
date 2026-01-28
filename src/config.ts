@@ -12,6 +12,8 @@ export interface ClankerConfig {
   judges: number;
   slaves: number;
   backlog: number;
+  lockConflictsEnabled: boolean;
+  lockConflictsBlockPlanner: boolean;
   startImmediately: boolean;
   tmuxFilter?: string;
   codexCommand?: string;
@@ -23,6 +25,8 @@ export interface ClankerConfigTemplate {
   judges: ConfigValue<number>;
   slaves: ConfigValue<number>;
   backlog: ConfigValue<number>;
+  lockConflictsEnabled: ConfigValue<boolean>;
+  lockConflictsBlockPlanner: ConfigValue<boolean>;
   startImmediately: ConfigValue<boolean>;
   tmuxFilter: ConfigValue<string>;
   codexCommand: ConfigValue<string>;
@@ -34,6 +38,8 @@ export const DEFAULT_CONFIG = {
   judges: 1,
   slaves: 3,
   backlog: 1,
+  lockConflictsEnabled: true,
+  lockConflictsBlockPlanner: false,
   startImmediately: false,
   tmuxFilter: undefined,
   codexCommand: "codex --no-alt-screen --sandbox workspace-write",
@@ -45,6 +51,8 @@ export const CONFIG_KEYS = [
   "judges",
   "slaves",
   "backlog",
+  "lockConflictsEnabled",
+  "lockConflictsBlockPlanner",
   "startImmediately",
   "tmuxFilter",
   "codexCommand",
@@ -60,6 +68,8 @@ export const CONFIG_COMMENTS: Record<ConfigKey, string> = {
   judges: `# default: ${DEFAULT_CONFIG.judges}. Number of Judge terminals.`,
   slaves: `# default: ${DEFAULT_CONFIG.slaves}. Number of Slave terminals.`,
   backlog: `# default: ${DEFAULT_CONFIG.backlog}. Queued task backlog target.`,
+  lockConflictsEnabled: `# default: ${DEFAULT_CONFIG.lockConflictsEnabled}. Enforce ownerDirs/ownerFiles lock conflicts.`,
+  lockConflictsBlockPlanner: `# default: ${DEFAULT_CONFIG.lockConflictsBlockPlanner}. Pause planner prompting when queued tasks are lock-blocked.`,
   startImmediately: `# default: ${DEFAULT_CONFIG.startImmediately}. Start in /resume state.`,
   tmuxFilter:
     "# default: clanker-<repo>. Tmux session name (tmux) or session prefix (iTerm2) override.",
@@ -212,6 +222,14 @@ export const buildTemplateConfig = ({
     judges: resolveTemplateNumber({ value: parsed?.judges, fallback: DEFAULT_CONFIG.judges }),
     slaves: resolveTemplateNumber({ value: parsed?.slaves, fallback: DEFAULT_CONFIG.slaves }),
     backlog: resolveTemplateNumber({ value: parsed?.backlog, fallback: DEFAULT_CONFIG.backlog }),
+    lockConflictsEnabled: resolveTemplateBoolean({
+      value: parsed?.lockConflictsEnabled,
+      fallback: DEFAULT_CONFIG.lockConflictsEnabled,
+    }),
+    lockConflictsBlockPlanner: resolveTemplateBoolean({
+      value: parsed?.lockConflictsBlockPlanner,
+      fallback: DEFAULT_CONFIG.lockConflictsBlockPlanner,
+    }),
     startImmediately: resolveTemplateBoolean({
       value: parsed?.startImmediately,
       fallback: DEFAULT_CONFIG.startImmediately,
@@ -255,6 +273,12 @@ export const formatConfigTemplate = ({ config }: { config: ClankerConfigTemplate
     "",
     CONFIG_COMMENTS.backlog,
     `backlog: ${formatConfigValue({ value: config.backlog })}`,
+    "",
+    CONFIG_COMMENTS.lockConflictsEnabled,
+    `lockConflictsEnabled: ${formatConfigValue({ value: config.lockConflictsEnabled })}`,
+    "",
+    CONFIG_COMMENTS.lockConflictsBlockPlanner,
+    `lockConflictsBlockPlanner: ${formatConfigValue({ value: config.lockConflictsBlockPlanner })}`,
     "",
     CONFIG_COMMENTS.startImmediately,
     `startImmediately: ${formatConfigValue({ value: config.startImmediately })}`,
@@ -360,6 +384,14 @@ export const loadConfig = async ({ repoRoot }: { repoRoot: string }): Promise<Cl
       judges: resolveConfigNumber({ value: parsed?.judges, fallback: DEFAULT_CONFIG.judges }),
       slaves: resolveConfigNumber({ value: parsed?.slaves, fallback: DEFAULT_CONFIG.slaves }),
       backlog: resolveConfigNumber({ value: parsed?.backlog, fallback: DEFAULT_CONFIG.backlog }),
+      lockConflictsEnabled: resolveConfigBoolean({
+        value: parsed?.lockConflictsEnabled,
+        fallback: DEFAULT_CONFIG.lockConflictsEnabled,
+      }),
+      lockConflictsBlockPlanner: resolveConfigBoolean({
+        value: parsed?.lockConflictsBlockPlanner,
+        fallback: DEFAULT_CONFIG.lockConflictsBlockPlanner,
+      }),
       startImmediately: resolveConfigBoolean({
         value: parsed?.startImmediately,
         fallback: DEFAULT_CONFIG.startImmediately,

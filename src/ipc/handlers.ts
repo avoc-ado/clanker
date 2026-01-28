@@ -13,6 +13,7 @@ import { listTasks, loadTask, saveTask, type TaskRecord, type TaskStatus } from 
 import type { TaskUsageInput } from "../state/task-usage.js";
 import { ensureJudgeCheckoutForTask, ensureSlaveCommitForTask } from "../state/task-commits.js";
 import { syncSlaveWorktreeForPrompt } from "../state/slave-sync.js";
+import { loadState } from "../state/state.js";
 import type { IpcHandlers } from "./server.js";
 import {
   writeTaskCreate,
@@ -178,6 +179,9 @@ export const buildIpcHandlers = ({ paths }: { paths: ClankerPaths }): IpcHandler
       const data = payload as TaskRequestPayload;
       const podId = requireString({ value: data?.podId, label: "podId" });
       const tasks = await listTasks({ tasksDir: paths.tasksDir });
+      const config = await loadConfig({ repoRoot: paths.repoRoot });
+      const state = await loadState({ statePath: paths.statePath });
+      const lockConflictsEnabled = state.lockConflicts.enabled ?? config.lockConflictsEnabled;
       const staleSlaves = await computeStaleSlaves({ paths });
       const promptPaths = { tasksDir: paths.tasksDir, historyDir: paths.historyDir };
       let targetTask = selectAssignedTask({ tasks, slaveId: podId });
@@ -187,6 +191,7 @@ export const buildIpcHandlers = ({ paths }: { paths: ClankerPaths }): IpcHandler
           availableSlaves: [podId],
           paths,
           staleSlaves,
+          lockConflictsEnabled,
         });
         targetTask = assigned[0] ?? null;
       }

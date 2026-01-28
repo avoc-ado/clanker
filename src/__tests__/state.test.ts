@@ -11,6 +11,7 @@ describe("state", () => {
     const initial = await loadState({ statePath: path });
     expect(initial.paused).toBe(true);
     expect(initial.pausedRoles).toEqual({ planner: false, judge: false, slave: false });
+    expect(initial.lockConflicts).toEqual({});
     expect(initial.promptApprovals.autoApprove).toEqual({
       planner: false,
       judge: false,
@@ -33,6 +34,7 @@ describe("state", () => {
     const state = await loadState({ statePath: path });
     expect(state.paused).toBe(true);
     expect(state.pausedRoles).toEqual({ planner: false, judge: false, slave: false });
+    expect(state.lockConflicts).toEqual({});
     expect(state.promptApprovals.autoApprove).toEqual({
       planner: false,
       judge: false,
@@ -55,6 +57,7 @@ describe("state", () => {
     expect(state.tasks.length).toBe(1);
     expect(state.paused).toBe(false);
     expect(state.pausedRoles).toEqual({ planner: false, judge: false, slave: false });
+    expect(state.lockConflicts).toEqual({});
     expect(state.promptApprovals.queue).toEqual([]);
   });
 
@@ -69,6 +72,7 @@ describe("state", () => {
     expect(state.tasks.length).toBe(0);
     expect(state.paused).toBe(false);
     expect(state.pausedRoles).toEqual({ planner: false, judge: false, slave: false });
+    expect(state.lockConflicts).toEqual({});
     expect(state.promptApprovals.queue).toEqual([]);
   });
 });

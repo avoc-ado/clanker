@@ -22,6 +22,7 @@ export interface ClankerState {
     judge: boolean;
     slave: boolean;
   };
+  lockConflicts: LockConflictOverrides;
   promptApprovals: PromptApprovalState;
   tasks: TaskState[];
 }
@@ -51,6 +52,11 @@ export interface PromptApprovalState {
   approved?: PromptApprovalRequest | null;
 }
 
+export interface LockConflictOverrides {
+  enabled?: boolean;
+  blockPlanner?: boolean;
+}
+
 export const DEFAULT_STATE: ClankerState = {
   paused: true,
   pausedRoles: {
@@ -58,6 +64,7 @@ export const DEFAULT_STATE: ClankerState = {
     judge: false,
     slave: false,
   },
+  lockConflicts: {},
   promptApprovals: {
     autoApprove: {
       planner: false,
@@ -91,6 +98,10 @@ export const loadState = async ({ statePath }: { statePath: string }): Promise<C
       pausedRoles: {
         ...DEFAULT_STATE.pausedRoles,
         ...(parsed.pausedRoles ?? {}),
+      },
+      lockConflicts: {
+        ...DEFAULT_STATE.lockConflicts,
+        ...(parsed.lockConflicts ?? {}),
       },
       promptApprovals: {
         ...DEFAULT_STATE.promptApprovals,

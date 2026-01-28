@@ -17,6 +17,8 @@ describe("loadConfig", () => {
     expect(config.judges).toBe(1);
     expect(config.slaves).toBe(3);
     expect(config.backlog).toBe(1);
+    expect(config.lockConflictsEnabled).toBe(true);
+    expect(config.lockConflictsBlockPlanner).toBe(false);
     expect(config.startImmediately).toBe(false);
     expect(config.tmuxFilter).toBe(`clanker-${basename(root)}`);
     expect(config.codexCommand).toBe("codex --no-alt-screen --sandbox workspace-write");
@@ -31,6 +33,8 @@ describe("loadConfig", () => {
     expect(raw).toContain("judges: default");
     expect(raw).toContain("slaves: default");
     expect(raw).toContain("backlog: default");
+    expect(raw).toContain("lockConflictsEnabled: default");
+    expect(raw).toContain("lockConflictsBlockPlanner: default");
     expect(raw).toContain("startImmediately: default");
     expect(raw).toContain("codexCommand: default");
     expect(raw).toContain("promptFile");
@@ -78,6 +82,8 @@ describe("loadConfig", () => {
     expect(config.judges).toBe(1);
     expect(config.slaves).toBe(2);
     expect(config.backlog).toBe(1);
+    expect(config.lockConflictsEnabled).toBe(true);
+    expect(config.lockConflictsBlockPlanner).toBe(false);
     expect(config.startImmediately).toBe(false);
     expect(config.tmuxFilter).toBe(`clanker-${basename(root)}`);
     expect(config.codexCommand).toBe("codex --no-alt-screen --sandbox workspace-write");
@@ -87,7 +93,7 @@ describe("loadConfig", () => {
   test("reformats config when all keys present", async () => {
     const root = await mkdtemp(join(tmpdir(), "clanker-config-"));
     const contents =
-      "planners: 2\njudges: 1\nslaves: 4\nbacklog: 5\nstartImmediately: false\ntmuxFilter: dev\ncodexCommand: codex\npromptFile: prompt.txt\n";
+      "planners: 2\njudges: 1\nslaves: 4\nbacklog: 5\nlockConflictsEnabled: true\nlockConflictsBlockPlanner: false\nstartImmediately: false\ntmuxFilter: dev\ncodexCommand: codex\npromptFile: prompt.txt\n";
     await writeFile(join(root, "clanker.yaml"), contents, "utf-8");
     await ensureConfigFile({ repoRoot: root });
     const raw = await readFile(join(root, "clanker.yaml"), "utf-8");
@@ -95,6 +101,8 @@ describe("loadConfig", () => {
     expect(raw).toContain("judges: default");
     expect(raw).toContain("slaves: 4");
     expect(raw).toContain("backlog: 5");
+    expect(raw).toContain("lockConflictsEnabled: default");
+    expect(raw).toContain("lockConflictsBlockPlanner: default");
     expect(raw).toContain("startImmediately: default");
     expect(raw).toContain('tmuxFilter: "dev"');
     expect(raw).toContain('codexCommand: "codex"');
@@ -120,6 +128,8 @@ describe("loadConfig", () => {
     expect(raw).toContain("judges: default");
     expect(raw).toContain("slaves: default");
     expect(raw).toContain("backlog: default");
+    expect(raw).toContain("lockConflictsEnabled: default");
+    expect(raw).toContain("lockConflictsBlockPlanner: default");
     expect(raw).toContain("startImmediately: default");
     expect(raw).toContain("promptFile");
   });
@@ -128,7 +138,7 @@ describe("loadConfig", () => {
     const root = await mkdtemp(join(tmpdir(), "clanker-config-"));
     await writeFile(
       join(root, "clanker.yaml"),
-      "planners: 2\njudges: 2\nslaves: 5\nbacklog: 4\nstartImmediately: false\ntmuxFilter: dev\ncodexCommand: codex\npromptFile: plan.txt\n",
+      "planners: 2\njudges: 2\nslaves: 5\nbacklog: 4\nlockConflictsEnabled: false\nlockConflictsBlockPlanner: true\nstartImmediately: false\ntmuxFilter: dev\ncodexCommand: codex\npromptFile: plan.txt\n",
       "utf-8",
     );
     const config = await loadConfig({ repoRoot: root });
@@ -136,6 +146,8 @@ describe("loadConfig", () => {
     expect(config.judges).toBe(2);
     expect(config.slaves).toBe(5);
     expect(config.backlog).toBe(4);
+    expect(config.lockConflictsEnabled).toBe(false);
+    expect(config.lockConflictsBlockPlanner).toBe(true);
     expect(config.startImmediately).toBe(false);
     expect(config.tmuxFilter).toBe("dev");
     expect(config.codexCommand).toBe("codex");
@@ -146,7 +158,7 @@ describe("loadConfig", () => {
     const root = await mkdtemp(join(tmpdir(), "clanker-config-"));
     await writeFile(
       join(root, "clanker.yaml"),
-      "planners: default\njudges: default\nslaves: default\nbacklog: default\nstartImmediately: default\ntmuxFilter: default\ncodexCommand: default\npromptFile: default\n",
+      "planners: default\njudges: default\nslaves: default\nbacklog: default\nlockConflictsEnabled: default\nlockConflictsBlockPlanner: default\nstartImmediately: default\ntmuxFilter: default\ncodexCommand: default\npromptFile: default\n",
       "utf-8",
     );
     const config = await loadConfig({ repoRoot: root });
@@ -154,6 +166,8 @@ describe("loadConfig", () => {
     expect(config.judges).toBe(1);
     expect(config.slaves).toBe(3);
     expect(config.backlog).toBe(1);
+    expect(config.lockConflictsEnabled).toBe(true);
+    expect(config.lockConflictsBlockPlanner).toBe(false);
     expect(config.startImmediately).toBe(false);
     expect(config.tmuxFilter).toBe(`clanker-${basename(root)}`);
     expect(config.codexCommand).toBe("codex --no-alt-screen --sandbox workspace-write");
@@ -185,6 +199,8 @@ describe("loadConfig", () => {
     const parsed = {
       planners: "default",
       judges: 1,
+      lockConflictsEnabled: "default",
+      lockConflictsBlockPlanner: "default",
       startImmediately: "default",
       tmuxFilter: `clanker-${basename(root)}`,
       codexCommand: "default",
@@ -193,6 +209,8 @@ describe("loadConfig", () => {
     const template = buildTemplateConfig({ parsed, repoRoot: root });
     expect(template.planners).toBe("default");
     expect(template.judges).toBe("default");
+    expect(template.lockConflictsEnabled).toBe("default");
+    expect(template.lockConflictsBlockPlanner).toBe("default");
     expect(template.startImmediately).toBe("default");
     expect(template.tmuxFilter).toBe("default");
     expect(template.codexCommand).toBe("default");

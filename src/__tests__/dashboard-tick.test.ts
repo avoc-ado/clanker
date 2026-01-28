@@ -96,6 +96,7 @@ describe("makeDashboardTick", () => {
     const loadState = async () => ({
       paused: false,
       pausedRoles: { planner: false, judge: false, slave: false },
+      lockConflicts: {},
       promptApprovals: {
         autoApprove: { planner: true, judge: true, slave: true },
         queue: [],
@@ -200,6 +201,8 @@ describe("makeDashboardTick", () => {
         judges: 1,
         slaves: 1,
         backlog: 1,
+        lockConflictsEnabled: true,
+        lockConflictsBlockPlanner: false,
         startImmediately: true,
         tmuxFilter: "clanker",
       },
@@ -329,6 +332,7 @@ describe("makeDashboardTick", () => {
     const loadState = async () => ({
       paused: false,
       pausedRoles: { planner: false, judge: false, slave: false },
+      lockConflicts: {},
       promptApprovals: {
         autoApprove: { planner: false, judge: false, slave: false },
         queue: [],
@@ -387,6 +391,8 @@ describe("makeDashboardTick", () => {
         judges: 1,
         slaves: 1,
         backlog: 2,
+        lockConflictsEnabled: true,
+        lockConflictsBlockPlanner: false,
         startImmediately: true,
         tmuxFilter: "clanker",
       },
@@ -498,6 +504,7 @@ describe("makeDashboardTick", () => {
       ({
         paused: false,
         pausedRoles: { planner: false, judge: false, slave: false },
+        lockConflicts: {},
         promptApprovals: {
           autoApprove: { planner: false, judge: false, slave: false },
           queue: [],
@@ -562,6 +569,8 @@ describe("makeDashboardTick", () => {
         judges: 1,
         slaves: 1,
         backlog: 1,
+        lockConflictsEnabled: true,
+        lockConflictsBlockPlanner: false,
         startImmediately: true,
         tmuxFilter: "clanker",
       },
@@ -666,6 +675,7 @@ describe("makeDashboardTick", () => {
       ({
         paused: false,
         pausedRoles: { planner: false, judge: false, slave: false },
+        lockConflicts: {},
         promptApprovals: {
           autoApprove: { planner: false, judge: false, slave: false },
           queue: [],
@@ -729,6 +739,8 @@ describe("makeDashboardTick", () => {
         judges: 1,
         slaves: 0,
         backlog: 1,
+        lockConflictsEnabled: true,
+        lockConflictsBlockPlanner: false,
         startImmediately: true,
         tmuxFilter: "clanker",
       },
@@ -796,6 +808,142 @@ describe("makeDashboardTick", () => {
     expect(saved.promptApprovals?.approved ?? null).toBeNull();
   });
 
+  test("blocks planner prompt when queued tasks are lock-blocked", async () => {
+    let plannerDispatchCalls = 0;
+    const dispatchPlannerPrompt = async () => {
+      plannerDispatchCalls += 1;
+      return { promptPath: ".clanker/plan-prompt.txt", dispatched: true };
+    };
+    const preparePlannerPrompt = async () => ({
+      prompt: "plan prompt",
+      dispatch: "dispatch",
+      promptPath: ".clanker/plan-prompt.txt",
+    });
+    const listTasks = async () => [
+      {
+        id: "busy",
+        status: "running",
+        assignedSlaveId: "slave-1",
+        prompt: "busy",
+        ownerDirs: ["src"],
+      } satisfies TaskRecord,
+      {
+        id: "queued",
+        status: "queued",
+        prompt: "work",
+        ownerDirs: ["src"],
+      } satisfies TaskRecord,
+    ];
+    const loadTask = async () => null;
+    const tick = makeDashboardTick({
+      repoRoot: "/repo",
+      config: {
+        planners: 1,
+        judges: 1,
+        slaves: 1,
+        backlog: 2,
+        lockConflictsEnabled: true,
+        lockConflictsBlockPlanner: true,
+        startImmediately: true,
+        tmuxFilter: "clanker",
+      },
+      paths: {
+        repoRoot: "/repo",
+        stateDir: "/repo/.clanker",
+        eventsLog: "/repo/.clanker/events.log",
+        statePath: "/repo/.clanker/state.json",
+        tasksDir: "/repo/.clanker/tasks",
+        historyDir: "/repo/.clanker/history",
+        heartbeatDir: "/repo/.clanker/heartbeat",
+        metricsPath: "/repo/.clanker/metrics.json",
+        logsDir: "/repo/.clanker/logs",
+        locksDir: "/repo/.clanker/locks",
+        archiveDir: "/repo/.clanker/archive",
+        archiveTasksDir: "/repo/.clanker/archive/tasks",
+        commandHistoryPath: "/repo/.clanker/command-history.json",
+      },
+      promptSettings: {
+        mode: "inline",
+        planPromptPath: ".clanker/plan-prompt.txt",
+        planPromptAbsolutePath: "/repo/.clanker/plan-prompt.txt",
+      },
+      knownTaskIds: new Set<string>(),
+      pendingActions: new Map<string, PendingAction>(),
+      plannerDispatchState: { pending: false, sentAt: 0, taskCountAt: 0 },
+      state: {
+        dashboardPaneId: "pane-dashboard",
+        lastSlavePaneId: null,
+        pendingEscalationPaneId: null,
+        restorePaneId: null,
+        lastTickAt: Date.now(),
+        lastGitFiles: new Set<string>(),
+        staleSlaves: new Set<string>(),
+        lastStatusLine: "",
+        idleStartedAt: Date.now(),
+        lastApprovalId: null,
+      },
+      inspectPane: async () => ({
+        hasPrompt: true,
+        isWorking: false,
+        isPaused: false,
+        hasEscalation: false,
+      }),
+      pauseRetryMs: 1,
+      plannerPromptTimeoutMs: 10,
+      deps: {
+        appendEvent: async () => undefined,
+        readRecentEvents: async () => [],
+        listTasks,
+        loadTask,
+        saveTask: async () => undefined,
+        readHeartbeats: async () => [],
+        assignQueuedTasks: async () => [],
+        acquireTaskLock: async () => ({ release: async () => undefined }),
+        computeSlaveCap: () => 1,
+        appendMetricSeries: ({ series, value }) => [...series, value],
+        loadMetrics: async () => ({
+          updatedAt: new Date().toISOString(),
+          taskCount: 0,
+          reworkCount: 0,
+          conflictCount: 0,
+          idleMinutes: 0,
+          tokenBurn: 0,
+          burnHistory: [],
+          backlogHistory: [],
+        }),
+        saveMetrics: async () => undefined,
+        listDirtyFiles: async () => [],
+        countLockConflicts: () => 0,
+        loadState: async () =>
+          ({
+            paused: false,
+            pausedRoles: { planner: false, judge: false, slave: false },
+            lockConflicts: {},
+            promptApprovals: {
+              autoApprove: { planner: true, judge: true, slave: true },
+              queue: [],
+              approved: null,
+            },
+            tasks: [],
+          }) satisfies ClankerState,
+        saveState: async () => undefined,
+        dispatchPlannerPrompt,
+        preparePlannerPrompt,
+        ensureJudgeCheckoutForTask: async () =>
+          ({ status: "checked_out", commitSha: "sha" }) as const,
+        getCurrentPaneId: async () => null,
+        listPanes: async () => [{ paneId: "pane-planner", title: "clanker:planner-1" }],
+        selectPane: async () => undefined,
+        sendKey: async () => undefined,
+        sendKeys: async () => undefined,
+      },
+    });
+
+    await tick();
+
+    expect(plannerDispatchCalls).toBe(0);
+  });
+
   test("sends approved judge prompt", async () => {
     const appendEvent = async () => undefined;
     const readRecentEvents = async () => [];
@@ -841,6 +989,7 @@ describe("makeDashboardTick", () => {
       ({
         paused: false,
         pausedRoles: { planner: false, judge: false, slave: false },
+        lockConflicts: {},
         promptApprovals: {
           autoApprove: { planner: false, judge: false, slave: false },
           queue: [],
@@ -904,6 +1053,8 @@ describe("makeDashboardTick", () => {
         judges: 1,
         slaves: 0,
         backlog: 1,
+        lockConflictsEnabled: true,
+        lockConflictsBlockPlanner: false,
         startImmediately: true,
         tmuxFilter: "clanker",
       },
@@ -983,6 +1134,8 @@ describe("makeDashboardTick", () => {
         judges: 1,
         slaves: 1,
         backlog: 1,
+        lockConflictsEnabled: true,
+        lockConflictsBlockPlanner: false,
         startImmediately: true,
         tmuxFilter: "clanker",
       },
@@ -1057,6 +1210,7 @@ describe("makeDashboardTick", () => {
           ({
             paused: false,
             pausedRoles: { planner: false, judge: false, slave: false },
+            lockConflicts: {},
             promptApprovals: {
               autoApprove: { planner: true, judge: true, slave: true },
               queue: [],
@@ -1093,6 +1247,8 @@ describe("makeDashboardTick", () => {
         judges: 1,
         slaves: 3,
         backlog: 0,
+        lockConflictsEnabled: true,
+        lockConflictsBlockPlanner: false,
         startImmediately: true,
         tmuxFilter: "clanker",
       },
@@ -1173,6 +1329,7 @@ describe("makeDashboardTick", () => {
           ({
             paused: false,
             pausedRoles: { planner: false, judge: false, slave: false },
+            lockConflicts: {},
             promptApprovals: {
               autoApprove: { planner: true, judge: true, slave: true },
               queue: [],
@@ -1218,6 +1375,8 @@ describe("makeDashboardTick", () => {
         judges: 1,
         slaves: 1,
         backlog: 0,
+        lockConflictsEnabled: true,
+        lockConflictsBlockPlanner: false,
         startImmediately: true,
         tmuxFilter: "clanker",
       },
@@ -1304,6 +1463,7 @@ describe("makeDashboardTick", () => {
           ({
             paused: false,
             pausedRoles: { planner: false, judge: false, slave: false },
+            lockConflicts: {},
             promptApprovals: {
               autoApprove: { planner: true, judge: true, slave: true },
               queue: [],
@@ -1353,6 +1513,8 @@ describe("makeDashboardTick", () => {
         judges: 1,
         slaves: 1,
         backlog: 0,
+        lockConflictsEnabled: true,
+        lockConflictsBlockPlanner: false,
         startImmediately: true,
         tmuxFilter: "clanker",
       },
@@ -1427,6 +1589,7 @@ describe("makeDashboardTick", () => {
           ({
             paused: false,
             pausedRoles: { planner: false, judge: false, slave: false },
+            lockConflicts: {},
             promptApprovals: {
               autoApprove: { planner: true, judge: true, slave: true },
               queue: [],
@@ -1474,6 +1637,8 @@ describe("makeDashboardTick", () => {
         judges: 1,
         slaves: 1,
         backlog: 0,
+        lockConflictsEnabled: true,
+        lockConflictsBlockPlanner: false,
         startImmediately: true,
         tmuxFilter: "clanker",
       },
@@ -1548,6 +1713,7 @@ describe("makeDashboardTick", () => {
           ({
             paused: false,
             pausedRoles: { planner: false, judge: false, slave: false },
+            lockConflicts: {},
             promptApprovals: {
               autoApprove: { planner: true, judge: true, slave: true },
               queue: [],

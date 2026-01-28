@@ -154,4 +154,38 @@ describe("assignQueuedTasks", () => {
     expect(updated.length).toBe(1);
     expect(updated[0]?.assignedSlaveId).toBe("slave-2");
   });
+
+  test("skips lock conflicts when disabled", async () => {
+    const paths = await makePaths();
+    await import("node:fs/promises").then(({ mkdir }) =>
+      mkdir(paths.tasksDir, { recursive: true }),
+    );
+
+    const busy: TaskRecord = {
+      id: "t9",
+      status: "running",
+      prompt: "busy",
+      assignedSlaveId: "slave-1",
+      ownerDirs: ["src"],
+    };
+    const queued: TaskRecord = {
+      id: "t10",
+      status: "queued",
+      prompt: "do t10",
+      ownerDirs: ["src"],
+    };
+    await saveTask({ tasksDir: paths.tasksDir, task: busy });
+    await saveTask({ tasksDir: paths.tasksDir, task: queued });
+
+    const loaded = await listTasks({ tasksDir: paths.tasksDir });
+    const updated = await assignQueuedTasks({
+      tasks: loaded,
+      availableSlaves: ["slave-2"],
+      paths,
+      lockConflictsEnabled: false,
+    });
+
+    expect(updated.length).toBe(1);
+    expect(updated[0]?.assignedSlaveId).toBe("slave-2");
+  });
 });

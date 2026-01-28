@@ -193,6 +193,46 @@ export const runDashboard = async ({}: {}): Promise<void> => {
       },
     });
   };
+  const getLockSettings = async (): Promise<{ enabled: boolean; blockPlanner: boolean }> => {
+    const current = await loadState({ statePath: paths.statePath });
+    return {
+      enabled: current.lockConflicts.enabled ?? config.lockConflictsEnabled,
+      blockPlanner: current.lockConflicts.blockPlanner ?? config.lockConflictsBlockPlanner,
+    };
+  };
+  const setLockSettings = async ({
+    enabled,
+    blockPlanner,
+  }: {
+    enabled?: boolean;
+    blockPlanner?: boolean;
+  }): Promise<void> => {
+    if (enabled === undefined && blockPlanner === undefined) {
+      return;
+    }
+    const current = await loadState({ statePath: paths.statePath });
+    const next = {
+      ...current,
+      lockConflicts: {
+        ...current.lockConflicts,
+        ...(enabled === undefined ? {} : { enabled }),
+        ...(blockPlanner === undefined ? {} : { blockPlanner }),
+      },
+    };
+    await saveState({ statePath: paths.statePath, state: next });
+    const effective = {
+      enabled: next.lockConflicts.enabled ?? config.lockConflictsEnabled,
+      blockPlanner: next.lockConflicts.blockPlanner ?? config.lockConflictsBlockPlanner,
+    };
+    await appendEvent({
+      eventsLog: paths.eventsLog,
+      event: {
+        ts: new Date().toISOString(),
+        type: "LOCK_SETTINGS",
+        msg: `locks=${effective.enabled ? "on" : "off"} lock-backpressure=${effective.blockPlanner ? "on" : "off"}`,
+      },
+    });
+  };
   const getNextApproval = async (): Promise<PromptApprovalRequest | null> => {
     const current = await loadState({ statePath: paths.statePath });
     if (current.promptApprovals.approved) {
@@ -380,6 +420,8 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     runRelaunch: runRelaunchCommand,
     getAutoApprove: loadApprovalState,
     setAutoApprove,
+    getLockSettings,
+    setLockSettings,
   });
 
   const handleCommand = makeDashboardCommandHandler({

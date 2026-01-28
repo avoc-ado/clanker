@@ -21,6 +21,8 @@ const baseConfig = {
   judges: 1,
   slaves: 1,
   backlog: 1,
+  lockConflictsEnabled: true,
+  lockConflictsBlockPlanner: false,
   startImmediately: false,
 } satisfies ClankerConfig;
 

@@ -28,6 +28,20 @@ describe("dashboard commands", () => {
       slave: false,
     });
     const setAutoApprove = async () => undefined;
+    let lockSettings = { enabled: true, blockPlanner: false };
+    const getLockSettings = async () => lockSettings;
+    const setLockSettings = async ({
+      enabled,
+      blockPlanner,
+    }: {
+      enabled?: boolean;
+      blockPlanner?: boolean;
+    }) => {
+      lockSettings = {
+        enabled: enabled ?? lockSettings.enabled,
+        blockPlanner: blockPlanner ?? lockSettings.blockPlanner,
+      };
+    };
     const tempDir = await mkdtemp(join(tmpdir(), "clanker-commands-"));
     const commandHistoryPath = join(tempDir, "history.json");
     const tasksDir = join(tempDir, "tasks");
@@ -60,6 +74,8 @@ describe("dashboard commands", () => {
       runRelaunch,
       getAutoApprove,
       setAutoApprove,
+      getLockSettings,
+      setLockSettings,
     });
 
     const commandHistory: string[] = [];
@@ -89,6 +105,10 @@ describe("dashboard commands", () => {
     handler("/task t1 done");
     handler("/task");
     handler("/task missing queued");
+    handler("/locks status");
+    handler("/locks off");
+    handler("/lock-backpressure on");
+    handler("/lock-backpressure status");
     handler("/pa");
     handler("/nope");
     handler("/help");
@@ -108,6 +128,8 @@ describe("dashboard commands", () => {
     expect(lines.some((line) => line.includes("invalid status"))).toBe(true);
     expect(lines.some((line) => line.includes("matches for /pa"))).toBe(true);
     expect(lines.some((line) => line.includes("unknown command"))).toBe(true);
+    expect(lockSettings.enabled).toBe(false);
+    expect(lockSettings.blockPlanner).toBe(true);
 
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
   });
@@ -169,6 +191,8 @@ describe("dashboard commands", () => {
       setAutoApprove: async ({ role, enabled }) => {
         autoApprove = { ...autoApprove, [role]: enabled };
       },
+      getLockSettings: async () => ({ enabled: true, blockPlanner: false }),
+      setLockSettings: async () => undefined,
     });
     const handler = makeDashboardCommandHandler({
       commands,

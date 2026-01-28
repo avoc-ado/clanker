@@ -25,6 +25,8 @@ export const buildDashboardCommands = ({
   runRelaunch,
   getAutoApprove,
   setAutoApprove,
+  getLockSettings,
+  setLockSettings,
 }: {
   paths: ClankerPaths;
   writeLine: (line: string) => void;
@@ -38,6 +40,14 @@ export const buildDashboardCommands = ({
   }: {
     role: "planner" | "judge" | "slave";
     enabled: boolean;
+  }) => Promise<void>;
+  getLockSettings: () => Promise<{ enabled: boolean; blockPlanner: boolean }>;
+  setLockSettings: ({
+    enabled,
+    blockPlanner,
+  }: {
+    enabled?: boolean;
+    blockPlanner?: boolean;
   }) => Promise<void>;
 }): SlashCommandHandler[] => {
   const parseRoleArg = ({ args, commandName }: { args: string; commandName: string }) => {
@@ -145,6 +155,46 @@ export const buildDashboardCommands = ({
         }
         await setAutoApprove({ role, enabled: toggle === "on" });
         return `auto-approve ${role} ${toggle}`;
+      },
+    },
+    {
+      name: "locks",
+      description: "toggle owner lock conflicts",
+      usage: "/locks [status|on|off]",
+      run: async ({ args }) => {
+        const token = args.trim().toLowerCase();
+        if (!token || token === "status") {
+          const status = await getLockSettings();
+          writeLine(
+            `locks=${status.enabled ? "on" : "off"} lock-backpressure=${status.blockPlanner ? "on" : "off"}`,
+          );
+          return "locks status";
+        }
+        if (token !== "on" && token !== "off") {
+          writeLine("usage: /locks [status|on|off]");
+          return null;
+        }
+        await setLockSettings({ enabled: token === "on" });
+        return `locks ${token}`;
+      },
+    },
+    {
+      name: "lock-backpressure",
+      description: "toggle planner backpressure for lock conflicts",
+      usage: "/lock-backpressure [status|on|off]",
+      run: async ({ args }) => {
+        const token = args.trim().toLowerCase();
+        if (!token || token === "status") {
+          const status = await getLockSettings();
+          writeLine(`lock-backpressure=${status.blockPlanner ? "on" : "off"}`);
+          return "lock-backpressure status";
+        }
+        if (token !== "on" && token !== "off") {
+          writeLine("usage: /lock-backpressure [status|on|off]");
+          return null;
+        }
+        await setLockSettings({ blockPlanner: token === "on" });
+        return `lock-backpressure ${token}`;
       },
     },
     {

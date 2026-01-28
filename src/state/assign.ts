@@ -11,11 +11,13 @@ export const assignQueuedTasks = async ({
   availableSlaves,
   paths,
   staleSlaves,
+  lockConflictsEnabled = true,
 }: {
   tasks: TaskRecord[];
   availableSlaves: string[];
   paths: ClankerPaths;
   staleSlaves?: Set<string>;
+  lockConflictsEnabled?: boolean;
 }): Promise<TaskRecord[]> => {
   const updated: TaskRecord[] = [];
   const staleSet = staleSlaves ?? new Set<string>();
@@ -31,12 +33,18 @@ export const assignQueuedTasks = async ({
 
   const freeSlaves = new Set(availableSlaves.filter((slave) => !busySlaves.has(slave)));
   const queued = tasks.filter((task) => task.status === "queued");
-  const lockState = buildLockState({
-    tasks: tasks.filter((task) => BUSY_STATUSES.has(task.status) && !isStale(task)),
-  });
+  const lockState = lockConflictsEnabled
+    ? buildLockState({
+        tasks: tasks.filter((task) => BUSY_STATUSES.has(task.status) && !isStale(task)),
+      })
+    : {
+        lockedDirs: new Set<string>(),
+        lockedFiles: new Set<string>(),
+        lockedFileTopDirs: new Set<string>(),
+      };
 
   for (const task of queued) {
-    if (hasLockConflict({ task, lockState })) {
+    if (lockConflictsEnabled && hasLockConflict({ task, lockState })) {
       continue;
     }
     const claim = await acquireTaskLock({
@@ -51,7 +59,7 @@ export const assignQueuedTasks = async ({
       if (!latest || latest.status !== "queued") {
         continue;
       }
-      if (hasLockConflict({ task: latest, lockState })) {
+      if (lockConflictsEnabled && hasLockConflict({ task: latest, lockState })) {
         continue;
       }
       const preferred = latest.resumeSlaveId;
