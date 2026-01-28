@@ -172,6 +172,20 @@ describe("ipc handlers", () => {
     expect(String((staleJudgeResponse as { prompt?: string }).prompt ?? "")).toContain(
       "clanker judge",
     );
+
+    const invalidTask = await loadTask({ tasksDir: paths.tasksDir, id: "t1" });
+    if (invalidTask) {
+      invalidTask.judgePromptedAt = "not-a-date";
+      await saveTask({ tasksDir: paths.tasksDir, task: invalidTask });
+    }
+    const invalidJudgeResponse = await handlers.judge_request({
+      payload: { podId: "judge-1" },
+      context: {},
+    });
+    expect(invalidJudgeResponse).toMatchObject({ taskId: "t1" });
+    expect(String((invalidJudgeResponse as { prompt?: string }).prompt ?? "")).toContain(
+      "clanker judge",
+    );
   });
 
   test("task_request and judge_request return null when queue is empty", async () => {

@@ -266,7 +266,7 @@ export const buildIpcHandlers = ({ paths }: { paths: ClankerPaths }): IpcHandler
               nowMs,
               thresholdMs: JUDGE_PROMPT_STALE_MS,
             }),
-      )
+          )
           .sort((left, right) => left.id.localeCompare(right.id))[0] ?? null;
       if (!targetTask) {
         return { taskId: null };

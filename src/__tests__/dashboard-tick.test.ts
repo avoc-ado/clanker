@@ -1322,4 +1322,245 @@ describe("makeDashboardTick", () => {
     expect(assignCalls).toBe(0);
     expect(sendKeysCalls.length).toBe(0);
   });
+
+  test("auto-approves judge prompt when judgePromptedAt is invalid", async () => {
+    const task: TaskRecord = {
+      id: "t1",
+      status: "needs_judge",
+      judgePromptedAt: "not-a-date",
+    };
+    const listTasks = async () => [task];
+    let savedTask: TaskRecord | null = null;
+    const loadTask = async () => ({ ...task });
+    const saveTask = async ({ task: next }: { task: TaskRecord }) => {
+      savedTask = next;
+    };
+    const sendKeysCalls: Array<{ paneId: string; text: string }> = [];
+    const tick = makeDashboardTick({
+      repoRoot: "/repo",
+      config: {
+        planners: 1,
+        judges: 1,
+        slaves: 1,
+        backlog: 0,
+        startImmediately: true,
+        tmuxFilter: "clanker",
+      },
+      paths: {
+        repoRoot: "/repo",
+        stateDir: "/repo/.clanker",
+        eventsLog: "/repo/.clanker/events.log",
+        statePath: "/repo/.clanker/state.json",
+        tasksDir: "/repo/.clanker/tasks",
+        historyDir: "/repo/.clanker/history",
+        heartbeatDir: "/repo/.clanker/heartbeat",
+        metricsPath: "/repo/.clanker/metrics.json",
+        logsDir: "/repo/.clanker/logs",
+        locksDir: "/repo/.clanker/locks",
+        archiveDir: "/repo/.clanker/archive",
+        archiveTasksDir: "/repo/.clanker/archive/tasks",
+        commandHistoryPath: "/repo/.clanker/command-history.json",
+      },
+      promptSettings: {
+        mode: "file",
+        planPromptPath: ".clanker/plan-prompt.txt",
+        planPromptAbsolutePath: "/repo/.clanker/plan-prompt.txt",
+      },
+      knownTaskIds: new Set<string>(),
+      pendingActions: new Map<string, PendingAction>(),
+      plannerDispatchState: { pending: false, sentAt: 0, taskCountAt: 0 },
+      state: {
+        dashboardPaneId: "pane-dashboard",
+        lastSlavePaneId: null,
+        pendingEscalationPaneId: null,
+        restorePaneId: null,
+        lastTickAt: Date.now(),
+        lastGitFiles: new Set<string>(),
+        staleSlaves: new Set<string>(),
+        lastStatusLine: "",
+        idleStartedAt: Date.now(),
+        lastApprovalId: null,
+      },
+      inspectPane: async () => ({
+        hasPrompt: true,
+        isWorking: false,
+        isPaused: false,
+        hasEscalation: false,
+      }),
+      pauseRetryMs: 1,
+      plannerPromptTimeoutMs: 10,
+      deps: {
+        appendEvent: async () => undefined,
+        readRecentEvents: async () => [],
+        listTasks,
+        loadTask,
+        saveTask,
+        readHeartbeats: async () => [],
+        assignQueuedTasks: async () => [],
+        acquireTaskLock: async () => ({ release: async () => undefined }),
+        computeSlaveCap: () => 1,
+        appendMetricSeries: ({ series, value }) => [...series, value],
+        loadMetrics: async () => ({
+          updatedAt: new Date().toISOString(),
+          taskCount: 0,
+          reworkCount: 0,
+          conflictCount: 0,
+          idleMinutes: 0,
+          tokenBurn: 0,
+          burnHistory: [],
+          backlogHistory: [],
+        }),
+        saveMetrics: async () => undefined,
+        listDirtyFiles: async () => [],
+        countLockConflicts: () => 0,
+        loadState: async () =>
+          ({
+            paused: false,
+            pausedRoles: { planner: false, judge: false, slave: false },
+            promptApprovals: {
+              autoApprove: { planner: true, judge: true, slave: true },
+              queue: [],
+              approved: null,
+            },
+            tasks: [],
+          }) satisfies ClankerState,
+        saveState: async () => undefined,
+        dispatchPlannerPrompt: async () => null,
+        preparePlannerPrompt: async () => null,
+        ensureJudgeCheckoutForTask: async () =>
+          ({ status: "checked_out", commitSha: "sha" }) as const,
+        getCurrentPaneId: async () => null,
+        listPanes: async () => [{ paneId: "pane-judge", title: "clanker:judge-1" }],
+        selectPane: async () => undefined,
+        sendKey: async () => undefined,
+        sendKeys: async ({ paneId, text }: { paneId: string; text: string }) => {
+          sendKeysCalls.push({ paneId, text });
+        },
+      },
+    });
+
+    await tick();
+
+    expect(sendKeysCalls.length).toBe(1);
+    expect(savedTask).toEqual(
+      expect.objectContaining({
+        judgePromptedAt: expect.any(String),
+      }),
+    );
+  });
+
+  test("skips auto-approve when judgePromptedAt is fresh", async () => {
+    const task: TaskRecord = {
+      id: "t1",
+      status: "needs_judge",
+      judgePromptedAt: new Date().toISOString(),
+    };
+    const sendKeysCalls: Array<{ paneId: string; text: string }> = [];
+    const tick = makeDashboardTick({
+      repoRoot: "/repo",
+      config: {
+        planners: 1,
+        judges: 1,
+        slaves: 1,
+        backlog: 0,
+        startImmediately: true,
+        tmuxFilter: "clanker",
+      },
+      paths: {
+        repoRoot: "/repo",
+        stateDir: "/repo/.clanker",
+        eventsLog: "/repo/.clanker/events.log",
+        statePath: "/repo/.clanker/state.json",
+        tasksDir: "/repo/.clanker/tasks",
+        historyDir: "/repo/.clanker/history",
+        heartbeatDir: "/repo/.clanker/heartbeat",
+        metricsPath: "/repo/.clanker/metrics.json",
+        logsDir: "/repo/.clanker/logs",
+        locksDir: "/repo/.clanker/locks",
+        archiveDir: "/repo/.clanker/archive",
+        archiveTasksDir: "/repo/.clanker/archive/tasks",
+        commandHistoryPath: "/repo/.clanker/command-history.json",
+      },
+      promptSettings: {
+        mode: "file",
+        planPromptPath: ".clanker/plan-prompt.txt",
+        planPromptAbsolutePath: "/repo/.clanker/plan-prompt.txt",
+      },
+      knownTaskIds: new Set<string>(),
+      pendingActions: new Map<string, PendingAction>(),
+      plannerDispatchState: { pending: false, sentAt: 0, taskCountAt: 0 },
+      state: {
+        dashboardPaneId: "pane-dashboard",
+        lastSlavePaneId: null,
+        pendingEscalationPaneId: null,
+        restorePaneId: null,
+        lastTickAt: Date.now(),
+        lastGitFiles: new Set<string>(),
+        staleSlaves: new Set<string>(),
+        lastStatusLine: "",
+        idleStartedAt: Date.now(),
+        lastApprovalId: null,
+      },
+      inspectPane: async () => ({
+        hasPrompt: true,
+        isWorking: false,
+        isPaused: false,
+        hasEscalation: false,
+      }),
+      pauseRetryMs: 1,
+      plannerPromptTimeoutMs: 10,
+      deps: {
+        appendEvent: async () => undefined,
+        readRecentEvents: async () => [],
+        listTasks: async () => [task],
+        loadTask: async () => ({ ...task }),
+        saveTask: async () => undefined,
+        readHeartbeats: async () => [],
+        assignQueuedTasks: async () => [],
+        acquireTaskLock: async () => ({ release: async () => undefined }),
+        computeSlaveCap: () => 1,
+        appendMetricSeries: ({ series, value }) => [...series, value],
+        loadMetrics: async () => ({
+          updatedAt: new Date().toISOString(),
+          taskCount: 0,
+          reworkCount: 0,
+          conflictCount: 0,
+          idleMinutes: 0,
+          tokenBurn: 0,
+          burnHistory: [],
+          backlogHistory: [],
+        }),
+        saveMetrics: async () => undefined,
+        listDirtyFiles: async () => [],
+        countLockConflicts: () => 0,
+        loadState: async () =>
+          ({
+            paused: false,
+            pausedRoles: { planner: false, judge: false, slave: false },
+            promptApprovals: {
+              autoApprove: { planner: true, judge: true, slave: true },
+              queue: [],
+              approved: null,
+            },
+            tasks: [],
+          }) satisfies ClankerState,
+        saveState: async () => undefined,
+        dispatchPlannerPrompt: async () => null,
+        preparePlannerPrompt: async () => null,
+        ensureJudgeCheckoutForTask: async () =>
+          ({ status: "checked_out", commitSha: "sha" }) as const,
+        getCurrentPaneId: async () => null,
+        listPanes: async () => [{ paneId: "pane-judge", title: "clanker:judge-1" }],
+        selectPane: async () => undefined,
+        sendKey: async () => undefined,
+        sendKeys: async ({ paneId, text }: { paneId: string; text: string }) => {
+          sendKeysCalls.push({ paneId, text });
+        },
+      },
+    });
+
+    await tick();
+
+    expect(sendKeysCalls.length).toBe(0);
+  });
 });
