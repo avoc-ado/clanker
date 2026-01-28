@@ -76,6 +76,29 @@ const resolveCliCommand = async ({
   return { cmd: "codex", args: [] };
 };
 
+const hasAddDirArg = ({ args, addDir }: { args: string[]; addDir: string }): boolean => {
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (!arg) {
+      continue;
+    }
+    if (arg === "--add-dir" && args[i + 1] === addDir) {
+      return true;
+    }
+    if (arg.startsWith("--add-dir=") && arg.slice("--add-dir=".length) === addDir) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const appendAddDir = ({ args, addDir }: { args: string[]; addDir: string }): string[] => {
+  if (hasAddDirArg({ args, addDir })) {
+    return args;
+  }
+  return [...args, "--add-dir", addDir];
+};
+
 const wrapWithPty = ({
   cmd,
   args,
@@ -108,12 +131,14 @@ export const spawnCodex = async ({
   id,
   command,
   cwd,
+  addDir,
 }: {
   logsDir: string;
   role: string;
   id: string;
   command?: string;
   cwd?: string;
+  addDir?: string;
 }): Promise<{ child: ReturnType<typeof spawn>; logPath: string }> => {
   const logPath = makeLogPath({ logsDir, role, id });
   const logStream = createWriteStream(logPath, { flags: "a" });
@@ -126,8 +151,12 @@ export const spawnCodex = async ({
   }
 
   const cli = await resolveCliCommand({ override: command });
+  const sanitizedAddDir = addDir?.trim();
+  const baseCli = sanitizedAddDir
+    ? { cmd: cli.cmd, args: appendAddDir({ args: cli.args, addDir: sanitizedAddDir }) }
+    : cli;
   const usePty = Boolean(overrides.codexTty);
-  const finalCli = usePty ? wrapWithPty(cli) : cli;
+  const finalCli = usePty ? wrapWithPty(baseCli) : baseCli;
   const stdio: ["pipe" | "inherit", "pipe", "pipe"] = usePty
     ? ["inherit", "pipe", "pipe"]
     : ["pipe", "pipe", "pipe"];

@@ -29,8 +29,13 @@ export const inspectCodexPane = async ({
 }): Promise<CodexPaneState> => {
   const content = await capturePane({ paneId, lines: 80 });
   const lines = content.split("\n");
+  const tailLines = lines.slice(-10);
+  const tailContent = tailLines.join("\n");
   const hasPrompt = lines.some((line) => PROMPT_MARKER.test(line.trimStart()));
-  const hasEscalation = hasEscalationPrompt({ content });
+  const tailHasConfirm = tailLines.some((line) =>
+    line.toLowerCase().includes("enter to confirm"),
+  );
+  const hasEscalation = hasEscalationPrompt({ content: tailContent }) || tailHasConfirm;
   const isWorking = lines.some((line) => line.toLowerCase().includes(WORKING_MATCH));
   const isPaused = lines.some((line) => line.toLowerCase().includes("paused"));
   return { hasPrompt, isWorking, isPaused, hasEscalation, content };

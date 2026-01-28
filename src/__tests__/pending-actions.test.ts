@@ -49,6 +49,22 @@ describe("inspectCodexPane", () => {
     expect(state.isPaused).toBe(true);
     expect(state.hasEscalation).toBe(true);
   });
+
+  test("ignores stale escalation when it is outside the tail window", async () => {
+    const content = [
+      "Press enter to confirm",
+      ...Array.from({ length: 15 }, (_, idx) => `line-${idx}`),
+      "› prompt here",
+    ].join("\n");
+    const capturePane = async () => content;
+    const hasEscalationPrompt = ({ content: raw }: { content: string }) => raw.includes("confirm");
+    const state = await inspectCodexPane({
+      paneId: "pane-1",
+      capturePane,
+      hasEscalationPrompt,
+    });
+    expect(state.hasEscalation).toBe(false);
+  });
 });
 
 describe("processPendingActions", () => {

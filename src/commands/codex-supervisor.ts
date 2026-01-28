@@ -215,6 +215,7 @@ export const runCodexSupervisor = async ({
       id,
       command: override ?? command,
       cwd,
+      addDir: paths.stateDir,
     });
     activeChild = child;
     activeLogPath = logPath;
