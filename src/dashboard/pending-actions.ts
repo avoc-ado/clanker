@@ -8,6 +8,7 @@ export interface CodexPaneState {
   isWorking: boolean;
   isPaused: boolean;
   hasEscalation: boolean;
+  content?: string;
 }
 
 export interface PendingAction {
@@ -32,7 +33,7 @@ export const inspectCodexPane = async ({
   const hasEscalation = hasEscalationPrompt({ content });
   const isWorking = lines.some((line) => line.toLowerCase().includes(WORKING_MATCH));
   const isPaused = lines.some((line) => line.toLowerCase().includes("paused"));
-  return { hasPrompt, isWorking, isPaused, hasEscalation };
+  return { hasPrompt, isWorking, isPaused, hasEscalation, content };
 };
 
 export const shouldSendAction = ({

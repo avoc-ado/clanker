@@ -55,6 +55,8 @@ export const runCodexSupervisor = async ({
   let activeLogPath = "";
   let shuttingDown = false;
   let pendingRelaunch: RelaunchMode | null = null;
+  let lastPaneSnapshot = "";
+  let lastPaneActivityAt = 0;
 
   const heartbeatTimer = setInterval(() => {
     const payload = {
@@ -139,12 +141,22 @@ export const runCodexSupervisor = async ({
       if (state.paused || isRolePaused) {
         return;
       }
+      const nowMs = Date.now();
       const paneState = paneId
         ? await inspectCodexPane({ paneId, capturePane, hasEscalationPrompt })
         : null;
       if (paneState) {
         if (paneState.isWorking || paneState.hasEscalation || !paneState.hasPrompt) {
           return;
+        }
+        if (paneState.content) {
+          if (paneState.content !== lastPaneSnapshot) {
+            lastPaneSnapshot = paneState.content;
+            lastPaneActivityAt = nowMs;
+          }
+          if (lastPaneActivityAt > 0 && nowMs - lastPaneActivityAt < 30_000) {
+            return;
+          }
         }
       }
       const type = role === "judge" ? "judge_request" : "task_request";
