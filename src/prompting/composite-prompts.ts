@@ -111,15 +111,18 @@ export const buildJudgePrompts = ({
     }
     return "Judge checkout: skipped";
   })();
+  const shouldShowCheckout = checkoutStatus !== "checked_out";
   const commitContext = commitSha
     ? [
         `Task id: ${taskLabel}`,
         `Commit to verify: ${commitSha}`,
-        `Checkout command: git checkout --detach ${commitSha}`,
+        shouldShowCheckout ? `Checkout command: git checkout --detach ${commitSha}` : null,
         `Status command: clanker task status ${task.id} done|rework|blocked|failed`,
         `Handoff command: clanker task handoff ${task.id} judge --summary "..." --tests "..." --diffs "..." --risks "..."`,
         `Note command: clanker task note ${task.id} judge "..."`,
-      ].join("\n")
+      ]
+        .filter((line): line is string => Boolean(line))
+        .join("\n")
     : [
         `Task id: ${taskLabel}`,
         "Commit to verify: (missing; request rework)",
