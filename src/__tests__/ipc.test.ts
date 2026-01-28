@@ -386,6 +386,109 @@ describe("ipc", () => {
     await rm(dirname(socketPath), { recursive: true, force: true });
   });
 
+  test("server starts with default net adapter", async () => {
+    const socketPath = await makeSocketPath();
+    const server = await startIpcServer({
+      socketPath,
+      handlers: {
+        ping: async () => ({ ok: true }),
+      },
+    });
+    await server.close();
+    await rm(dirname(socketPath), { recursive: true, force: true });
+  });
+
+  test("server forwards errors to onError", async () => {
+    const socketPath = await makeSocketPath();
+    const serverEmitter = new EventEmitter() as FakeServer;
+    serverEmitter.listen = (_path: string, cb?: () => void) => {
+      cb?.();
+    };
+    serverEmitter.close = (cb?: () => void) => {
+      cb?.();
+    };
+    const net = {
+      createServer: () => serverEmitter,
+    };
+    const onError = jest.fn();
+    const handle = await startIpcServer({
+      socketPath,
+      handlers: {},
+      onError,
+      net,
+    });
+    const error = new Error("boom");
+    serverEmitter.emit("error", error);
+    expect(onError).toHaveBeenCalledWith(error);
+    await handle.close();
+    await rm(dirname(socketPath), { recursive: true, force: true });
+  });
+
+  test("server rejects unknown request types", async () => {
+    const net = makeNetStub();
+    const socketPath = await makeSocketPath();
+    const server = await startIpcServer({
+      socketPath,
+      handlers: {},
+      net,
+    });
+    await writeFile(socketPath, "");
+    const response = await new Promise<string>((resolve) => {
+      const socket = net.createConnection(socketPath);
+      let buffer = "";
+      socket.on("data", (chunk) => {
+        buffer += chunk.toString();
+        if (buffer.includes("\n")) {
+          resolve(buffer.trim());
+          socket.end();
+        }
+      });
+      socket.on("connect", () => {
+        socket.write("\n");
+        socket.write(JSON.stringify({ v: 1, id: "req-1", type: "missing" }) + "\n");
+      });
+    });
+    const parsed = JSON.parse(response) as { ok?: boolean; error?: string };
+    expect(parsed.ok).toBe(false);
+    expect(parsed.error).toContain("unknown ipc type");
+    await server.close();
+    await rm(dirname(socketPath), { recursive: true, force: true });
+  });
+
+  test("server serializes handler errors", async () => {
+    const net = makeNetStub();
+    const socketPath = await makeSocketPath();
+    const server = await startIpcServer({
+      socketPath,
+      handlers: {
+        boom: async () => {
+          throw "boom";
+        },
+      },
+      net,
+    });
+    await writeFile(socketPath, "");
+    const response = await new Promise<string>((resolve) => {
+      const socket = net.createConnection(socketPath);
+      let buffer = "";
+      socket.on("data", (chunk) => {
+        buffer += chunk.toString();
+        if (buffer.includes("\n")) {
+          resolve(buffer.trim());
+          socket.end();
+        }
+      });
+      socket.on("connect", () => {
+        socket.write(JSON.stringify({ v: 1, id: "req-2", type: "boom" }) + "\n");
+      });
+    });
+    const parsed = JSON.parse(response) as { ok?: boolean; error?: string };
+    expect(parsed.ok).toBe(false);
+    expect(parsed.error).toBe("boom");
+    await server.close();
+    await rm(dirname(socketPath), { recursive: true, force: true });
+  });
+
   test("makeIpcResponse creates expected shape", () => {
     const response = makeIpcResponse({ id: "1", ok: true, data: { ok: true } });
     expect(response).toEqual({ v: 1, id: "1", ok: true, data: { ok: true }, error: undefined });

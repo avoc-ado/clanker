@@ -77,6 +77,36 @@ describe("attachFilteredPipe", () => {
     pipe.flush();
     expect(outputs.length).toBe(0);
   });
+
+  test("calls onLine for each output line", async () => {
+    const source = new PassThrough();
+    const lines: string[] = [];
+    const target = new Writable({
+      write(_chunk, _enc, cb) {
+        cb();
+      },
+    });
+    const logStream = new Writable({
+      write(_chunk, _enc, cb) {
+        cb();
+      },
+    });
+    attachFilteredPipe({
+      source,
+      target,
+      logStream,
+      onLine: (line) => {
+        lines.push(line);
+      },
+    });
+
+    source.write("yarn install\n");
+    source.end("hello");
+    await new Promise((resolve) => source.on("end", resolve));
+
+    expect(lines).toContain("yarn install");
+    expect(lines).toContain("hello");
+  });
 });
 
 describe("shouldSuppressYarnInstallLine", () => {

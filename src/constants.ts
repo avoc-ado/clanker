@@ -14,3 +14,5 @@ export const IPC_DOWN_CACHE_MS = 5_000;
 export const IPC_SPOOL_GRACE_MS = 2_000;
 export const IPC_SPOOL_BATCH_MAX = 200;
 export const IPC_SPOOL_MAX_BYTES = 1_000_000;
+export const USAGE_LIMIT_STATUS_POLL_MS = 30_000;
+export const USAGE_LIMIT_CLEAR_GRACE_MS = 60_000;

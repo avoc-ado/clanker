@@ -127,4 +127,23 @@ describe("ipc spool", () => {
     expect(trimmed.trim().split("\n").pop()).toContain("task_status");
     await rm(root, { recursive: true, force: true });
   });
+
+  test("append clears spool when entry exceeds max bytes", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-spool-"));
+    const paths = getClankerPaths({ repoRoot: root });
+    await ensureStateDirs({ paths });
+    const spoolPath = join(paths.stateDir, "ipc-spool.ndjson");
+    const payloadLine = "x".repeat(IPC_SPOOL_MAX_BYTES + 100);
+    await appendIpcSpoolEntry({
+      paths,
+      entry: {
+        ts: new Date().toISOString(),
+        type: "task_status",
+        payload: { blob: payloadLine },
+      },
+    });
+    const trimmed = await readFile(spoolPath, "utf-8");
+    expect(trimmed).toBe("");
+    await rm(root, { recursive: true, force: true });
+  });
 });

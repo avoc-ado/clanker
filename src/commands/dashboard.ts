@@ -77,6 +77,9 @@ export const runDashboard = async ({}: {}): Promise<void> => {
     lastStatusLine: "",
     idleStartedAt: Date.now(),
     lastApprovalId: null,
+    usageLimitStatusSentAt: 0,
+    usageLimitLastSeenAt: 0,
+    usageLimitProbePaneId: null,
   };
   const promptSettings = getPromptSettings({ repoRoot, config });
   const knownTaskIds = new Set<string>();

@@ -49,34 +49,11 @@
 - Real IT: planner auto-dispatch waits for Codex prompt readiness; `yarn test:it:real` passes
 - IPC: add `task_request` + `judge_request` handlers; shared composite prompt builders
 - Tests: add IT coverage for worktree pods updating root state via IPC; ensure no immediate prompts on `/resume`.
-
-## Stack Rank
-
-1. Usage limit handling: detect Codex "You've hit your usage limit" message in production, pause + poll `/status` until reset, then resume (IT real should still fail fast).
+- Usage limit handling: detect Codex usage limit line, auto-pause + poll `/status`, resume on clear (fail fast in IT real).
 
 ## Now
 
-- When launching clanker for the first time, after onboarding, .clanker/worktree dirs are created for the 5 default roles (3 slaves, etc). Then clanker fails with the message
-
-```
-command failed: Command failed: tmux set-hook -t clanker-airline-protocol client-detached if -F \"#{==:#{session_name},clanker-airline-protocol}\" { run-shell \"tmux list-clients -t clanker-airline-protocol: 2>/dev/null | wc -l | grep -q '^0$' && tmux kill-session -t clanker-airline-protocol:\" }
-syntax error
-
-Error: Command failed: tmux set-hook -t clanker-airline-protocol client-detached if -F \"#{==:#{session_name},clanker-airline-protocol}\" { run-shell \"tmux list-clients -t clanker-airline-protocol: 2>/dev/null | wc -l | grep -q '^0$' && tmux kill-session -t clanker-airline-protocol:\" }
-syntax error
-
-    at genericNodeError (node:internal/errors:998:15)
-    at wrappedFn (node:internal/errors:543:14)
-    at ChildProcess.exithandler (node:child_process:417:12)
-    at ChildProcess.emit (node:events:508:28)
-    at maybeClose (node:internal/child_process:1085:16)
-    at Socket.<anonymous> (node:internal/child_process:456:11)
-    at Socket.emit (node:events:508:28)
-    at Pipe.<anonymous> (node:net:346:12)
-```
-
-- Switch to yargs for args parsing everywhere (CLI + dashboard commands).
-- Usage limit handling: detect Codex "You've hit your usage limit" message in production, pause + poll `/status` until reset, then resume (IT real should still fail fast).
+- Allow `/relaunch` to target a specific role/pod (e.g. `/relaunch slave-2`).
 
 ## Blind-Spot Audit (List)
 
@@ -96,4 +73,3 @@ syntax error
 
 - Escalation auto-focus + restore behavior in IT
 - Resume-after-sleep / offline recovery (paused state consistency)
-- Usage-limit recovery in production (pause + resume after reset)

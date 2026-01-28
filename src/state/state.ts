@@ -24,6 +24,7 @@ export interface ClankerState {
   };
   lockConflicts: LockConflictOverrides;
   promptApprovals: PromptApprovalState;
+  usageLimit: UsageLimitState;
   tasks: TaskState[];
 }
 
@@ -57,6 +58,15 @@ export interface LockConflictOverrides {
   blockPlanner?: boolean;
 }
 
+export interface UsageLimitState {
+  active: boolean;
+  detectedAt?: string;
+  message?: string;
+  podId?: string;
+  role?: "planner" | "judge" | "slave";
+  autoPaused?: boolean;
+}
+
 export const DEFAULT_STATE: ClankerState = {
   paused: true,
   pausedRoles: {
@@ -74,6 +84,7 @@ export const DEFAULT_STATE: ClankerState = {
     queue: [],
     approved: null,
   },
+  usageLimit: { active: false },
   tasks: [],
 };
 
@@ -116,6 +127,10 @@ export const loadState = async ({ statePath }: { statePath: string }): Promise<C
           Object.prototype.hasOwnProperty.call(parsed.promptApprovals, "approved")
             ? (parsed.promptApprovals.approved ?? null)
             : DEFAULT_STATE.promptApprovals.approved,
+      },
+      usageLimit: {
+        ...DEFAULT_STATE.usageLimit,
+        ...(parsed.usageLimit ?? {}),
       },
       tasks: parsed.tasks ?? DEFAULT_STATE.tasks,
     } satisfies ClankerState;

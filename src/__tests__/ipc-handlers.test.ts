@@ -5,6 +5,7 @@ import { jest } from "@jest/globals";
 import { JUDGE_PROMPT_STALE_MS, SLAVE_PROMPT_STALE_MS } from "../constants.js";
 import { getClankerPaths } from "../paths.js";
 import { ensureStateDirs } from "../state/ensure-state.js";
+import { loadState, saveState } from "../state/state.js";
 import { loadTask, saveTask } from "../state/tasks.js";
 
 const runGitMock = jest.fn<Promise<string>, [{ args: string[]; cwd: string }]>();
@@ -118,6 +119,30 @@ describe("ipc handlers", () => {
     });
     const missingNote = await readFile(join(paths.historyDir, "task-missing-slave.md"), "utf-8");
     expect(missingNote).toContain("note");
+  });
+
+  test("usage_limit pauses work and records state", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-ipc-"));
+    const paths = getClankerPaths({ repoRoot: root });
+    await ensureStateDirs({ paths });
+    const handlers = buildIpcHandlers({ paths });
+    const current = await loadState({ statePath: paths.statePath });
+    current.paused = false;
+    await saveState({ statePath: paths.statePath, state: current });
+
+    await handlers.usage_limit({
+      payload: {
+        podId: "slave-2",
+        role: "slave",
+        message: "You've hit your usage limit.",
+      },
+      context: {},
+    });
+
+    const updated = await loadState({ statePath: paths.statePath });
+    expect(updated.usageLimit.active).toBe(true);
+    expect(updated.usageLimit.autoPaused).toBe(true);
+    expect(updated.paused).toBe(true);
   });
 
   test("task_request assigns work and judge_request returns needs_judge prompts", async () => {

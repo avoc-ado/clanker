@@ -11,6 +11,7 @@ import { getRelaunchPrompt } from "./relaunch-prompt.js";
 import { RELAUNCH_SIGNALS, type RelaunchMode } from "../constants.js";
 import { sendIpcRequest } from "../ipc/client.js";
 import { getRuntimeOverrides } from "../runtime/overrides.js";
+import { isUsageLimitLine } from "../codex/usage-limit.js";
 
 const IPC_POLL_MS = 2_000;
 const ESCALATION_PROMPT_MATCHES = [
@@ -57,6 +58,45 @@ export const runCodexSupervisor = async ({
   let pendingRelaunch: RelaunchMode | null = null;
   let lastPaneSnapshot = "";
   let lastPaneActivityAt = 0;
+  let usageLimitNotified = false;
+
+  const isRealItMode = (process.env.CLANKER_IT_MODE ?? "").trim().toLowerCase() === "real";
+
+  const notifyUsageLimit = async ({ line }: { line: string }): Promise<void> => {
+    if (usageLimitNotified) {
+      return;
+    }
+    usageLimitNotified = true;
+    if (isRealItMode) {
+      console.error(`usage limit detected: ${line}`);
+      process.exit(1);
+      return;
+    }
+    const socketPath = process.env.CLANKER_IPC_SOCKET?.trim();
+    if (socketPath) {
+      await sendIpcRequest({
+        socketPath,
+        type: "usage_limit",
+        payload: {
+          podId: id,
+          role,
+          message: line,
+          ts: new Date().toISOString(),
+        },
+      }).catch(() => {});
+      return;
+    }
+    await appendEvent({
+      eventsLog: paths.eventsLog,
+      event: {
+        ts: new Date().toISOString(),
+        type: "USAGE_LIMIT",
+        msg: "usage limit detected (no ipc socket)",
+        slaveId: id,
+        data: { role },
+      },
+    });
+  };
 
   const heartbeatTimer = setInterval(() => {
     const payload = {
@@ -216,6 +256,11 @@ export const runCodexSupervisor = async ({
       command: override ?? command,
       cwd,
       addDir: paths.stateDir,
+      onOutputLine: (line) => {
+        if (isUsageLimitLine({ line })) {
+          void notifyUsageLimit({ line });
+        }
+      },
     });
     activeChild = child;
     activeLogPath = logPath;

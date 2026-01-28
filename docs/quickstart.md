@@ -67,6 +67,7 @@ read_when: first-use, onboarding
 - `/resume planner|judge|slave`: resumes only that role
 - Pause action waits for Codex to be in working mode; escalation prompts delay the pause.
 - Role resumes do not clear a global `/pause`; use `/resume` to clear global pause.
+- Codex usage-limit messages auto-pause the fleet; dashboard polls `/status` and resumes when cleared.
 
 ### Shutdown
 

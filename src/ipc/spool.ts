@@ -25,14 +25,11 @@ const enforceSpoolLimit = async ({
     return;
   }
   const raw = await readFile(spoolPath, "utf-8").catch(() => "");
-  if (!raw.trim()) {
-    return;
-  }
   const lines = raw.split("\n").filter((line) => line.trim().length > 0);
   let size = 0;
   const kept: string[] = [];
   for (let i = lines.length - 1; i >= 0; i -= 1) {
-    const line = lines[i] ?? "";
+    const line = lines[i];
     size += Buffer.byteLength(line) + 1;
     if (size > maxBytes) {
       break;

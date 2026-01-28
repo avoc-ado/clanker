@@ -15,6 +15,7 @@ read_when: ops, debugging
   - References `taskId`, `slaveId`, and optional `data`.
 - `state.json`
   - Snapshot of pause state + task statuses.
+  - `usageLimit` records the last detected usage-limit pause.
   - No timestamps; use `events.log` for chronology.
 - `tasks/*.json`
   - Task packets. No created/updated fields.

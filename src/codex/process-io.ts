@@ -15,18 +15,26 @@ export const attachFilteredPipe = ({
   source,
   target,
   logStream,
+  onLine,
 }: {
   source: NodeJS.ReadableStream | null | undefined;
   target: NodeJS.WritableStream;
   logStream: NodeJS.WritableStream;
+  onLine?: (line: string) => void;
 }): { flush: () => void } => {
   let buffer = "";
+  const handleLine = (line: string) => {
+    if (onLine) {
+      onLine(line);
+    }
+  };
   const flush = () => {
     if (buffer.length === 0) {
       return;
     }
     const pending = buffer;
     buffer = "";
+    handleLine(pending);
     if (!shouldSuppressYarnInstallLine({ line: pending })) {
       target.write(pending);
     }
@@ -42,6 +50,7 @@ export const attachFilteredPipe = ({
       const hasCarriageReturn = line.endsWith("\r");
       const outputLine = hasCarriageReturn ? line.slice(0, -1) : line;
       const newline = hasCarriageReturn ? "\r\n" : "\n";
+      handleLine(outputLine);
       if (!shouldSuppressYarnInstallLine({ line: outputLine })) {
         target.write(outputLine + newline);
       }

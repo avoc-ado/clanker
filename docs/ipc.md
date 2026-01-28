@@ -140,6 +140,24 @@ Response:
 - When no `needs_judge` tasks exist: `{ "ok": true, "data": { "taskId": null } }`
 - Judge prompts are throttled by `judgePromptedAt`; stale or invalid timestamps re-issue prompts.
 
+### usage_limit (pod -> dashboard)
+
+Report a Codex usage-limit message to pause and recover the fleet.
+
+```json
+{
+  "type": "usage_limit",
+  "payload": {
+    "podId": "slave-1",
+    "role": "slave",
+    "message": "You've hit your usage limit.",
+    "ts": "..."
+  }
+}
+```
+
+- Dashboard pauses all panes, polls `/status`, and resumes when the limit clears.
+
 ## Fallback Behavior
 
 - If `CLANKER_IPC_SOCKET` is unset or connect fails:

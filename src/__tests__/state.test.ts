@@ -18,6 +18,7 @@ describe("state", () => {
       slave: false,
     });
     expect(initial.promptApprovals.queue).toEqual([]);
+    expect(initial.usageLimit).toEqual({ active: false });
 
     const updated = { ...initial, paused: false };
     await saveState({ statePath: path, state: updated });
@@ -40,6 +41,7 @@ describe("state", () => {
       judge: false,
       slave: false,
     });
+    expect(state.usageLimit).toEqual({ active: false });
   });
 
   test("loads tasks from state", async () => {
@@ -59,6 +61,7 @@ describe("state", () => {
     expect(state.pausedRoles).toEqual({ planner: false, judge: false, slave: false });
     expect(state.lockConflicts).toEqual({});
     expect(state.promptApprovals.queue).toEqual([]);
+    expect(state.usageLimit).toEqual({ active: false });
   });
 
   test("defaults tasks when missing in state file", async () => {
@@ -74,5 +77,6 @@ describe("state", () => {
     expect(state.pausedRoles).toEqual({ planner: false, judge: false, slave: false });
     expect(state.lockConflicts).toEqual({});
     expect(state.promptApprovals.queue).toEqual([]);
+    expect(state.usageLimit).toEqual({ active: false });
   });
 });

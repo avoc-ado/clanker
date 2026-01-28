@@ -8,19 +8,41 @@ const attachRawPipe = ({
   source,
   target,
   logStream,
+  onLine,
 }: {
   source: NodeJS.ReadableStream | null | undefined;
   target: NodeJS.WriteStream;
   logStream: NodeJS.WritableStream;
+  onLine?: (line: string) => void;
 }): { flush: () => void } => {
   if (!source) {
     return { flush: () => {} };
   }
+  let buffer = "";
+  const handleLine = (line: string) => {
+    if (onLine) {
+      onLine(line);
+    }
+  };
   source.on("data", (chunk) => {
+    const text = buffer + chunk.toString("utf-8");
+    const lines = text.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const outputLine = line.endsWith("\r") ? line.slice(0, -1) : line;
+      handleLine(outputLine);
+    }
     target.write(chunk);
     logStream.write(chunk);
   });
-  return { flush: () => {} };
+  return {
+    flush: () => {
+      if (buffer.length > 0) {
+        handleLine(buffer);
+        buffer = "";
+      }
+    },
+  };
 };
 
 const splitCommand = ({ command }: { command: string }): string[] => {
@@ -132,6 +154,7 @@ export const spawnCodex = async ({
   command,
   cwd,
   addDir,
+  onOutputLine,
 }: {
   logsDir: string;
   role: string;
@@ -139,6 +162,7 @@ export const spawnCodex = async ({
   command?: string;
   cwd?: string;
   addDir?: string;
+  onOutputLine?: (line: string) => void;
 }): Promise<{ child: ReturnType<typeof spawn>; logPath: string }> => {
   const logPath = makeLogPath({ logsDir, role, id });
   const logStream = createWriteStream(logPath, { flags: "a" });
@@ -167,11 +191,13 @@ export const spawnCodex = async ({
     source: child.stdout,
     target: process.stdout,
     logStream,
+    onLine: onOutputLine,
   });
   const stderrPipe = attachPipe({
     source: child.stderr,
     target: process.stderr,
     logStream,
+    onLine: onOutputLine,
   });
   child.on("exit", () => {
     stdoutPipe.flush();

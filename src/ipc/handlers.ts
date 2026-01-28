@@ -8,6 +8,7 @@ import { appendEvent } from "../state/events.js";
 import { writeHeartbeat } from "../state/heartbeat.js";
 import { isHeartbeatStale } from "../state/heartbeat.js";
 import { readHeartbeats } from "../state/read-heartbeats.js";
+import { loadState, saveState } from "../state/state.js";
 import { acquireTaskLock } from "../state/task-claim.js";
 import { listTasks, loadTask, saveTask, type TaskRecord, type TaskStatus } from "../state/tasks.js";
 import type { TaskUsageInput } from "../state/task-usage.js";
@@ -64,6 +65,13 @@ interface HeartbeatPayload {
   ts?: string;
 }
 
+interface UsageLimitPayload {
+  podId: string;
+  role?: "planner" | "judge" | "slave";
+  message?: string;
+  ts?: string;
+}
+
 const requireString = ({ value, label }: { value: unknown; label: string }): string => {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error(`Missing ${label}`);
@@ -83,6 +91,13 @@ const requireRole = ({ value }: { value: unknown }): "slave" | "judge" => {
     throw new Error("Role must be slave or judge");
   }
   return value;
+};
+
+const parsePodRole = ({ value }: { value: unknown }): "planner" | "judge" | "slave" => {
+  if (value === "planner" || value === "judge" || value === "slave") {
+    return value;
+  }
+  return "slave";
 };
 
 const loadPromptSettingsForRepo = async ({ repoRoot }: { repoRoot: string }) => {
@@ -140,6 +155,52 @@ export const buildIpcHandlers = ({ paths }: { paths: ClankerPaths }): IpcHandler
         role,
         ts: data?.ts,
       });
+      return { ok: true };
+    },
+    usage_limit: async ({ payload }) => {
+      const data = payload as UsageLimitPayload;
+      const podId = requireString({ value: data?.podId, label: "podId" });
+      const role = parsePodRole({ value: data?.role });
+      const message = typeof data?.message === "string" ? data.message : "usage limit detected";
+      const now = data?.ts && data.ts.trim().length > 0 ? data.ts : new Date().toISOString();
+      const state = await loadState({ statePath: paths.statePath });
+      if (state.usageLimit.active) {
+        return { ok: true };
+      }
+      const autoPaused = !state.paused;
+      const nextState = {
+        ...state,
+        paused: autoPaused ? true : state.paused,
+        usageLimit: {
+          active: true,
+          detectedAt: now,
+          message,
+          podId,
+          role,
+          autoPaused,
+        },
+      };
+      await saveState({ statePath: paths.statePath, state: nextState });
+      await appendEvent({
+        eventsLog: paths.eventsLog,
+        event: {
+          ts: now,
+          type: "USAGE_LIMIT",
+          msg: message,
+          slaveId: podId,
+          data: { role },
+        },
+      });
+      if (autoPaused) {
+        await appendEvent({
+          eventsLog: paths.eventsLog,
+          event: {
+            ts: new Date().toISOString(),
+            type: "PAUSED",
+            msg: "paused all work (usage limit)",
+          },
+        });
+      }
       return { ok: true };
     },
     task_create: async ({ payload }) => {

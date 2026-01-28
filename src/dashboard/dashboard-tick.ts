@@ -16,7 +16,13 @@ import { buildLockState, countLockConflicts, hasLockConflict } from "../state/lo
 import { loadState, saveState } from "../state/state.js";
 import type { PromptApprovalRequest, PromptApprovalState } from "../state/state.js";
 import { dispatchPlannerPrompt, preparePlannerPrompt } from "../commands/plan.js";
-import { HEARTBEAT_STALE_MS, JUDGE_PROMPT_STALE_MS, SLAVE_PROMPT_STALE_MS } from "../constants.js";
+import {
+  HEARTBEAT_STALE_MS,
+  JUDGE_PROMPT_STALE_MS,
+  SLAVE_PROMPT_STALE_MS,
+  USAGE_LIMIT_CLEAR_GRACE_MS,
+  USAGE_LIMIT_STATUS_POLL_MS,
+} from "../constants.js";
 import { ClankerRole } from "../prompting/role-prompts.js";
 import { buildJudgePrompts, buildSlavePrompts } from "../prompting/composite-prompts.js";
 import { ensureJudgeCheckoutForTask } from "../state/task-commits.js";
@@ -36,6 +42,7 @@ import {
   parseJudgeTitle,
   parsePlannerTitle,
 } from "../tmux-title-utils.js";
+import { hasUsageLimitContent } from "../codex/usage-limit.js";
 
 export interface PlannerDispatchState {
   pending: boolean;
@@ -54,6 +61,9 @@ export interface DashboardTickState {
   lastStatusLine: string;
   idleStartedAt: number;
   lastApprovalId: string | null;
+  usageLimitStatusSentAt: number;
+  usageLimitLastSeenAt: number;
+  usageLimitProbePaneId: string | null;
 }
 
 interface DashboardTickDeps {
@@ -255,6 +265,18 @@ export const makeDashboardTick = ({
       ...new Map(slavePanes.map((entry) => [entry.slaveId, entry])).values(),
     ];
     const plannerPaneId = plannerPanes[0]?.paneId ?? null;
+    const nowMs = Date.now();
+
+    if (!liveState.usageLimit.active) {
+      state.usageLimitStatusSentAt = 0;
+      state.usageLimitLastSeenAt = 0;
+      state.usageLimitProbePaneId = null;
+    } else if (state.usageLimitLastSeenAt === 0 && liveState.usageLimit.detectedAt) {
+      const parsed = new Date(liveState.usageLimit.detectedAt).getTime();
+      if (Number.isFinite(parsed)) {
+        state.usageLimitLastSeenAt = parsed;
+      }
+    }
     const slavePaneCount = uniqueSlavePanes.length;
     const needsJudgeTasks = tasks
       .filter((task) => task.status === "needs_judge")
@@ -295,6 +317,127 @@ export const makeDashboardTick = ({
     const slavePaneMap = new Map<string, string>(
       cappedSlavePanes.map((entry) => [entry.slaveId, entry.pane.paneId]),
     );
+    if (liveState.usageLimit.active) {
+      const ensurePaused = async (): Promise<void> => {
+        if (liveState.usageLimit.autoPaused && !liveState.paused) {
+          liveState.paused = true;
+          await saveState({ statePath: paths.statePath, state: liveState });
+        }
+      };
+      const queueActionForRole = ({
+        actionRole,
+        targets,
+        kind,
+      }: {
+        actionRole: ClankerRole;
+        targets: typeof panes;
+        kind: "pause" | "resume";
+      }): void => {
+        for (const pane of targets) {
+          pendingActions.set(pane.paneId, {
+            kind,
+            role: actionRole,
+            requestedAt: nowMs,
+          });
+        }
+      };
+      const queuePauseAll = (): void => {
+        queueActionForRole({
+          actionRole: ClankerRole.Planner,
+          targets: plannerPanes,
+          kind: "pause",
+        });
+        queueActionForRole({ actionRole: ClankerRole.Judge, targets: judgePanes, kind: "pause" });
+        queueActionForRole({
+          actionRole: ClankerRole.Slave,
+          targets: uniqueSlavePanes.map((entry) => entry.pane),
+          kind: "pause",
+        });
+      };
+      await ensurePaused();
+      if (liveState.paused) {
+        queuePauseAll();
+      }
+
+      const probeCandidates = [
+        state.usageLimitProbePaneId,
+        judgePanes[0]?.paneId,
+        uniqueSlavePanes[0]?.pane.paneId,
+        plannerPaneId,
+      ].filter((paneId): paneId is string => Boolean(paneId));
+      const seenInPanes = async (): Promise<boolean> => {
+        for (const paneId of probeCandidates) {
+          const paneState = await inspectPane({ paneId });
+          if (paneState.content && hasUsageLimitContent({ content: paneState.content })) {
+            state.usageLimitLastSeenAt = nowMs;
+            state.usageLimitProbePaneId = paneId;
+            return true;
+          }
+        }
+        return false;
+      };
+      const hasUsageLimit = await seenInPanes();
+      const shouldPollStatus = nowMs - state.usageLimitStatusSentAt >= USAGE_LIMIT_STATUS_POLL_MS;
+      if (shouldPollStatus) {
+        for (const paneId of probeCandidates) {
+          const paneState = await inspectPane({ paneId });
+          if (paneState.hasEscalation || paneState.isWorking || !paneState.hasPrompt) {
+            continue;
+          }
+          await sendKeys({ paneId, text: "/status" });
+          state.usageLimitStatusSentAt = nowMs;
+          state.usageLimitProbePaneId = paneId;
+          break;
+        }
+      }
+      const lastSeenAt = state.usageLimitLastSeenAt;
+      const shouldClear =
+        state.usageLimitStatusSentAt > 0 &&
+        !hasUsageLimit &&
+        lastSeenAt > 0 &&
+        nowMs - lastSeenAt >= USAGE_LIMIT_CLEAR_GRACE_MS;
+      if (shouldClear) {
+        const autoPaused = Boolean(liveState.usageLimit.autoPaused);
+        liveState.usageLimit = { active: false };
+        if (autoPaused && liveState.paused) {
+          liveState.paused = false;
+        }
+        await saveState({ statePath: paths.statePath, state: liveState });
+        await appendEvent({
+          eventsLog: paths.eventsLog,
+          event: {
+            ts: new Date().toISOString(),
+            type: "USAGE_LIMIT_RESET",
+            msg: "usage limit cleared",
+          },
+        });
+        if (autoPaused) {
+          await appendEvent({
+            eventsLog: paths.eventsLog,
+            event: {
+              ts: new Date().toISOString(),
+              type: "RESUMED",
+              msg: "resumed after usage limit reset",
+            },
+          });
+          queueActionForRole({
+            actionRole: ClankerRole.Planner,
+            targets: plannerPanes,
+            kind: "resume",
+          });
+          queueActionForRole({
+            actionRole: ClankerRole.Judge,
+            targets: judgePanes,
+            kind: "resume",
+          });
+          queueActionForRole({
+            actionRole: ClankerRole.Slave,
+            targets: uniqueSlavePanes.map((entry) => entry.pane),
+            kind: "resume",
+          });
+        }
+      }
+    }
     const brokerMode = Boolean(process.env.CLANKER_IPC_SOCKET?.trim());
     const promptPaths = { tasksDir: paths.tasksDir, historyDir: paths.historyDir };
     const isJudgePromptStale = ({
@@ -511,8 +654,6 @@ export const makeDashboardTick = ({
     }
 
     const judgeRolePaused = liveState.paused || liveState.pausedRoles.judge;
-
-    const nowMs = Date.now();
 
     if (state.pendingEscalationPaneId) {
       const escalation = await inspectPane({ paneId: state.pendingEscalationPaneId });
