@@ -1,4 +1,4 @@
-import { createServer, type Server } from "node:net";
+import { createServer } from "node:net";
 import { mkdir, rm } from "node:fs/promises";
 import { dirname } from "node:path";
 import { makeIpcResponse, type IpcRequest, type IpcResponse } from "./protocol.js";
@@ -21,11 +21,28 @@ export interface IpcServerHandle {
   close: () => Promise<void>;
 }
 
+interface IpcServerSocket {
+  on: (event: "data", listener: (chunk: Buffer) => void) => void;
+  write: (data: string) => void;
+}
+
+interface IpcNetServer {
+  listen: (path: string, cb?: () => void) => void;
+  on: (event: "error", listener: (error: Error) => void) => void;
+  close: (cb?: () => void) => void;
+}
+
+interface IpcNetAdapter {
+  createServer: (onConnection: (socket: IpcServerSocket) => void) => IpcNetServer;
+}
+
+const defaultNet: IpcNetAdapter = { createServer };
+
 const sendResponse = ({
   socket,
   response,
 }: {
-  socket: import("node:net").Socket;
+  socket: IpcServerSocket;
   response: IpcResponse;
 }): void => {
   socket.write(`${JSON.stringify(response)}\n`);
@@ -43,15 +60,17 @@ export const startIpcServer = async ({
   socketPath,
   handlers,
   onError,
+  net = defaultNet,
 }: {
   socketPath: string;
   handlers: IpcHandlers;
   onError?: (error: Error) => void;
+  net?: IpcNetAdapter;
 }): Promise<IpcServerHandle> => {
   await mkdir(dirname(socketPath), { recursive: true });
   await rm(socketPath, { force: true });
 
-  const server: Server = createServer((socket) => {
+  const server = net.createServer((socket) => {
     let buffer = "";
     socket.on("data", (chunk) => {
       buffer += chunk.toString();

@@ -5,17 +5,20 @@ import { getPromptSettings, selectAssignedTask } from "../prompting.js";
 import { buildJudgePrompts, buildSlavePrompts } from "../prompting/composite-prompts.js";
 import { assignQueuedTasks } from "../state/assign.js";
 import { appendEvent } from "../state/events.js";
-import { writeHistory, type HistoryRole } from "../state/history.js";
 import { writeHeartbeat } from "../state/heartbeat.js";
 import { isHeartbeatStale } from "../state/heartbeat.js";
 import { readHeartbeats } from "../state/read-heartbeats.js";
 import { acquireTaskLock } from "../state/task-claim.js";
-import { transitionTaskStatus } from "../state/task-status.js";
 import { listTasks, loadTask, saveTask, type TaskRecord, type TaskStatus } from "../state/tasks.js";
-import { buildHandoffContent, buildNoteContent } from "../state/task-content.js";
-import { applyTaskUsage, type TaskUsageInput } from "../state/task-usage.js";
+import type { TaskUsageInput } from "../state/task-usage.js";
 import { ensureJudgeCheckoutForTask, ensureSlaveCommitForTask } from "../state/task-commits.js";
 import type { IpcHandlers } from "./server.js";
+import {
+  writeTaskCreate,
+  writeTaskHandoff,
+  writeTaskNote,
+  writeTaskStatus,
+} from "./task-gateway.js";
 
 interface TaskCreatePayload {
   task: TaskRecord;
@@ -36,7 +39,7 @@ interface JudgeRequestPayload {
 
 interface TaskHandoffPayload {
   taskId: string;
-  role: HistoryRole;
+  role: "slave" | "judge";
   summary?: string;
   tests?: string;
   diffs?: string;
@@ -46,7 +49,7 @@ interface TaskHandoffPayload {
 
 interface TaskNotePayload {
   taskId: string;
-  role: HistoryRole;
+  role: "slave" | "judge";
   content: string;
   usage?: TaskUsageInput;
 }
@@ -72,7 +75,7 @@ const requireTask = ({ value }: { value: unknown }): TaskRecord => {
   return value as TaskRecord;
 };
 
-const requireRole = ({ value }: { value: unknown }): HistoryRole => {
+const requireRole = ({ value }: { value: unknown }): "slave" | "judge" => {
   if (value !== "slave" && value !== "judge") {
     throw new Error("Role must be slave or judge");
   }
@@ -139,19 +142,7 @@ export const buildIpcHandlers = ({ paths }: { paths: ClankerPaths }): IpcHandler
     task_create: async ({ payload }) => {
       const data = payload as TaskCreatePayload;
       const task = requireTask({ value: data?.task });
-      if (!task.status) {
-        task.status = "queued";
-      }
-      await saveTask({ tasksDir: paths.tasksDir, task });
-      await appendEvent({
-        eventsLog: paths.eventsLog,
-        event: {
-          ts: new Date().toISOString(),
-          type: "TASK_CREATED",
-          msg: "task created",
-          taskId: task.id,
-        },
-      });
+      await writeTaskCreate({ paths, task, message: "task created" });
       return { taskId: task.id };
     },
     task_status: async ({ payload }) => {
@@ -179,11 +170,7 @@ export const buildIpcHandlers = ({ paths }: { paths: ClankerPaths }): IpcHandler
           );
         }
       }
-      const latestTask = await loadTask({ tasksDir: paths.tasksDir, id: taskId });
-      if (!latestTask) {
-        throw new Error(`Task not found: ${taskId}`);
-      }
-      await transitionTaskStatus({ task: latestTask, status, paths });
+      await writeTaskStatus({ paths, taskId, status });
       return { taskId, status };
     },
     task_request: async ({ payload }) => {
@@ -339,65 +326,34 @@ export const buildIpcHandlers = ({ paths }: { paths: ClankerPaths }): IpcHandler
           : role === "slave" && task?.slaveCommitSha
             ? `commit: ${task.slaveCommitSha}`
             : diffs;
-      const content = buildHandoffContent({
-        role,
-        summary: data?.summary ?? "",
-        tests: data?.tests ?? "",
-        diffs: autoDiffs,
-        risks: data?.risks ?? "",
+      await writeTaskHandoff({
+        paths,
+        payload: {
+          taskId,
+          role,
+          summary: data?.summary ?? "",
+          tests: data?.tests ?? "",
+          diffs: autoDiffs,
+          risks: data?.risks ?? "",
+          usage: data?.usage,
+        },
       });
-      await writeHistory({ historyDir: paths.historyDir, taskId, role, content });
-      if (task && data?.usage) {
-        const next = applyTaskUsage({ task, usage: data.usage });
-        if (next) {
-          await saveTask({ tasksDir: paths.tasksDir, task });
-          await appendEvent({
-            eventsLog: paths.eventsLog,
-            event: {
-              ts: new Date().toISOString(),
-              type: "TASK_USAGE",
-              msg: "task usage updated",
-              taskId,
-              slaveId: task.assignedSlaveId,
-              data: {
-                tok: task.usage?.tokens,
-                cost: task.usage?.cost,
-                judgeCost: task.usage?.judgeCost,
-              },
-            },
-          });
-        }
-      }
       return { taskId, role };
     },
     task_note: async ({ payload }) => {
       const data = payload as TaskNotePayload;
       const taskId = requireString({ value: data?.taskId, label: "taskId" });
       const role = requireRole({ value: data?.role });
-      const content = buildNoteContent({ content: data?.content ?? "" });
-      await writeHistory({ historyDir: paths.historyDir, taskId, role, content });
-      const task = await loadTask({ tasksDir: paths.tasksDir, id: taskId });
-      if (task && data?.usage) {
-        const next = applyTaskUsage({ task, usage: data.usage });
-        if (next) {
-          await saveTask({ tasksDir: paths.tasksDir, task });
-          await appendEvent({
-            eventsLog: paths.eventsLog,
-            event: {
-              ts: new Date().toISOString(),
-              type: "TASK_USAGE",
-              msg: "task usage updated",
-              taskId,
-              slaveId: task.assignedSlaveId,
-              data: {
-                tok: task.usage?.tokens,
-                cost: task.usage?.cost,
-                judgeCost: task.usage?.judgeCost,
-              },
-            },
-          });
-        }
-      }
+      const content = requireString({ value: data?.content, label: "content" });
+      await writeTaskNote({
+        paths,
+        payload: {
+          taskId,
+          role,
+          content,
+          usage: data?.usage,
+        },
+      });
       return { taskId, role };
     },
   };

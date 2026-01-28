@@ -1,13 +1,9 @@
 import { loadConfig } from "../config.js";
 import { getClankerPaths } from "../paths.js";
 import { ensureStateDirs } from "../state/ensure-state.js";
-import { appendEvent } from "../state/events.js";
 import type { TaskStatus } from "../state/tasks.js";
-import { saveTask, loadTask } from "../state/tasks.js";
-import { transitionTaskStatus } from "../state/task-status.js";
-import { writeHistory } from "../state/history.js";
-import { buildHandoffContent, buildNoteContent } from "../state/task-content.js";
-import { applyTaskUsage, type TaskUsageInput } from "../state/task-usage.js";
+import { loadTask } from "../state/tasks.js";
+import type { TaskUsageInput } from "../state/task-usage.js";
 import { ensureSlaveCommitForTask } from "../state/task-commits.js";
 import { TASK_SCHEMA } from "../plan/schema.js";
 import { mkdir, readdir, rename, stat } from "node:fs/promises";
@@ -15,7 +11,12 @@ import { join } from "node:path";
 import yargs from "yargs";
 import type { Argv, ArgumentsCamelCase } from "yargs";
 import { getRepoRoot } from "../repo-root.js";
-import { sendIpcRequest } from "../ipc/client.js";
+import {
+  dispatchTaskCreate,
+  dispatchTaskHandoff,
+  dispatchTaskNote,
+  dispatchTaskStatus,
+} from "../ipc/task-gateway.js";
 
 const requireValue = ({ value, label }: { value: string | undefined; label: string }): string => {
   if (!value || value.length === 0) {
@@ -55,22 +56,6 @@ const getUsageFromArgs = ({
   };
 };
 
-const tryIpc = async ({ type, payload }: { type: string; payload: unknown }): Promise<boolean> => {
-  const socketPath = process.env.CLANKER_IPC_SOCKET?.trim();
-  if (!socketPath) {
-    return false;
-  }
-  try {
-    const response = await sendIpcRequest({ socketPath, type, payload });
-    if (!response.ok) {
-      return false;
-    }
-    return true;
-  } catch {
-    return false;
-  }
-};
-
 export const runTask = async ({ args }: { args: string[] }): Promise<void> => {
   const repoRoot = getRepoRoot();
   const paths = getClankerPaths({ repoRoot });
@@ -107,31 +92,16 @@ export const runTask = async ({ args }: { args: string[] }): Promise<void> => {
             return {
               ...parsed,
               id: typeof parsed.id === "string" && parsed.id.length > 0 ? parsed.id : id,
-              status: typeof parsed.status === "string" ? parsed.status : "queued",
+              status: typeof parsed.status === "string" ? (parsed.status as TaskStatus) : "queued",
               prompt: typeof parsed.prompt === "string" ? parsed.prompt : prompt,
             };
           }
           if (!prompt) {
             throw new Error("Missing prompt text");
           }
-          return { id, status: "queued", prompt };
+          return { id, status: "queued" as TaskStatus, prompt };
         })();
-        const handled = await tryIpc({ type: "task_create", payload: { task } });
-        if (!handled) {
-          await saveTask({
-            tasksDir: paths.tasksDir,
-            task: task as Parameters<typeof saveTask>[0]["task"],
-          });
-          await appendEvent({
-            eventsLog: paths.eventsLog,
-            event: {
-              ts: new Date().toISOString(),
-              type: "TASK_CREATED",
-              msg: "task created",
-              taskId: id,
-            },
-          });
-        }
+        await dispatchTaskCreate({ paths, task, message: "task created" });
         console.log(`task ${id} queued`);
       },
     )
@@ -167,17 +137,7 @@ export const runTask = async ({ args }: { args: string[] }): Promise<void> => {
             );
           }
         }
-        const handled = await tryIpc({
-          type: "task_status",
-          payload: { taskId: id, status },
-        });
-        if (!handled) {
-          const task = await loadTask({ tasksDir: paths.tasksDir, id });
-          if (!task) {
-            throw new Error(`Task not found: ${id}`);
-          }
-          await transitionTaskStatus({ task, status, paths });
-        }
+        await dispatchTaskStatus({ paths, taskId: id, status });
         console.log(`task ${id} -> ${nextStatus}`);
       },
     )
@@ -212,37 +172,7 @@ export const runTask = async ({ args }: { args: string[] }): Promise<void> => {
           throw new Error("Missing note content");
         }
         const usage = getUsageFromArgs({ argv });
-        const handled = await tryIpc({
-          type: "task_note",
-          payload: { taskId: id, role, content, usage },
-        });
-        if (!handled) {
-          await writeHistory({
-            historyDir: paths.historyDir,
-            taskId: id,
-            role,
-            content: buildNoteContent({ content }),
-          });
-          const task = await loadTask({ tasksDir: paths.tasksDir, id });
-          if (task && applyTaskUsage({ task, usage })) {
-            await saveTask({ tasksDir: paths.tasksDir, task });
-            await appendEvent({
-              eventsLog: paths.eventsLog,
-              event: {
-                ts: new Date().toISOString(),
-                type: "TASK_USAGE",
-                msg: "task usage updated",
-                taskId: id,
-                slaveId: task.assignedSlaveId,
-                data: {
-                  tok: task.usage?.tokens,
-                  cost: task.usage?.cost,
-                  judgeCost: task.usage?.judgeCost,
-                },
-              },
-            });
-          }
-        }
+        await dispatchTaskNote({ paths, payload: { taskId: id, role, content, usage } });
         console.log(`task ${id} ${role} note saved`);
       },
     )
@@ -290,38 +220,10 @@ export const runTask = async ({ args }: { args: string[] }): Promise<void> => {
               ? `commit: ${task.slaveCommitSha}`
               : diffs;
         const usage = getUsageFromArgs({ argv });
-        const handled = await tryIpc({
-          type: "task_handoff",
+        await dispatchTaskHandoff({
+          paths,
           payload: { taskId: id, role, summary, tests, diffs: autoDiffs, risks, usage },
         });
-        if (!handled) {
-          const content = buildHandoffContent({
-            role,
-            summary,
-            tests,
-            diffs: autoDiffs,
-            risks,
-          });
-          await writeHistory({ historyDir: paths.historyDir, taskId: id, role, content });
-          if (task && applyTaskUsage({ task, usage })) {
-            await saveTask({ tasksDir: paths.tasksDir, task });
-            await appendEvent({
-              eventsLog: paths.eventsLog,
-              event: {
-                ts: new Date().toISOString(),
-                type: "TASK_USAGE",
-                msg: "task usage updated",
-                taskId: id,
-                slaveId: task.assignedSlaveId,
-                data: {
-                  tok: task.usage?.tokens,
-                  cost: task.usage?.cost,
-                  judgeCost: task.usage?.judgeCost,
-                },
-              },
-            });
-          }
-        }
         console.log(`task ${id} ${role} handoff saved`);
       },
     )
@@ -333,29 +235,11 @@ export const runTask = async ({ args }: { args: string[] }): Promise<void> => {
         const id = requireValue({ value: argv.id as string | undefined, label: "task id" });
         const prompt =
           "Verify main behavior matches current plan. Run the minimal app checks and report pass/fail.";
-        const handled = await tryIpc({
-          type: "task_create",
-          payload: { task: { id, status: "queued", prompt } },
+        await dispatchTaskCreate({
+          paths,
+          task: { id, status: "queued", prompt },
+          message: "health-check task created",
         });
-        if (!handled) {
-          await saveTask({
-            tasksDir: paths.tasksDir,
-            task: {
-              id,
-              status: "queued",
-              prompt,
-            },
-          });
-          await appendEvent({
-            eventsLog: paths.eventsLog,
-            event: {
-              ts: new Date().toISOString(),
-              type: "TASK_CREATED",
-              msg: "health-check task created",
-              taskId: id,
-            },
-          });
-        }
         console.log(`health-check task ${id} queued`);
       },
     )

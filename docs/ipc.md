@@ -10,7 +10,7 @@ read_when: architecture, ops, no-escalation
 ## CLI Behavior
 
 - When `CLANKER_IPC_SOCKET` is set, `clanker task add|status|handoff|note` uses IPC and does not write `.clanker/` directly.
-- When unset, CLI falls back to filesystem state as before.
+- When unset (or IPC fails), CLI falls back to filesystem state as before.
 
 ## Transport
 
@@ -20,8 +20,8 @@ read_when: architecture, ops, no-escalation
 
 ## Socket Path
 
-- `CLANKER_IPC_SOCKET=/tmp/clanker-<repo>.sock` (or test-specific path)
-- Dashboard creates socket; pods connect on demand.
+- `CLANKER_IPC_SOCKET` is set by `clanker launch` (default: `<repo>/.clanker/ipc.sock`).
+- Dashboard creates the socket; pods connect on demand.
 
 ## Message Envelope
 
@@ -41,11 +41,11 @@ Errors:
 { "v": 1, "id": "req-123", "ok": false, "error": "reason" }
 ```
 
-## Message Types
+## Message Types (Shipped)
 
 ### hello
 
-Announce pod identity + capabilities.
+Announce pod identity + capabilities (no-op beyond ack).
 
 ```json
 { "type": "hello", "payload": { "podId": "slave-1", "role": "slave", "worktree": "/path" } }
@@ -83,7 +83,8 @@ Response:
 ```
 
 - When no work is available: `{ "ok": true, "data": { "taskId": null } }`
-- Handler assigns queued work to `podId` when possible and records `TASK_PROMPTED`.
+- Handler assigns queued work to `podId` when possible, sets `promptedAt`, and records `TASK_PROMPTED`.
+- If the task was already prompted, response omits `prompt` and returns `{ taskId, status }`.
 
 ### task_status (slave/judge -> dashboard)
 
@@ -102,7 +103,22 @@ Response:
     "summary": "...",
     "tests": "...",
     "diffs": "...",
-    "risks": "..."
+    "risks": "...",
+    "usage": { "tokens": 12, "cost": 3, "judgeTokens": 1, "judgeCost": 1 }
+  }
+}
+```
+
+### task_note (slave/judge -> dashboard)
+
+```json
+{
+  "type": "task_note",
+  "payload": {
+    "taskId": "t1",
+    "role": "slave",
+    "content": "note",
+    "usage": { "tokens": 1 }
   }
 }
 ```
@@ -122,6 +138,7 @@ Response:
 ```
 
 - When no `needs_judge` tasks exist: `{ "ok": true, "data": { "taskId": null } }`
+- Judge prompts are throttled by `judgePromptedAt`; stale or invalid timestamps re-issue prompts.
 
 ## Fallback Behavior
 
@@ -129,6 +146,12 @@ Response:
   - Planner writes task packets to `.clanker/tasks` (via `clanker task add`).
   - Dashboard uses filesystem for assignments.
   - Slave/judge uses filesystem for status/handoff.
+
+## Spool (IPC Down)
+
+- When IPC is configured but unreachable, task operations can be spooled to
+  `.clanker/ipc-spool.ndjson` for the dashboard to drain on startup/tick.
+- Spool is bounded (max 1 MB); oldest entries are trimmed when over limit.
 
 ## Security
 

@@ -1,8 +1,37 @@
 import { randomUUID } from "node:crypto";
+import { stat } from "node:fs/promises";
 import { createConnection } from "node:net";
 import { makeIpcResponse, type IpcRequest, type IpcResponse } from "./protocol.js";
+import { IPC_DOWN_CACHE_MS, IPC_TIMEOUT_MS } from "../constants.js";
 
-const DEFAULT_TIMEOUT_MS = 5000;
+const downCache = new Map<string, number>();
+
+const isSocketDown = ({ socketPath }: { socketPath: string }): boolean => {
+  const retryAt = downCache.get(socketPath);
+  if (!retryAt) {
+    return false;
+  }
+  if (Date.now() < retryAt) {
+    return true;
+  }
+  downCache.delete(socketPath);
+  return false;
+};
+
+const markSocketDown = ({ socketPath }: { socketPath: string }): void => {
+  downCache.set(socketPath, Date.now() + IPC_DOWN_CACHE_MS);
+};
+
+interface IpcClientSocket {
+  on(event: "data", listener: (chunk: Buffer) => void): void;
+  on(event: "error", listener: (error: Error) => void): void;
+  on(event: "connect", listener: () => void): void;
+  write: (data: string) => void;
+  end: () => void;
+  destroy: () => void;
+}
+
+type IpcConnect = (path: string) => IpcClientSocket;
 
 export const sendIpcRequest = async ({
   socketPath,
@@ -10,19 +39,31 @@ export const sendIpcRequest = async ({
   payload,
   id,
   timeoutMs,
+  connect,
 }: {
   socketPath: string;
   type: string;
   payload?: unknown;
   id?: string;
   timeoutMs?: number;
+  connect?: IpcConnect;
 }): Promise<IpcResponse> => {
+  if (isSocketDown({ socketPath })) {
+    throw new Error("ipc socket unavailable");
+  }
+  try {
+    await stat(socketPath);
+  } catch {
+    markSocketDown({ socketPath });
+    throw new Error("ipc socket missing");
+  }
   const requestId = id ?? randomUUID();
   const message: IpcRequest = { v: 1, id: requestId, type, payload };
-  const timeout = timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const timeout = timeoutMs ?? IPC_TIMEOUT_MS;
+  const connectFn = connect ?? createConnection;
 
   return new Promise<IpcResponse>((resolve, reject) => {
-    const socket = createConnection(socketPath);
+    const socket = connectFn(socketPath);
     let buffer = "";
     let settled = false;
     const timer = setTimeout(() => {
@@ -31,6 +72,7 @@ export const sendIpcRequest = async ({
       }
       settled = true;
       socket.destroy();
+      markSocketDown({ socketPath });
       reject(new Error(`ipc timeout (${timeout}ms)`));
     }, timeout);
 
@@ -50,6 +92,7 @@ export const sendIpcRequest = async ({
       }
       settled = true;
       clearTimeout(timer);
+      markSocketDown({ socketPath });
       reject(error);
     });
 

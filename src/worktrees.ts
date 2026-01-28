@@ -189,6 +189,7 @@ export const ensureRoleWorktrees = async ({
     const helper = [
       `worktree ref ${ref} not found.`,
       `Git error: ${message}`,
+      "",
       "Clanker needs a GitHub remote named origin with primary branch main.",
       "Fix:",
       "- Create a GitHub repo and set default branch to main.",

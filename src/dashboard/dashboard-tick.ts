@@ -21,6 +21,8 @@ import { ClankerRole } from "../prompting/role-prompts.js";
 import { buildJudgePrompts, buildSlavePrompts } from "../prompting/composite-prompts.js";
 import { ensureJudgeCheckoutForTask } from "../state/task-commits.js";
 import { getCurrentPaneId, listPanes, selectPane, sendKey, sendKeys } from "../tmux.js";
+import { drainIpcSpool } from "../ipc/spool.js";
+import { buildIpcHandlers } from "../ipc/handlers.js";
 import {
   processPendingActions,
   type CodexPaneState,
@@ -217,6 +219,7 @@ export const makeDashboardTick = ({
       });
       return true;
     };
+    await drainIpcSpool({ paths, handlers: buildIpcHandlers({ paths }) });
     const panes = await listPanes({ sessionPrefix: config.tmuxFilter });
     const tasks = await listTasks({ tasksDir: paths.tasksDir });
     for (const task of tasks) {

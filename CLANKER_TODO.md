@@ -2,6 +2,12 @@
 
 ## Done
 
+- IPC: route dispatch/assignment through IPC broker (dashboard), not file polling.
+- Refactor: add IPC-first gateway (`task-gateway.ts`) used across CLI + handlers; remove duplicated fs logic.
+- IPC perf: avoid repeated 5s timeouts when dashboard absent (socket-exists check or short-lived down cache).
+- IPC reliability: replace env knobs with code constants (no dead envvars). Add grace/retry/spool constants + bounded GC; set spool max bytes = 1 MB.
+- Docs: align `docs/ipc.md` with implemented message types; mark planned vs shipped.
+- When clanker starts, it can fail if no origin/main is configured. Print a prettier helper message after the git error.
 - Decide Prettier in verify (`prettier --write` in `yarn verify`, keep `yarn format` check)
 - Integration suite shape (parallel-safe tmpdir, no shared ports/state)
 - CLI artifact validation uses args/STDIO (no disk writes)
@@ -49,26 +55,6 @@
 1. Usage limit handling: detect Codex "You've hit your usage limit" message in production, pause + poll `/status` until reset, then resume (IT real should still fail fast).
 
 ## Now
-
-- IPC: route dispatch/assignment through IPC broker (dashboard), not file polling.
-- Refactor: add IPC-first gateway (`task-gateway.ts`) used across CLI + handlers; remove duplicated fs logic.
-- IPC perf: avoid repeated 5s timeouts when dashboard absent (socket-exists check or short-lived down cache).
-- IPC reliability: replace env knobs with code constants (no dead envvars). Add grace/retry/spool constants + bounded GC; set spool max bytes = 1 MB.
-- Docs: align `docs/ipc.md` with implemented message types; mark planned vs shipped.
-
-- When clanker starts, it can fail if no origin/main is configured. Print a prettier helper message after the git error. Current error message is as follows:
-
-```
-command failed: worktree ref origin/main not found (run "git fetch origin"). Details: Command failed: git rev-parse --verify origin/main
-fatal: Needed a single revision
-
-Error: worktree ref origin/main not found (run "git fetch origin"). Details: Command failed: git rev-parse --verify origin/main
-fatal: Needed a single revision
-
-    at ensureRoleWorktrees (file:///./clanker/dist/worktrees.js:62:15)
-    at async runLaunch (file:///./clanker/dist/commands/launch.js:299:27)
-    at async main (file:///./clanker/dist/cli.js:145:13)
-```
 
 - When launching clanker for the first time, after onboarding, .clanker/worktree dirs are created for the 5 default roles (3 slaves, etc). Then clanker fails with the message
 

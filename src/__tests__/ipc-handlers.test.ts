@@ -35,19 +35,27 @@ describe("ipc handlers", () => {
     expect(created?.id).toBe("t1");
 
     await handlers.task_status({
+      payload: { taskId: "t1", status: "running" },
+      context: {},
+    });
+    await handlers.task_status({
       payload: { taskId: "t1", status: "needs_judge" },
       context: {},
     });
     const updated = await loadTask({ tasksDir: paths.tasksDir, id: "t1" });
     expect(updated?.status).toBe("needs_judge");
 
+    if (updated) {
+      updated.slaveCommitSha = "deadbeef";
+      await saveTask({ tasksDir: paths.tasksDir, task: updated });
+    }
     await handlers.task_handoff({
       payload: {
         taskId: "t1",
         role: "slave",
         summary: "done",
         tests: "tests",
-        diffs: "diffs",
+        diffs: "",
         risks: "risks",
         usage: { tokens: 12, cost: 3 },
       },
@@ -55,6 +63,7 @@ describe("ipc handlers", () => {
     });
     const firstHandoff = await readFile(join(paths.historyDir, "task-t1-slave.md"), "utf-8");
     expect(firstHandoff).toContain("done");
+    expect(firstHandoff).toContain("deadbeef");
     await handlers.task_handoff({
       payload: {
         taskId: "t1",
@@ -252,6 +261,13 @@ describe("ipc handlers", () => {
         context: {},
       }),
     ).rejects.toThrow("Role must be slave or judge");
+
+    await expect(
+      handlers.task_note({
+        payload: { taskId: "t1", role: "slave" },
+        context: {},
+      }),
+    ).rejects.toThrow("Missing content");
 
     await expect(
       handlers.heartbeat({ payload: { podId: "slave-1", role: "slave" }, context: {} }),
