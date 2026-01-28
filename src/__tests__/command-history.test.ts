@@ -25,6 +25,14 @@ describe("command-history", () => {
     expect(normalized).toEqual(["/pause", "/resume"]);
   });
 
+  test("normalize keeps entries when under limit", () => {
+    const normalized = normalizeHistoryEntries({
+      entries: ["/pause", "/resume"],
+      maxEntries: 10,
+    });
+    expect(normalized).toEqual(["/pause", "/resume"]);
+  });
+
   test("appendHistoryEntry appends and normalizes", () => {
     const appended = appendHistoryEntry({
       entries: ["/pause"],
@@ -46,6 +54,16 @@ describe("command-history", () => {
     const path = join(root, "history.json");
     await writeFile(path, JSON.stringify({ entries: "bad" }), "utf-8");
     await expect(loadCommandHistory({ path, maxEntries: 5 })).resolves.toEqual([]);
+  });
+
+  test("loadCommandHistory returns normalized entries when valid", async () => {
+    const root = await mkdtemp(join(tmpdir(), "clanker-history-valid-"));
+    const path = join(root, "history.json");
+    await writeFile(path, JSON.stringify({ entries: [" /pause ", "/pause", "/resume"] }), "utf-8");
+    await expect(loadCommandHistory({ path, maxEntries: 10 })).resolves.toEqual([
+      "/pause",
+      "/resume",
+    ]);
   });
 
   test("saveCommandHistory writes normalized entries", async () => {

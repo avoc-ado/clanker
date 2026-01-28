@@ -16,6 +16,18 @@ const buildCommand = ({ cwd, command }: { cwd: string; command: string }): strin
   return `${cd}; ${command}`;
 };
 
+const resolveStubCommand = ({ cwd }: { cwd: string }): string | null => {
+  const stubCommand = process.env.CLANKER_ITERM_STUB_COMMAND?.trim();
+  if (stubCommand) {
+    return stubCommand;
+  }
+  const mode = process.env.CLANKER_IT_MODE?.trim().toLowerCase();
+  if (mode === "stub") {
+    return `${buildCommand({ cwd, command: "echo one" })}`;
+  }
+  return null;
+};
+
 export const buildGridLayout = ({
   paneCount,
   maxRows = 2,
@@ -113,6 +125,11 @@ export const launchIterm = async ({
   cwd: string;
   commands: string[];
 }): Promise<void> => {
+  const stubCommand = resolveStubCommand({ cwd });
+  if (stubCommand) {
+    await execFileAsync("sh", ["-c", stubCommand], { cwd });
+    return;
+  }
   try {
     await execFileAsync("osascript", ["-e", 'tell application "iTerm" to version']);
   } catch (error) {

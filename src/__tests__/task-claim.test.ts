@@ -57,6 +57,21 @@ describe("acquireTaskLock", () => {
     await claim?.release();
   });
 
+  test("falls back to mtime when lockedAt is invalid", async () => {
+    const locksDir = await makeLocksDir();
+    const lockPath = lockPathFor({ locksDir, key: "task-4b" });
+    await writeFile(
+      lockPath,
+      JSON.stringify({ key: "task-4b", lockedAt: "not-a-date", pid: 1 }, null, 2),
+      "utf-8",
+    );
+    const old = new Date(Date.now() - 120_000);
+    await utimes(lockPath, old, old);
+    const claim = await acquireTaskLock({ locksDir, key: "task-4b", ttlMs: 60_000 });
+    expect(claim).not.toBeNull();
+    await claim?.release();
+  });
+
   test("treats missing lock target as stale", async () => {
     const locksDir = await makeLocksDir();
     const lockPath = lockPathFor({ locksDir, key: "task-5" });

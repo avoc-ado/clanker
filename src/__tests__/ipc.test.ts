@@ -178,6 +178,31 @@ describe("ipc", () => {
     await rm(dirname(socketPath), { recursive: true, force: true });
   });
 
+  test("handles non-Error handler rejection", async () => {
+    const net = makeNetStub();
+    const socketPath = await makeSocketPath();
+    const server = await startIpcServer({
+      socketPath,
+      handlers: {
+        fail: async () => {
+          throw "boom";
+        },
+      },
+      net,
+    });
+    await writeFile(socketPath, "");
+    const response = await sendIpcRequest({
+      socketPath,
+      type: "fail",
+      payload: {},
+      connect: net.createConnection,
+    });
+    expect(response.ok).toBe(false);
+    expect(response.error).toContain("boom");
+    await server.close();
+    await rm(dirname(socketPath), { recursive: true, force: true });
+  });
+
   test("client handles invalid json response", async () => {
     const net = makeNetStub();
     const socketPath = await makeSocketPath();
@@ -199,6 +224,38 @@ describe("ipc", () => {
     });
     expect(response.ok).toBe(false);
     await new Promise<void>((resolve) => server.close(() => resolve()));
+    await rm(dirname(socketPath), { recursive: true, force: true });
+  });
+
+  test("client ignores extra data after settling", async () => {
+    const socketPath = await makeSocketPath();
+    await writeFile(socketPath, "");
+    const socket = new EventEmitter() as FakeSocket;
+    socket.write = () => {
+      const response = JSON.stringify(makeIpcResponse({ ok: true }));
+      socket.emit("data", Buffer.from(`${response}\n`));
+      socket.emit("data", Buffer.from(`${response}\n`));
+      socket.emit("error", new Error("late"));
+    };
+    socket.end = jest.fn();
+    socket.destroy = jest.fn();
+    const connect = () => {
+      queueMicrotask(() => {
+        socket.emit("connect");
+      });
+      return socket;
+    };
+
+    const response = await sendIpcRequest({
+      socketPath,
+      type: "echo",
+      payload: {},
+      connect,
+      id: "req-1",
+      timeoutMs: 250,
+    });
+    expect(response.ok).toBe(true);
+    expect(socket.end).toHaveBeenCalled();
     await rm(dirname(socketPath), { recursive: true, force: true });
   });
 
@@ -488,7 +545,6 @@ describe("ipc", () => {
     await server.close();
     await rm(dirname(socketPath), { recursive: true, force: true });
   });
-
   test("makeIpcResponse creates expected shape", () => {
     const response = makeIpcResponse({ id: "1", ok: true, data: { ok: true } });
     expect(response).toEqual({ v: 1, id: "1", ok: true, data: { ok: true }, error: undefined });
