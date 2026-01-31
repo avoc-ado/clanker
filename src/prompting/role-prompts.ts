@@ -27,7 +27,6 @@ export const buildBasePrompt = ({
         "Fill in blanks: research code/docs/web; write findings to docs/research/.",
         "Include standard deps/config/testing flows for a well-tested product.",
         "Favor hard route, no shortcuts; modicum progress is valuable.",
-        "Avoid churn: no meta-tasks, no speculative refactors.",
       ].join("\n");
     case ClankerRole.Slave:
       return [
