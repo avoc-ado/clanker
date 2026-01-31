@@ -259,11 +259,13 @@ export const dispatchTaskStatus = async ({
   taskId,
   status,
   socketPath,
+  onFilesystem,
 }: {
   paths: ClankerPaths;
   taskId: string;
   status: TaskStatus;
   socketPath?: string;
+  onFilesystem?: () => Promise<void>;
 }): Promise<"ipc" | "filesystem" | "spool"> => {
   const ipcSocket = resolveSocketPath({ socketPath });
   const ipcHandled = await tryIpc({
@@ -282,6 +284,9 @@ export const dispatchTaskStatus = async ({
   });
   if (spooled) {
     return "spool";
+  }
+  if (onFilesystem) {
+    await onFilesystem();
   }
   await writeTaskStatus({ paths, taskId, status });
   return "filesystem";

@@ -242,6 +242,9 @@ export const buildIpcHandlers = ({ paths }: { paths: ClankerPaths }): IpcHandler
       const tasks = await listTasks({ tasksDir: paths.tasksDir });
       const config = await loadConfig({ repoRoot: paths.repoRoot });
       const state = await loadState({ statePath: paths.statePath });
+      if (state.usageLimit.active) {
+        return { taskId: null };
+      }
       const lockConflictsEnabled = state.lockConflicts.enabled ?? config.lockConflictsEnabled;
       const staleSlaves = await computeStaleSlaves({ paths });
       const promptPaths = { tasksDir: paths.tasksDir, historyDir: paths.historyDir };
@@ -330,6 +333,10 @@ export const buildIpcHandlers = ({ paths }: { paths: ClankerPaths }): IpcHandler
       const tasks = await listTasks({ tasksDir: paths.tasksDir });
       const promptPaths = { tasksDir: paths.tasksDir, historyDir: paths.historyDir };
       const nowMs = Date.now();
+      const state = await loadState({ statePath: paths.statePath });
+      if (state.usageLimit.active) {
+        return { taskId: null };
+      }
       const targetTask =
         tasks
           .filter((task) => task.status === "needs_judge")

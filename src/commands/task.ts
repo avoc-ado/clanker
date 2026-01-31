@@ -123,21 +123,24 @@ export const runTask = async ({ args }: { args: string[] }): Promise<void> => {
         if (!existingTask) {
           throw new Error(`Task not found: ${id}`);
         }
-        if (status === "needs_judge") {
-          const config = await loadConfig({ repoRoot });
-          const commitResult = await ensureSlaveCommitForTask({
-            repoRoot,
-            paths,
-            config,
-            task: existingTask,
-          });
-          if (commitResult.status === "commit_failed") {
-            throw new Error(
-              `Slave commit required before needs_judge (${commitResult.message ?? "commit failed"})`,
-            );
-          }
-        }
-        await dispatchTaskStatus({ paths, taskId: id, status });
+        const onFilesystem =
+          status === "needs_judge"
+            ? async () => {
+                const config = await loadConfig({ repoRoot });
+                const commitResult = await ensureSlaveCommitForTask({
+                  repoRoot,
+                  paths,
+                  config,
+                  task: existingTask,
+                });
+                if (commitResult.status === "commit_failed") {
+                  throw new Error(
+                    `Slave commit required before needs_judge (${commitResult.message ?? "commit failed"})`,
+                  );
+                }
+              }
+            : undefined;
+        await dispatchTaskStatus({ paths, taskId: id, status, onFilesystem });
         console.log(`task ${id} -> ${nextStatus}`);
       },
     )
