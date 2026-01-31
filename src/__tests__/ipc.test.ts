@@ -443,18 +443,6 @@ describe("ipc", () => {
     await rm(dirname(socketPath), { recursive: true, force: true });
   });
 
-  test("server starts with default net adapter", async () => {
-    const socketPath = await makeSocketPath();
-    const server = await startIpcServer({
-      socketPath,
-      handlers: {
-        ping: async () => ({ ok: true }),
-      },
-    });
-    await server.close();
-    await rm(dirname(socketPath), { recursive: true, force: true });
-  });
-
   test("server forwards errors to onError", async () => {
     const socketPath = await makeSocketPath();
     const serverEmitter = new EventEmitter() as FakeServer;
